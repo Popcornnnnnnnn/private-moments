@@ -1,34 +1,34 @@
-# Private Moments Operator Runbook
+# Private Moments 运维手册
 
-This runbook covers local operation of the Mac server, admin UI, and iOS test app.
+这份 runbook 覆盖 Mac server、Admin UI 和 iOS test app 的本地运行、验证和排障。
 
-## Requirements
+## 环境要求
 
-- macOS with Xcode installed.
-- Node.js `>=22`.
-- `npm`.
-- `xcodegen` for regenerating `ios/PrivateMoments.xcodeproj`.
-- Tailscale for real iPhone access outside simulator localhost.
-- The paired iPhone must be unlocked and trusted for command-line install.
+- 安装 Xcode 的 macOS。
+- Node.js `>=22`。
+- `npm`。
+- `xcodegen`，用于重新生成 `ios/PrivateMoments.xcodeproj`。
+- Tailscale，用于真实 iPhone 访问 simulator localhost 之外的 Mac server。
+- 已配对的 iPhone 需要解锁，并信任当前 Mac，才能通过命令行安装。
 
-## Environment Variables
+## 环境变量
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Server bind address. Use `0.0.0.0` for LAN/Tailscale IP access. |
-| `PORT` | `3210` | Server port. |
-| `LOG_LEVEL` | `info` | Fastify log level. |
-| `PRIVATE_MOMENTS_INITIAL_PASSWORD` | unset | Creates the first local user when the database has no users. |
-| `PRIVATE_MOMENTS_DATA_DIR` | `~/Library/Application Support/PrivateMoments` | Runtime data directory. Development commonly uses `./server/data`. |
-| `DATABASE_URL` | `file:<dataDir>/app.sqlite` | Prisma SQLite database URL. In `server/.env.example`, `file:./dev.db` is relative to `server/prisma/schema.prisma`. |
-| `PRIVATE_MOMENTS_SERVER_URL` | `http://127.0.0.1:3210` | Simulator script server URL. |
-| `PRIVATE_MOMENTS_SIM_NAME` | `Private Moments iPhone 13 Pro` | Simulator display name. |
-| `PRIVATE_MOMENTS_DEVICE_TYPE` | `com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro` | Simulator device type. |
-| `PRIVATE_MOMENTS_DEVICE_NAME` | `wwz 的 iphone` | Real iPhone name for `devicectl`. |
-| `PRIVATE_MOMENTS_DEVICE_SERVER_URL` | auto-detected | Real-device server URL override. |
-| `PRIVATE_MOMENTS_LAUNCHD_LABEL` | `com.private-moments.server` | launchd label. |
+| `HOST` | `127.0.0.1` | Server bind address。真实 iPhone 通过 LAN/Tailscale 访问时使用 `0.0.0.0`。 |
+| `PORT` | `3210` | Server port。 |
+| `LOG_LEVEL` | `info` | Fastify log level。 |
+| `PRIVATE_MOMENTS_INITIAL_PASSWORD` | unset | 数据库没有 user 时，用于创建第一个本地用户。 |
+| `PRIVATE_MOMENTS_DATA_DIR` | `~/Library/Application Support/PrivateMoments` | Runtime data directory。开发时常用 `./server/data`。 |
+| `DATABASE_URL` | `file:<dataDir>/app.sqlite` | Prisma SQLite database URL。`server/.env.example` 里的 `file:./dev.db` 是相对 `server/prisma/schema.prisma`。 |
+| `PRIVATE_MOMENTS_SERVER_URL` | `http://127.0.0.1:3210` | Simulator script server URL。 |
+| `PRIVATE_MOMENTS_SIM_NAME` | `Private Moments iPhone 13 Pro` | Simulator display name。 |
+| `PRIVATE_MOMENTS_DEVICE_TYPE` | `com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro` | Simulator device type。 |
+| `PRIVATE_MOMENTS_DEVICE_NAME` | `wwz 的 iphone` | `devicectl` 使用的真实 iPhone 名称。 |
+| `PRIVATE_MOMENTS_DEVICE_SERVER_URL` | auto-detected | 真实设备 server URL override。 |
+| `PRIVATE_MOMENTS_LAUNCHD_LABEL` | `com.private-moments.server` | launchd label。 |
 
-## Local Development Start
+## 本地开发启动
 
 ```bash
 npm install
@@ -39,42 +39,38 @@ npm run admin:build
 npm run server:dev
 ```
 
-Set a real password in `server/.env` before first boot:
+第一次启动前，需要在 `server/.env` 里设置真实的 `PRIVATE_MOMENTS_INITIAL_PASSWORD`。Agent 应使用安全 secret 收集机制处理这个值，不要在聊天或文档中要求用户粘贴密码。
 
-```text
-PRIVATE_MOMENTS_INITIAL_PASSWORD=your-password
-```
-
-For real iPhone testing, make the server reachable from Tailscale:
+真实 iPhone 测试时，让 server 可以从 Tailscale 访问：
 
 ```text
 HOST=0.0.0.0
 PRIVATE_MOMENTS_DATA_DIR="./data"
 ```
 
-## Build And Install iOS
+## 构建和安装 iOS
 
-Simulator:
+Simulator：
 
 ```bash
 npm run ios:simulator
 ```
 
-Real iPhone:
+真实 iPhone：
 
 ```bash
 npm run ios:device
 ```
 
-The real-device script:
+真实设备脚本会：
 
-1. Checks candidate server URLs.
-2. Regenerates the Xcode project with `xcodegen` if available.
-3. Builds a Debug iPhoneOS app.
-4. Installs with `xcrun devicectl`.
-5. Launches `com.popcornnnnnn.privatemoments`.
+1. 检查候选 server URLs。
+2. 如果可用，用 `xcodegen` 重新生成 Xcode project。
+3. 构建 Debug iPhoneOS app。
+4. 使用 `xcrun devicectl` 安装。
+5. 启动 `com.popcornnnnnn.privatemoments`。
 
-If iPhone blocks the app as an untrusted developer, trust it on the phone:
+如果 iPhone 阻止未信任开发者 app，在手机上信任开发者：
 
 ```text
 Settings > General > VPN & Device Management > Developer App
@@ -82,42 +78,42 @@ Settings > General > VPN & Device Management > Developer App
 
 ## Mac Admin
 
-After `npm run admin:build`, the server serves:
+执行 `npm run admin:build` 后，server 会提供：
 
 ```text
 http://127.0.0.1:3210/admin/
 ```
 
-Use the same password as iOS login. Admin registers as a web device and uses the same Bearer token flow.
+Admin 使用和 iOS login 相同的 password。Admin 会注册为 web device，并使用同一套 Bearer token flow。
 
 ## launchd Service
 
-Install:
+安装：
 
 ```bash
 server/scripts/install-launchd.sh
 ```
 
-Uninstall:
+卸载：
 
 ```bash
 server/scripts/uninstall-launchd.sh
 ```
 
-Production data defaults to:
+生产数据默认放在：
 
 ```text
 ~/Library/Application Support/PrivateMoments
 ```
 
-launchd stdout/stderr logs:
+launchd stdout/stderr logs：
 
 ```text
 ~/Library/Logs/private-moments.out.log
 ~/Library/Logs/private-moments.err.log
 ```
 
-Application logs:
+Application logs：
 
 ```text
 <dataDir>/logs/app-YYYY-MM-DD.jsonl
@@ -125,36 +121,36 @@ Application logs:
 
 ## Smoke Checks
 
-Server health:
+Server health：
 
 ```bash
 curl -fsS http://127.0.0.1:3210/api/v1/health
 ```
 
-Tailscale reachability from the Mac:
+从 Mac 检查 Tailscale reachability：
 
 ```bash
 tailscale ip -4
 curl -fsS http://<tailscale-ip>:3210/api/v1/health
 ```
 
-Admin build and server typecheck:
+Admin build 和 server typecheck：
 
 ```bash
 npm run admin:build
 npm run server:typecheck
 ```
 
-Admin storage diagnostics, after logging in and setting `TOKEN` to a device token:
+Admin storage diagnostics。登录后把 device token 设置到 `TOKEN`：
 
 ```bash
 curl -fsS http://127.0.0.1:3210/api/v1/admin/status \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-The response should include `counts` plus `storage.totalBytes`, `storage.databaseBytes`, `storage.mediaBytes`, `storage.logsBytes`, and `storage.availableBytes`.
+响应应包含 `counts`，以及 `storage.totalBytes`、`storage.databaseBytes`、`storage.mediaBytes`、`storage.logsBytes` 和 `storage.availableBytes`。
 
-iOS compile without signing:
+iOS 无签名编译检查：
 
 ```bash
 cd ios
@@ -167,9 +163,9 @@ xcodebuild -project PrivateMoments.xcodeproj \
   build
 ```
 
-## Real iPhone Data Verification
+## 真实 iPhone 数据验证
 
-Copy the app Library container:
+复制 app 的 Library container：
 
 ```bash
 rm -rf .tmp/device-app-library-check
@@ -183,7 +179,7 @@ xcrun devicectl device copy from \
   --timeout 60
 ```
 
-Inspect sync state:
+检查 sync state：
 
 ```bash
 plutil -p .tmp/device-app-library-check/Preferences/com.popcornnnnnn.privatemoments.plist
@@ -191,7 +187,7 @@ sqlite3 '.tmp/device-app-library-check/Application Support/PrivateMoments/privat
   'SELECT COUNT(*) FROM local_posts WHERE deletedAt IS NULL;'
 ```
 
-Useful media recovery query:
+Media recovery 常用检查：
 
 ```sql
 SELECT COUNT(*) AS missing_visible_media
@@ -204,44 +200,44 @@ WHERE m.uploadStatus='uploaded'
   AND p.deletedAt IS NULL;
 ```
 
-Expected healthy value after cache recovery is `0`.
+Cache recovery 健康状态下，`missing_visible_media` 应为 `0`。
 
 ## Troubleshooting
 
 ### Login Fails With App Transport Security
 
-Use HTTPS Tailscale Serve, or use an IP/host covered by the current `NSAppTransportSecurity` exceptions in `ios/PrivateMoments/Info.plist`. The development app currently allows arbitrary loads and local networking, but a clean production build should tighten this.
+使用 HTTPS Tailscale Serve，或者使用当前 `ios/PrivateMoments/Info.plist` 里的 `NSAppTransportSecurity` exceptions 覆盖的 IP/host。开发 app 当前允许 arbitrary loads 和 local networking，但干净的 production build 后续应该收紧。
 
 ### Duplicate Devices
 
-Repeated login should reuse `deviceKey`. If old duplicate rows exist, use Mac Admin device cleanup carefully. Do not revoke the active iPhone token unless you plan to log in again.
+重复登录应该复用 `deviceKey`。如果历史上已经产生 duplicate rows，可以谨慎使用 Mac Admin 的 device cleanup。不要撤销当前活跃 iPhone token，除非你准备重新登录。
 
 ### Sync Shows Empty Timeline After Login
 
-Check `lastSyncCursor` in app preferences. iOS recovery resets the cursor to `0` when the local database is empty or the one-time recovery flag has not been applied. After sync, `lastSyncCursor` should match the server's latest `server_changes.version`.
+检查 app preferences 里的 `lastSyncCursor`。iOS recovery 会在本地数据库为空或一次性 recovery flag 尚未应用时，把 cursor 重置为 `0`。sync 完成后，`lastSyncCursor` 应该匹配 server 最新的 `server_changes.version`。
 
 ### Images Do Not Load
 
-Check server logs for `media.batch_download`. iOS now uses batch thumbnail JSON for remote cache recovery. On the phone database, `missing_visible_media` should be `0`.
+检查 server logs 里的 `media.batch_download`。iOS 现在用 batch thumbnail JSON 做 remote cache recovery。手机数据库中 `missing_visible_media` 应为 `0`。
 
 ### Uploads Stay Pending
 
-iOS uploads media one file at a time and compresses images before upload. If a large upload or Tailscale connection drops, the item remains in the local queue and sync schedules delayed retry with backoff. Check Settings > Storage > Sync Health for pending or failed counts, then inspect server logs for `media.upload` and sync errors.
+iOS 会逐个上传 media，并在上传前压缩图片。如果大文件上传失败或 Tailscale 连接中断，item 会留在本地 queue，并由 sync retry 调度器按 backoff 延迟重试。先看 Settings > Storage > Sync Health 里的 pending 或 failed counts，再检查 server logs 里的 `media.upload` 和 sync errors。
 
 ### Storage Mac Server Section Is Missing
 
-Settings > Storage always shows local iPhone usage. The Mac Server section appears only when the app is logged in and `/api/v1/admin/status` succeeds. Check the server URL, token state, and Tailscale reachability if the Mac section is hidden.
+Settings > Storage 总是显示本机 iPhone usage。只有在 app 已登录且 `/api/v1/admin/status` 成功时，Mac Server section 才会出现。如果 Mac section 被隐藏，检查 server URL、token state 和 Tailscale reachability。
 
 ### Build Fails With Signing/Profile Errors
 
-Open Xcode:
+打开 Xcode：
 
 ```text
 Xcode > Settings > Accounts
 Target PrivateMoments > Signing & Capabilities
 ```
 
-Select the personal team, keep automatic signing enabled, unlock the iPhone, then rerun:
+选择 personal team，保持 automatic signing，解锁 iPhone，然后重新运行：
 
 ```bash
 npm run ios:device

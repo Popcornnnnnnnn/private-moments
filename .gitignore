@@ -25,6 +25,8 @@ data/
 # Agent/runtime state
 .bg-shell/
 .gsd/CODEBASE.md
+.gsd/STATE.md
+.gsd/notifications.jsonl
 .gsd/runtime/
 .gsd/exec/
 .gsd/browser-state/

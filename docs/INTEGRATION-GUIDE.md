@@ -1,27 +1,27 @@
-# Private Moments Integration Guide
+# Private Moments 集成指南
 
-This guide is for a developer or future agent that needs to connect a client, admin tool, or diagnostic script to the Mac server.
+这份指南面向需要连接 Mac server 的开发者或未来 agent：包括 client、admin tool、diagnostic script 等。
 
 ## Server Base URL
 
-Local Mac development:
+本地 Mac 开发：
 
 ```text
 http://127.0.0.1:3210
 ```
 
-Real iPhone testing over Tailscale normally uses either:
+真实 iPhone 通过 Tailscale 测试时，通常使用：
 
 ```text
 http://<mac-tailscale-ip>:3210
 https://<mac-tailscale-serve-name>
 ```
 
-The iOS app stores the server URL in Settings. The real-device install script auto-detects a reachable Tailscale Serve hostname, Tailscale IP, or LAN IP unless `PRIVATE_MOMENTS_DEVICE_SERVER_URL` is set.
+iOS app 在 Settings 中保存 server URL。真实设备安装脚本会自动探测可访问的 Tailscale Serve hostname、Tailscale IP 或 LAN IP；也可以通过 `PRIVATE_MOMENTS_DEVICE_SERVER_URL` override。
 
 ## Authentication
 
-Login exchanges the single-user password for a long-lived device token.
+Login 会用单用户 password 换取长期 device token。
 
 ```bash
 curl -X POST http://127.0.0.1:3210/api/v1/auth/login \
@@ -34,42 +34,42 @@ curl -X POST http://127.0.0.1:3210/api/v1/auth/login \
   }'
 ```
 
-Authenticated requests use:
+Authenticated requests 使用：
 
 ```http
 Authorization: Bearer <device-token>
 ```
 
-`deviceKey` prevents duplicate device rows. Repeated login from the same physical device or browser installation should reuse the same `deviceKey`.
+`deviceKey` 用于避免重复 device rows。同一物理设备或同一 browser installation 重复 login 时，应复用同一个 `deviceKey`。
 
 ## Endpoint Quick Reference
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/health` | Health, schema version, data directory. |
-| `POST` | `/api/v1/auth/login` | Password login and device token issue/rebind. |
-| `GET` | `/api/v1/devices` | List authorized devices. |
-| `DELETE` | `/api/v1/devices/:deviceId` | Revoke a device token. |
-| `POST` | `/api/v1/sync` | Push local operations and pull server changes. |
-| `POST` | `/api/v1/media/upload` | Upload one image file with multipart form data. |
-| `POST` | `/api/v1/media/batch-download` | Download multiple media variants as base64 JSON. |
-| `GET` | `/api/v1/media/:mediaId?variant=thumbnail` | Download one media file. |
-| `GET` | `/api/v1/timeline` | Read server timeline for diagnostics. |
-| `GET` | `/api/v1/posts/:postId` | Read one post. |
-| `GET` | `/api/v1/search?q=...` | Search server archive text. |
-| `GET` | `/api/v1/admin/status` | Admin dashboard status and storage diagnostics. |
-| `GET` | `/api/v1/admin/logs?limit=100` | Admin dashboard logs. |
-| `GET` | `/api/v1/admin/posts` | Admin post list with filters. |
-| `GET` | `/api/v1/admin/posts/:postId` | Admin post detail. |
-| `DELETE` | `/api/v1/admin/posts/:postId` | Soft delete one post from Admin. |
-| `GET` | `/api/v1/admin/devices/:deviceId/clean-posts/preview` | Preview permanent cleanup for one device's created posts. |
-| `POST` | `/api/v1/admin/devices/:deviceId/clean-posts` | Permanently clean test posts created by one device. |
+| `GET` | `/api/v1/health` | Health、schema version、data directory。 |
+| `POST` | `/api/v1/auth/login` | Password login，并签发或重新绑定 device token。 |
+| `GET` | `/api/v1/devices` | 列出 authorized devices。 |
+| `DELETE` | `/api/v1/devices/:deviceId` | 撤销 device token。 |
+| `POST` | `/api/v1/sync` | 推送 local operations，并拉取 server changes。 |
+| `POST` | `/api/v1/media/upload` | 用 multipart form data 上传单张 image file。 |
+| `POST` | `/api/v1/media/batch-download` | 以 base64 JSON 下载多个 media variants。 |
+| `GET` | `/api/v1/media/:mediaId?variant=thumbnail` | 下载单个 media file。 |
+| `GET` | `/api/v1/timeline` | 读取 server timeline，用于 diagnostics。 |
+| `GET` | `/api/v1/posts/:postId` | 读取单个 post。 |
+| `GET` | `/api/v1/search?q=...` | 搜索 server archive text。 |
+| `GET` | `/api/v1/admin/status` | Admin dashboard status 和 storage diagnostics。 |
+| `GET` | `/api/v1/admin/logs?limit=100` | Admin dashboard logs。 |
+| `GET` | `/api/v1/admin/posts` | Admin post list，支持 filters。 |
+| `GET` | `/api/v1/admin/posts/:postId` | Admin post detail。 |
+| `DELETE` | `/api/v1/admin/posts/:postId` | 从 Admin soft delete 单个 post。 |
+| `GET` | `/api/v1/admin/devices/:deviceId/clean-posts/preview` | 预览某个 device 创建的 posts 永久清理候选。 |
+| `POST` | `/api/v1/admin/devices/:deviceId/clean-posts` | 永久清理某个 device 创建的测试 posts。 |
 
 ## Sync
 
-`POST /api/v1/sync` is an endpoint for device/server reconciliation, not a CRUD endpoint for one resource.
+`POST /api/v1/sync` 是 device/server reconciliation endpoint，不是针对单个 resource 的 CRUD endpoint。
 
-Request shape:
+Request shape：
 
 ```json
 {
@@ -91,24 +91,24 @@ Request shape:
 }
 ```
 
-Supported client operation types:
+当前支持的 client operation types：
 
 - `create_post`
 - `update_post`
 - `update_post_favorite`
 - `delete_post`
 
-Important rules:
+重要规则：
 
-- `opId` must be unique per device. The server uses `(deviceId, opId)` for idempotency.
-- `syncCursor` is the largest `server_changes.version` the client has applied.
-- The client should only persist `nextSyncCursor` after applying all returned `serverChanges`.
-- iOS accepts ISO8601 timestamps with and without fractional seconds.
-- If the local database is empty, iOS requests cursor `0` to restore from the Mac archive.
+- `opId` 必须在同一 device 内唯一。Server 使用 `(deviceId, opId)` 保证 idempotency。
+- `syncCursor` 表示 client 已经应用的最大 `server_changes.version`。
+- Client 只能在成功应用所有返回的 `serverChanges` 后，持久化 `nextSyncCursor`。
+- iOS 接受带 fractional seconds 和不带 fractional seconds 的 ISO8601 timestamps。
+- 如果 local database 为空，iOS 会请求 cursor `0`，从 Mac archive 恢复数据。
 
 ## Media Upload
 
-Upload one image with multipart form data:
+用 multipart form data 上传单张 image：
 
 ```bash
 curl -X POST http://127.0.0.1:3210/api/v1/media/upload \
@@ -121,11 +121,11 @@ curl -X POST http://127.0.0.1:3210/api/v1/media/upload \
   -F file=@image.jpg
 ```
 
-The server stores files under the configured data directory and writes only relative file paths and metadata to SQLite.
+Server 会把文件存到 configured data directory，只把 relative file paths 和 metadata 写入 SQLite。
 
 ## Media Batch Download
 
-iOS uses batch download for remote image cache recovery:
+iOS 使用 batch download 做 remote image cache recovery：
 
 ```bash
 curl -X POST http://127.0.0.1:3210/api/v1/media/batch-download \
@@ -137,7 +137,7 @@ curl -X POST http://127.0.0.1:3210/api/v1/media/batch-download \
   }'
 ```
 
-Response:
+Response：
 
 ```json
 {
@@ -153,18 +153,18 @@ Response:
 }
 ```
 
-The server generates thumbnail variants on demand with `sips`. Current thumbnail policy is max edge `800px`; large existing thumbnails are regenerated when they exceed the server threshold.
+Server 使用 `sips` 按需生成 thumbnail variants。当前 thumbnail policy 是 max edge `800px`；如果已有 thumbnail 超过 server threshold，会重新生成。
 
 ## Admin Status And Storage Diagnostics
 
-`GET /api/v1/admin/status` uses the same Bearer token auth as other admin routes. The iOS Settings storage page calls this endpoint when logged in; if the Mac server is offline or the request fails, the iOS UI hides the Mac Server storage section instead of showing an error alert.
+`GET /api/v1/admin/status` 使用和其他 admin routes 相同的 Bearer token auth。iOS Settings storage page 登录后会调用这个 endpoint；如果 Mac server offline 或请求失败，iOS UI 会隐藏 Mac Server storage section，而不是弹 error alert。
 
 ```bash
 curl -X GET http://127.0.0.1:3210/api/v1/admin/status \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Response shape:
+Response shape：
 
 ```json
 {
@@ -189,21 +189,21 @@ Response shape:
 }
 ```
 
-`databaseBytes` includes the SQLite database plus `-wal` and `-shm` sidecar files. `totalBytes` is the whole configured data directory. `availableBytes` is the free space available to the data directory volume.
+`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。
 
 ## Admin Posts Filters
 
-`GET /api/v1/admin/posts` supports:
+`GET /api/v1/admin/posts` 支持：
 
 | Query | Values | Notes |
 |---|---|---|
-| `deleted` | `active`, `deleted`, `all` | Defaults to active in the UI. |
-| `deviceId` | device UUID | Filters by `createdByDeviceId`. |
-| `q` | text | Searches post text. Search returns up to 100 rows and does not use cursor pagination. |
-| `limit` | `1..100` | Default list limit is 50. |
-| `cursor` | encoded cursor | Used for non-search list pagination. |
+| `deleted` | `active`, `deleted`, `all` | UI 默认显示 active。 |
+| `deviceId` | device UUID | 按 `createdByDeviceId` 过滤。 |
+| `q` | text | 搜索 post text。Search 最多返回 100 rows，不使用 cursor pagination。 |
+| `limit` | `1..100` | 默认 list limit 是 50。 |
+| `cursor` | encoded cursor | 用于非 search list pagination。 |
 
-`POST /api/v1/admin/devices/:deviceId/clean-posts` requires:
+`POST /api/v1/admin/devices/:deviceId/clean-posts` 需要：
 
 ```json
 {
@@ -211,4 +211,4 @@ Response shape:
 }
 ```
 
-It permanently removes posts created by that device and writes minimal `post_deleted` server changes so iOS caches can hide those posts on the next sync.
+它会永久删除该 device 创建的 posts，并写入最小化的 `post_deleted` server changes，让 iOS caches 在下次 sync 时隐藏这些 posts。
