@@ -1,4 +1,82 @@
 import Foundation
+import SwiftUI
+import UIKit
+
+struct PlainTextListEditor: UIViewRepresentable {
+    @Binding var text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.text = text
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.backgroundColor = .clear
+        textView.isScrollEnabled = true
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 5, bottom: 8, right: 5)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.dataDetectorTypes = []
+        textView.smartInsertDeleteType = .default
+        return textView
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        context.coordinator.text = $text
+
+        if uiView.text != text {
+            uiView.text = text
+        }
+
+        uiView.font = .preferredFont(forTextStyle: .body)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func textView(
+            _ textView: UITextView,
+            shouldChangeTextIn range: NSRange,
+            replacementText replacement: String
+        ) -> Bool {
+            guard replacement == "\n" else {
+                return true
+            }
+
+            guard let edit = PlainTextListContinuation.replacement(
+                in: textView.text ?? "",
+                selectedRange: range,
+                replacementText: replacement
+            ) else {
+                return true
+            }
+
+            guard let currentText = textView.text,
+                  let stringRange = Range(edit.replacementRange, in: currentText) else {
+                return true
+            }
+
+            let updatedText = currentText.replacingCharacters(in: stringRange, with: edit.replacementText)
+            textView.text = updatedText
+            text.wrappedValue = updatedText
+            textView.selectedRange = edit.selectedRange
+            return false
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            text.wrappedValue = textView.text ?? ""
+        }
+    }
+}
 
 struct PlainTextListContinuation {
     struct Edit: Equatable {

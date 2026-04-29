@@ -91,7 +91,7 @@ Done when: The helper and test target exist, all list-rule tests pass, and the a
   - Files: `ios/PrivateMoments/Views/PlainTextListEditor.swift`, `ios/PrivateMomentsListContinuationTests/PlainTextListContinuationTests.swift`, `ios/project.yml`
   - Verify: cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test
 
-- [ ] **T02: Wrap UITextView as the shared plain-text editor** `est:1h`
+- [x] **T02: Wrap UITextView as the shared plain-text editor** `est:1h`
   Executor skills: `test`, `verify-before-complete`.
 
 Why: SwiftUI `TextEditor` does not provide reliable Return interception or cursor control. This task turns the tested helper into a reusable `UIViewRepresentable` that preserves `Binding<String>`, Dynamic Type, clear background styling, and native text behavior outside list-continuation cases.
