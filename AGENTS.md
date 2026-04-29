@@ -32,6 +32,8 @@ Private Moments is a private, local-first personal timeline:
 
 Use `.gsd/` as the structured source for current project facts, requirements, decisions, and milestone state. Use `docs/` as the stable human-facing documentation set.
 
+Human-facing documentation under `docs/` should be primarily Chinese. Keep command names, API routes, field names, filenames, code symbols, and established app UI copy in English where that is clearer or source-of-truth. `.gsd` and `AGENTS.md` may stay English-first because they primarily serve agents and tooling.
+
 Work defaults to lightweight continuous maintenance. Upgrade to milestone/slice planning before implementation when a change can affect sync semantics, SQLite schema migrations, media storage or recovery, backup or restore, auth/security boundaries, cross-device behavior, or real-device recovery.
 
 Every non-trivial change must close with:
