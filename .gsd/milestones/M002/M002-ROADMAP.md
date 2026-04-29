@@ -18,7 +18,7 @@
 - [x] **S02: S02** `risk:medium` `depends:[]`
   > After this: On iPhone, opening a moment detail shows a private comments section where the user can add and delete plain-text comments; the main timeline stays uncluttered.
 
-- [ ] **S03: S03** `risk:medium` `depends:[]`
+- [x] **S03: S03** `risk:medium` `depends:[]`
   > After this: A documented UAT path proves private comments create/delete and sync behavior, and operator/product docs explain the feature and constraints.
 
 ## Boundary Map
