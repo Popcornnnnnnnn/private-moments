@@ -1,5 +1,16 @@
 # Private Moments Design Principles
 
+## Product North Star
+
+Moments 是一个没有观众的生活表达空间。它应该像社交一样轻松表达，像日记一样完全私密，像信息流一样可以沉浸浏览，但不把用户推向被观看、被评价、被管理或被迫写完整的压力里。
+
+后续功能优先保护这些原则：
+
+- **表达，而不是记录**：输入要降低表达摩擦，不鼓励复杂结构化写作。
+- **默认没有观众**：不要引入点赞、评论、公开展示、社交反馈或类似压力。
+- **时间是流动的**：回看体验应像回到一段生活轨迹，而不是查数据库。
+- **本地优先**：数据属于用户自己，同步是能力，不是云端依赖。
+
 ## Keep the Main Timeline Quiet
 
 当前使用体验的核心优势是界面简洁、低干扰、记录入口清楚。后续新增功能时，应优先保护这个体验。
@@ -13,3 +24,31 @@
 - Storage 默认是诊断信息入口，只展示本地和 Mac server 的空间/同步健康状态；清理、删除、重建缓存等危险或低频操作必须后置到二级确认或后续版本，不能让 Settings 主界面变重。
 - 时间和月份提示应服务于方向感，并保持 App UI 的英文体系。优先使用 `Just now`、`2 min ago`、`Yesterday 2:40 PM` 这类人类表达；月份信息适合作为滚动时短暂出现的浮层提示，而不是常驻的大块结构标题。
 - 如果一个功能让首屏变复杂，默认重新设计入口，而不是继续堆控件。
+
+## Time Navigation Without Database Feel
+
+内容变多以后，Moments 需要更好的时间导航，但导航目标是“回到某段生活”，不是管理 archive。
+
+设计约束：
+
+- 主体验继续以 timeline/feed 为主。
+- 不新增常驻 Calendar tab 或 Archive 管理中心。
+- 日期跳转放在 toolbar menu 等低频入口里。
+- 日期跳转采用月优先、日可选：先看到已有内容的月份，再看到该月内有 moments 的日期。
+- 只显示有内容的日期，避免选到空日期后不知道跳到哪里。
+- 不显示每天有多少 moments，避免把生活变成统计面板。
+- 日期文案偏生活感，例如 `April 2026`、`Apr 29 · Wed`、`Today`、`Yesterday`。
+
+## Lightweight Input, Not Markdown Editor
+
+输入体验可以帮助用户顺手表达，但不能把 Moments 变成写作工具。
+
+设计约束：
+
+- 保存格式保持 plain text。
+- Timeline 展示保持普通文本，不做 Markdown rendering。
+- 可以支持轻量列表延续：`- `、`• `、`1. `。
+- Numbered list 可以自动递增：`1. ` 回车后生成 `2. `。
+- 空列表项再次回车退出列表。
+- 不支持 heading、bold、quote、link preview 等 formatting 功能。
+- 如果列表延续需要大规模输入组件重构，优先延后，不为了 polish 牵动 composer/edit 架构。

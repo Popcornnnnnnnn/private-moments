@@ -4,7 +4,16 @@ Last updated: 2026-04-30
 
 ## What This Project Is
 
-Private Moments is a private, local-first personal timeline. The iOS app, named `Moments`, is the primary capture and browsing surface. A Mac runs the self-hosted server, SQLite archive, media storage, sync API, and Admin UI.
+Moments is a private expression space with no audience. It is a personal timeline app that feels like posting to a feed, but everything belongs only to the user: no likes, no comments, no pressure of being watched.
+
+The product should preserve four north-star ideas:
+
+- 表达，而不是记录 — writing can be partial, quick, and lightweight.
+- 默认没有观众 — content is not created for other people to see.
+- 时间是流动的 — browsing should feel like returning to a living timeline, not querying a database.
+- 本地优先 — data belongs to the user and can sync without depending on a cloud platform.
+
+The iOS app, named `Moments`, is the primary capture and browsing surface. A Mac runs the self-hosted server, SQLite archive, media storage, sync API, and Admin UI.
 
 The intended network boundary is Tailscale or another private VPN. The project is not designed as a public cloud service.
 
@@ -34,6 +43,8 @@ Implemented capabilities include:
 ## Design Constraints
 
 - The main iOS timeline must stay simple. Low-frequency controls belong in toolbar menus, swipe actions, detail views, or settings.
+- Content management features must help the user return to lived time, not turn Moments into an archive/database manager.
+- Input assistance must reduce friction for lightweight expression, not turn Moments into a Markdown editor or writing tool.
 - App-facing UI copy should remain primarily English unless explicitly requested otherwise.
 - Sync cursor advancement is data-sensitive: the client must only advance after all returned server changes are applied.
 - Media recovery should prefer robust batch thumbnail recovery for iOS/Tailscale reliability.
@@ -58,3 +69,7 @@ Current documentation responsibilities:
 Use lightweight continuous maintenance by default. Upgrade work to milestone/slice planning when it touches high-risk areas: sync semantics, schema migrations, media storage or recovery, backup or restore, auth/security boundaries, or cross-device behavior.
 
 Every non-trivial change must close with a short summary, fresh verification evidence, known issues or next steps, and updates to affected `.gsd` or `docs/` files.
+
+## Milestone Sequence
+
+- [ ] M001: Timeline Navigation and Lightweight Input — Add quiet month/day date jump and bounded plain-text list continuation while preserving Moments as a private expression feed.
