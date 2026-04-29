@@ -40,7 +40,7 @@ Server Prisma schema/migration, sync handler, shared docs/OpenAPI, and iOS local
   - Files: `ios/PrivateMoments/Persistence/LocalDatabase+Schema.swift`, `ios/PrivateMoments/Persistence/LocalDatabase+Records.swift`, `ios/PrivateMoments/Persistence/LocalDatabase+Sync.swift`, `ios/PrivateMoments/Persistence/TimelineStore+Payloads.swift`, `ios/PrivateMoments/Persistence/TimelineStore+ServerChanges.swift`, `ios/PrivateMoments/Networking/APIModels.swift`
   - Verify: cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
-- [ ] **T04: Verify and close comment sync contract slice** `est:45m`
+- [x] **T04: Verify and close comment sync contract slice** `est:45m`
   Run slice-level integration checks, reconcile docs/contracts, and record S01 summary with remaining risks for UI slice.
   - Files: `docs/TECH-DESIGN.md`, `docs/INTEGRATION-GUIDE.md`, `.gsd/REQUIREMENTS.md`
   - Verify: npm run server:build && cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build

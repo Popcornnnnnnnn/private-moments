@@ -38,16 +38,6 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: M002/S01,M002/S03
 - Validation: A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered.
 
-### R009 — Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
-- Class: functional
-- Status: active
-- Description: Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
-- Why it matters: Comments are user data; keeping them local-only would create avoidable loss and future migration risk.
-- Source: M002 planning discussion 2026-04-30
-- Primary owning slice: M002/S01
-- Supporting slices: M002/S02,M002/S03
-- Validation: Server sync tests or scripted API checks prove create/delete comment operations are idempotent, emit server changes, and are applied by iOS without advancing cursor before local persistence succeeds.
-
 ### R010 — Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
 - Class: constraint
 - Status: active
@@ -96,6 +86,16 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M001/S02
 - Validation: Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled.
 
+### R009 — Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
+- Class: functional
+- Status: validated
+- Description: Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
+- Why it matters: Comments are user data; keeping them local-only would create avoidable loss and future migration risk.
+- Source: M002 planning discussion 2026-04-30
+- Primary owning slice: M002/S01
+- Supporting slices: M002/S02,M002/S03
+- Validation: S01 validated the private comment sync contract: T02 added server Prisma schema/migration plus idempotent `create_comment` and `delete_comment` operations emitting `comment_created`/`comment_deleted`; T03 added iOS `local_comments`, payload builders, outbox plumbing, and strict server-change apply before cursor advancement. Verification: `npm run server:prisma:generate && npm run server:build`, scripted server comment sync smoke test, `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`, and iOS XCTest payload coverage passed.
+
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
@@ -108,12 +108,12 @@ This file is the explicit capability and coverage contract for the project.
 | R006 | functional | validated | M001/S02 | none | Validated by `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test` after creating an available iPhone 16 simulator: 14 XCTest cases passed, covering dash, bullet, numbered increment, empty-item exit, normal paragraph fallback, non-list fallback, invalid range fallback, max-int fallback, and emoji/Unicode UTF-16 safety. App integration also built with `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`. Manual UAT script is recorded in S02-UAT for tactile cursor/save verification. |
 | R007 | constraint | validated | M001/S02 | none | Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled. |
 | R008 | functional | active | M002/S02 | M002/S01,M002/S03 | A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered. |
-| R009 | functional | active | M002/S01 | M002/S02,M002/S03 | Server sync tests or scripted API checks prove create/delete comment operations are idempotent, emit server changes, and are applied by iOS without advancing cursor before local persistence succeeds. |
+| R009 | functional | validated | M002/S01 | M002/S02,M002/S03 | S01 validated the private comment sync contract: T02 added server Prisma schema/migration plus idempotent `create_comment` and `delete_comment` operations emitting `comment_created`/`comment_deleted`; T03 added iOS `local_comments`, payload builders, outbox plumbing, and strict server-change apply before cursor advancement. Verification: `npm run server:prisma:generate && npm run server:build`, scripted server comment sync smoke test, `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`, and iOS XCTest payload coverage passed. |
 | R010 | constraint | active | M002/S02 | M002/S01,M002/S03 | Implementation review confirms comments use plain strings, no nested thread model is exposed in iOS UI, and docs describe comments as private notes rather than social comments. |
 
 ## Coverage Summary
 
-- Active requirements: 6
-- Mapped to slices: 6
-- Validated: 4 (R004, R005, R006, R007)
+- Active requirements: 5
+- Mapped to slices: 5
+- Validated: 5 (R004, R005, R006, R007, R009)
 - Unmapped active requirements: 0

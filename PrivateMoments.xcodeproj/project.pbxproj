@@ -22,6 +22,7 @@
 		59FC007F2EDFA0D1C3C0E639 /* TimelineStore+Payloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDE6E131A3D57F82B3B2EE7 /* TimelineStore+Payloads.swift */; };
 		5AB42D42AE865E5F80122DC7 /* TimelinePost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1D9731CB0B481A0ED366AD /* TimelinePost.swift */; };
 		614C48DFE667AF8A84065D1D /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD046AEB64DA8C819CCD8E45 /* APIClient.swift */; };
+		654807D87027094CABFE7D8B /* CommentSyncPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD8EBCCF39A2D05A2B4E94F /* CommentSyncPayloadTests.swift */; };
 		6A20097874E0843CEE22AAB9 /* LocalDatabase+StorageStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17CF9BFE7488320FD5D183D7 /* LocalDatabase+StorageStats.swift */; };
 		6AD60F9A0E0A577AD56D051A /* TimelineStore+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02BAC4E8D8C68F343ECD75 /* TimelineStore+Media.swift */; };
 		700C6349916B9F0CBEFEEA34 /* LocalDatabaseError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9173229FE9FFF1B19BFE6DC3 /* LocalDatabaseError.swift */; };
@@ -112,6 +113,7 @@
 		D130C34065C3B6D5DC6FA332 /* OutboxOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxOperation.swift; sourceTree = "<group>"; };
 		D4B9BB97EF1CC09D21459AF1 /* MomentDateFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MomentDateFormatter.swift; sourceTree = "<group>"; };
 		DA6B301FEB1C66A7CAAEF181 /* PrivateMomentsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateMomentsApp.swift; sourceTree = "<group>"; };
+		DBD8EBCCF39A2D05A2B4E94F /* CommentSyncPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentSyncPayloadTests.swift; sourceTree = "<group>"; };
 		E6FF52BFC28E86826001BEF9 /* TimelineStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineStore.swift; sourceTree = "<group>"; };
 		E9DD43FFCB17EBC3A4CE7816 /* LocalDatabase+SQLite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalDatabase+SQLite.swift"; sourceTree = "<group>"; };
 		EDD226404883BAD2C7D0D5BA /* PlainTextListEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainTextListEditor.swift; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 		612F84F0382A881D32B8C5CE /* PrivateMomentsTests */ = {
 			isa = PBXGroup;
 			children = (
+				DBD8EBCCF39A2D05A2B4E94F /* CommentSyncPayloadTests.swift */,
 				F2E1DBCC2D053719CDA25279 /* TimelineDateJumpModelsTests.swift */,
 			);
 			name = PrivateMomentsTests;
@@ -378,6 +381,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				654807D87027094CABFE7D8B /* CommentSyncPayloadTests.swift in Sources */,
 				4B2E6B365D0CC111136B3CFB /* TimelineDateJumpModelsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

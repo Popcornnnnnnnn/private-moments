@@ -97,6 +97,41 @@ Request shape：
 - `update_post`
 - `update_post_favorite`
 - `delete_post`
+- `create_comment`
+- `delete_comment`
+
+Comment operations：
+
+```json
+{
+  "opId": "comment-op-uuid",
+  "type": "create_comment",
+  "entityType": "comment",
+  "entityId": "comment-uuid",
+  "clientCreatedAt": "2026-04-30T12:00:00.000Z",
+  "payload": {
+    "postId": "post-uuid",
+    "text": "补一句自己的想法",
+    "createdAt": "2026-04-30T12:00:00.000Z"
+  }
+}
+```
+
+```json
+{
+  "opId": "comment-delete-op-uuid",
+  "type": "delete_comment",
+  "entityType": "comment",
+  "entityId": "comment-uuid",
+  "clientCreatedAt": "2026-04-30T12:10:00.000Z",
+  "payload": {
+    "postId": "post-uuid",
+    "deletedAt": "2026-04-30T12:10:00.000Z"
+  }
+}
+```
+
+Server 会为 comment 操作写入 `comment_created` / `comment_deleted` server changes。iOS 只在本地成功应用这些 server changes 后推进 cursor；comment change 解析错误会带 `comment_created` 或 `comment_deleted` 上下文，但不把评论正文写入错误信息。
 
 重要规则：
 

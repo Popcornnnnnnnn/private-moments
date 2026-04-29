@@ -1,19 +1,26 @@
 {
   "nodes": [
     {
-      "id": "milestone:M001",
-      "label": "M001: Timeline Navigation and Lightweight Input",
+      "id": "milestone:M002",
+      "label": "M002: Private comments for moments",
       "type": "milestone",
-      "description": "Active milestone: M001",
+      "description": "Active milestone: M002",
       "confidence": "EXTRACTED",
       "sourceFile": "STATE.md"
     },
     {
-      "id": "concept:phase:validating-milestone",
-      "label": "Phase: validating-milestone",
+      "id": "concept:phase:planning",
+      "label": "Phase: planning",
       "type": "concept",
       "confidence": "EXTRACTED",
       "sourceFile": "STATE.md"
+    },
+    {
+      "id": "milestone:M001",
+      "label": "M001: Timeline Navigation and Lightweight Input",
+      "type": "milestone",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-ROADMAP.md"
     },
     {
       "id": "slice:M001:S01",
@@ -58,6 +65,357 @@
       "label": "T03: Wire shared editor into New Moment and Edit Moment",
       "type": "task",
       "confidence": "EXTRACTED"
+    },
+    {
+      "id": "slice:M002:S01",
+      "label": "S01: Comment data model and sync contract",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M002/slices/S01/S01-PLAN.md"
+    },
+    {
+      "id": "task:M002:S01:T01",
+      "label": "T01: Map existing sync and persistence seams",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S01:T02",
+      "label": "T02: Add server comment schema and sync operations",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S01:T03",
+      "label": "T03: Add iOS local comment sync plumbing",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S01:T04",
+      "label": "T04: Verify and close comment sync contract slice",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "decision:M001:1",
+      "label": "Keep date navigation in the existing toolbar calendar menu, with month submenus, direct Jump to Month actions, and day buttons rather than adding a calendar/archive surface.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Key decisions",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:2",
+      "label": "Keep date-jump grouping pure and caller-driven so TimelineView passes filteredItems and the model never queries broader persistence/media state.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Key decisions",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:3",
+      "label": "Keep list continuation as local plain-string editing with no Markdown/rich-text semantics, persistence/schema changes, server changes, sync changes, telemetry, or logging.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Key decisions",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:4",
+      "label": "Reuse one shared PlainTextListEditor component for both Composer and Edit Moment instead of forking per-screen behavior.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Key decisions",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:5",
+      "label": "Maintain a root project.yml mirror to satisfy root-level automation while preserving ios/project.yml for the documented iOS workflow.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:6",
+      "label": "Auto verification may run XcodeGen from the repository root even when the human workflow says `cd ios`; either keep the root spec mirror synchronized or standardize automation around `xcodegen generate --spec ios/project.yml`.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:7",
+      "label": "Simulator-name verification failures can be environmental rather than code failures; if the device type and runtime exist, create the missing simulator and rerun the planned xcodebuild destination unchanged.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:8",
+      "label": "Manual tactile UAT is still needed for nested menu ergonomics, scroll feel, editor cursor behavior, and saved plain-text display; automated tests/builds prove contracts and integration but not final touch feel.",
+      "type": "decision",
+      "description": "Source: M001-VALIDATION.md/Verification Class Compliance",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:9",
+      "label": "Moment text is private, so diagnostics for text-entry behavior should be deterministic tests and build output rather than runtime logging or telemetry of typed content.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Observability/diagnostics",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:10",
+      "label": "Visible-only UI navigation models should accept already-filtered view items from the caller instead of querying persistence, preserving search/filter semantics and avoiding database/archive coupling.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:11",
+      "label": "Date labels for timeline navigation belong in MomentDateFormatter and must remain count/statistics-free.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:12",
+      "label": "SwiftUI scroll targets for mixed section/row navigation can use a neutral target ID request with section anchor IDs and row `.id(item.id)` values.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:13",
+      "label": "For UIKit text-editing helpers, isolate string/range transformation in a pure NSRange/UTF-16 helper and test Unicode boundaries before wiring UI.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:14",
+      "label": "For lightweight input polish, share one plain editor component across Composer/Edit surfaces and preserve the existing plain Binding<String> save/draft path.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:15",
+      "label": "The exact iPhone 16 simulator destination was initially unavailable locally, despite being the planned verification destination.",
+      "type": "decision",
+      "description": "Source: S02-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:16",
+      "label": "Root-level automation expected an XcodeGen spec at the repository root even though the documented iOS workflow used ios/project.yml.",
+      "type": "decision",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "decision:M001:17",
+      "label": "Milestone validation returned needs-attention because manual/device UAT and consumer-side assessment artifacts were missing, even though automated contract/build evidence covered the core implementation.",
+      "type": "decision",
+      "description": "Source: M001-VALIDATION.md/Verdict Rationale",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:1",
+      "label": "Auto verification may run XcodeGen from the repository root even when the human workflow says `cd ios`; either keep the root spec mirror synchronized or standardize automation around `xcodegen generate --spec ios/project.yml`.",
+      "type": "lesson",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:2",
+      "label": "Simulator-name verification failures can be environmental rather than code failures; if the device type and runtime exist, create the missing simulator and rerun the planned xcodebuild destination unchanged.",
+      "type": "lesson",
+      "description": "Source: S02-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:3",
+      "label": "Manual tactile UAT is still needed for nested menu ergonomics, scroll feel, editor cursor behavior, and saved plain-text display; automated tests/builds prove contracts and integration but not final touch feel.",
+      "type": "lesson",
+      "description": "Source: M001-VALIDATION.md/Verification Class Compliance",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:4",
+      "label": "Moment text is private, so diagnostics for text-entry behavior should be deterministic tests and build output rather than runtime logging or telemetry of typed content.",
+      "type": "lesson",
+      "description": "Source: S02-SUMMARY.md/Observability/diagnostics",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:5",
+      "label": "Visible-only UI navigation models should accept already-filtered view items from the caller instead of querying persistence, preserving search/filter semantics and avoiding database/archive coupling.",
+      "type": "lesson",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:6",
+      "label": "Date labels for timeline navigation belong in MomentDateFormatter and must remain count/statistics-free.",
+      "type": "lesson",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:7",
+      "label": "SwiftUI scroll targets for mixed section/row navigation can use a neutral target ID request with section anchor IDs and row `.id(item.id)` values.",
+      "type": "lesson",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:8",
+      "label": "For UIKit text-editing helpers, isolate string/range transformation in a pure NSRange/UTF-16 helper and test Unicode boundaries before wiring UI.",
+      "type": "lesson",
+      "description": "Source: S02-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:9",
+      "label": "For lightweight input polish, share one plain editor component across Composer/Edit surfaces and preserve the existing plain Binding<String> save/draft path.",
+      "type": "lesson",
+      "description": "Source: S02-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:10",
+      "label": "The exact iPhone 16 simulator destination was initially unavailable locally, despite being the planned verification destination.",
+      "type": "lesson",
+      "description": "Source: S02-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:11",
+      "label": "Root-level automation expected an XcodeGen spec at the repository root even though the documented iOS workflow used ios/project.yml.",
+      "type": "lesson",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "lesson:M001:12",
+      "label": "Milestone validation returned needs-attention because manual/device UAT and consumer-side assessment artifacts were missing, even though automated contract/build evidence covered the core implementation.",
+      "type": "lesson",
+      "description": "Source: M001-VALIDATION.md/Verdict Rationale",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:1",
+      "label": "Visible-only UI navigation models should accept already-filtered view items from the caller instead of querying persistence, preserving search/filter semantics and avoiding database/archive coupling.",
+      "type": "pattern",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:2",
+      "label": "Date labels for timeline navigation belong in MomentDateFormatter and must remain count/statistics-free.",
+      "type": "pattern",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:3",
+      "label": "SwiftUI scroll targets for mixed section/row navigation can use a neutral target ID request with section anchor IDs and row `.id(item.id)` values.",
+      "type": "pattern",
+      "description": "Source: S01-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:4",
+      "label": "For UIKit text-editing helpers, isolate string/range transformation in a pure NSRange/UTF-16 helper and test Unicode boundaries before wiring UI.",
+      "type": "pattern",
+      "description": "Source: S02-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:5",
+      "label": "For lightweight input polish, share one plain editor component across Composer/Edit surfaces and preserve the existing plain Binding<String> save/draft path.",
+      "type": "pattern",
+      "description": "Source: S02-SUMMARY.md/Patterns established",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:6",
+      "label": "The exact iPhone 16 simulator destination was initially unavailable locally, despite being the planned verification destination.",
+      "type": "pattern",
+      "description": "Source: S02-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:7",
+      "label": "Root-level automation expected an XcodeGen spec at the repository root even though the documented iOS workflow used ios/project.yml.",
+      "type": "pattern",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "pattern:M001:8",
+      "label": "Milestone validation returned needs-attention because manual/device UAT and consumer-side assessment artifacts were missing, even though automated contract/build evidence covered the core implementation.",
+      "type": "pattern",
+      "description": "Source: M001-VALIDATION.md/Verdict Rationale",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "surprise:M001:1",
+      "label": "The exact iPhone 16 simulator destination was initially unavailable locally, despite being the planned verification destination.",
+      "type": "lesson",
+      "description": "Source: S02-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "surprise:M001:2",
+      "label": "Root-level automation expected an XcodeGen spec at the repository root even though the documented iOS workflow used ios/project.yml.",
+      "type": "lesson",
+      "description": "Source: S01-SUMMARY.md/Deviations",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
+    },
+    {
+      "id": "surprise:M001:3",
+      "label": "Milestone validation returned needs-attention because manual/device UAT and consumer-side assessment artifacts were missing, even though automated contract/build evidence covered the core implementation.",
+      "type": "lesson",
+      "description": "Source: M001-VALIDATION.md/Verdict Rationale",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M001/M001-LEARNINGS.md"
     }
   ],
   "edges": [
@@ -102,7 +460,277 @@
       "to": "task:M001:S02:T03",
       "type": "contains",
       "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M002",
+      "to": "slice:M002:S01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S01",
+      "to": "task:M002:S01:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S01",
+      "to": "task:M002:S01:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S01",
+      "to": "task:M002:S01:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S01",
+      "to": "task:M002:S01:T04",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:1",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:2",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:3",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:4",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:5",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:6",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:7",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:8",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:9",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:10",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:11",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:12",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:13",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:14",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:15",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:16",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "decision:M001:17",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:1",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:2",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:3",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:4",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:5",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:6",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:7",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:8",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:9",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:10",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:11",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "lesson:M001:12",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:1",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:2",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:3",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:4",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:5",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:6",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:7",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "pattern:M001:8",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "surprise:M001:1",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "surprise:M001:2",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "milestone:M001",
+      "to": "surprise:M001:3",
+      "type": "relates_to",
+      "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-04-29T18:11:26.594Z"
+  "builtAt": "2026-04-29T19:41:40.501Z"
 }

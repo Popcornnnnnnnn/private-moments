@@ -12,10 +12,10 @@
 
 ## Slices
 
-- [ ] **S01: S01** `risk:high` `depends:[]`
+- [x] **S01: S01** `risk:high` `depends:[]`
   > After this: A scripted sync/API check can create and delete a private comment using idempotent operations; iOS local database has a corresponding comment table and operation payload model ready for UI consumption.
 
-- [ ] **S02: Private comments in Moment detail** `risk:medium` `depends:[S01]`
+- [ ] **S02: S02** `risk:medium` `depends:[]`
   > After this: On iPhone, opening a moment detail shows a private comments section where the user can add and delete plain-text comments; the main timeline stays uncluttered.
 
 - [ ] **S03: Comment flow validation and documentation** `risk:medium` `depends:[S01,S02]`

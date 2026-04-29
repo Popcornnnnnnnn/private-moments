@@ -75,6 +75,8 @@ private-moments/
 
 当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字和图片、手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩与远端图片缓存、设置页存储诊断、英文人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、月份跳转、详情页、编辑、软删除同步，以及 Mac 后台状态页和 Posts 运维管理。
 
+当前 comment 基础设施已经具备 contract 层能力：Mac server 有 private comments 表和 `create_comment` / `delete_comment` sync operations，iOS 本地 SQLite 有 `local_comments` 表、outbox payload builders 和 server change apply 逻辑。可见 UI 入口尚未开放；评论仍是后续详情页功能的底层数据能力。
+
 当前 UI 设计原则是保持主时间线安静：筛选、月份跳转、收藏和管理能力应尽量藏在 toolbar menu、滑动操作或详情页里，避免把主界面做成后台管理界面。详细原则见 `docs/DESIGN-PRINCIPLES.md`。
 
 iOS 主要模块已经按职责拆分。`TimelineStore` 按 session、mutations、sync、server changes、media、payloads 和 sync retry 拆分；`LocalDatabase` 按 schema、records、timeline、sync、storage stats 和 SQLite helper 拆分；`TimelineView` 拆出 `TimelineRow`、`MomentDateFormatter`、`MediaGalleryView` 和 `ZoomableLocalImage`。设置页存储诊断拆在 `StorageStats.swift` 和 `StorageSettingsView.swift`。后续继续加功能时优先扩展这些小文件，不再把同步、数据库或主界面逻辑塞回单一大文件。
@@ -300,6 +302,32 @@ failed
 deleted
 ```
 
+### Comment
+
+Private comments 是附着在 post 下的单层 plain-text note。当前服务端 schema 和 sync contract 已支持，iOS 也有本地表和同步 plumbing；可见 UI 入口尚未开放。
+
+```text
+comment
+  id
+  postId
+  text
+  createdAt
+  updatedAt
+  deletedAt
+  clientCreatedAt
+  clientUpdatedAt
+  serverVersion
+  createdByDeviceId
+  updatedByDeviceId
+```
+
+说明：
+
+- `postId` 指向所属 post。
+- `text` 是普通字符串，不渲染 Markdown，不支持 replies、likes、mentions 或 public author identity。
+- `deletedAt` 为软删除时间。
+- `serverVersion` 用于增量同步。
+
 ### SyncOperation
 
 服务端记录设备提交过的操作，用于幂等和排查。
@@ -384,6 +412,22 @@ local_media
   createdAt
   updatedAt
 ```
+
+### local_comment
+
+```text
+local_comment
+  id
+  postId
+  text
+  createdAt
+  updatedAt
+  serverVersion
+  syncStatus
+  deletedAt
+```
+
+`local_comment` 是 iOS 端 private comments 的本地缓存和待同步状态来源。comment outbox operation 的 `entityId` 是 comment id；payload 中保留 `postId`，用于本地把 comment 同步状态映射回所属 moment。
 
 ### outbox_operation
 
