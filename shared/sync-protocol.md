@@ -40,12 +40,14 @@ The MVP server currently supports these operation types:
 - `update_post`: replace post text, `occurredAt`, media order, and removed media set.
 - `update_post_favorite`: update only a post's favorite state.
 - `delete_post`: soft delete an existing post.
+- `create_comment`: create a private plain-text comment attached to a post.
+- `delete_comment`: soft delete a private comment.
 - `media_uploaded`: server-originated change emitted after `/api/v1/media/upload`.
 - `media_deleted`: server-originated change emitted when a media item is removed from a post.
 
 Future operation types:
 
-- `upsert_media`
+- `update_comment` if editing private comments becomes necessary.
 - media status reconciliation
 
 ## Idempotency
@@ -70,6 +72,7 @@ Deletes are soft deletes.
 
 - iOS sets `deletedAt` locally and appends `delete_post`.
 - The server sets `deletedAt` on the post and related media.
+- Comment deletes set `deletedAt` on the comment without deleting the parent post.
 - The server permanently deletes records and files after 30 days.
 
 ## Partial Media Sync
@@ -140,6 +143,40 @@ Favorite state is synced as metadata on the post, but it uses a separate lightwe
 ```
 
 The server updates `Post.isFavorite`, emits `post_favorite_updated`, and assigns a new `serverVersion`. Clients should keep the time line visually quiet: favorites are a small marker and filter target, not a prominent content block.
+
+## Private Comments
+
+Private comments are single-level, plain-text notes attached to a post. They are synced as independent entities so updating post text or media cannot overwrite comments.
+
+`create_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload:
+
+```json
+{
+  "postId": "post-id",
+  "text": "follow-up thought",
+  "createdAt": "2026-04-29T12:07:00Z"
+}
+```
+
+Server behavior:
+
+- Rejects empty or whitespace-only comment text.
+- Rejects comments for missing or deleted posts.
+- Emits `comment_created` with `{ id, postId, text, createdAt, updatedAt, deletedAt: null }`.
+
+`delete_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload:
+
+```json
+{
+  "deletedAt": "2026-04-29T12:08:00Z"
+}
+```
+
+Server behavior:
+
+- Soft-deletes the comment.
+- Emits `comment_deleted` with `{ id, postId, deletedAt }`.
+- Does not expose replies, likes, mentions, Markdown rendering, or public author identity.
 
 ## Cursor Rules
 

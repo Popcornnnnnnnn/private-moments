@@ -140,6 +140,9 @@ extension LocalDatabase {
 
                 if operation.entityType == "post" {
                     try refreshPostSyncStatus(postId: operation.entityId)
+                } else if operation.entityType == "comment",
+                          let postId = try operationCommentPostId(operation) {
+                    try refreshPostSyncStatus(postId: postId)
                 }
             }
         }
@@ -164,6 +167,9 @@ extension LocalDatabase {
 
                 if operation.entityType == "post" {
                     try updatePostSyncStatus(postId: operation.entityId, status: "failed")
+                } else if operation.entityType == "comment",
+                          let postId = try operationCommentPostId(operation) {
+                    try updatePostSyncStatus(postId: postId, status: "failed")
                 }
             }
         }
@@ -237,6 +243,15 @@ extension LocalDatabase {
         try bind(Date(), to: 2, in: statement)
         try bind(mediaId, to: 3, in: statement)
         try stepDone(statement)
+    }
+
+    func operationCommentPostId(_ operation: OutboxOperation) throws -> String? {
+        guard let data = operation.payloadJson.data(using: .utf8),
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        return object["postId"] as? String
     }
 
     func applyPostCreated(
@@ -491,6 +506,91 @@ extension LocalDatabase {
         try bind(checksum, to: 4, in: statement)
         try bind(Date(), to: 5, in: statement)
         try bind(mediaId, to: 6, in: statement)
+        try stepDone(statement)
+        try refreshPostSyncStatus(postId: postId)
+    }
+
+    func applyCommentCreated(
+        id: String,
+        postId: String,
+        text: String,
+        createdAt: Date,
+        updatedAt: Date,
+        serverVersion: Int
+    ) throws {
+        guard try fetchPost(id: postId) != nil else {
+            return
+        }
+
+        if try fetchComment(id: id) == nil {
+            let comment = TimelineComment(
+                id: id,
+                postId: postId,
+                text: text,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                serverVersion: serverVersion,
+                syncStatus: "synced",
+                deletedAt: nil
+            )
+            try insert(comment)
+            try refreshPostSyncStatus(postId: postId)
+            return
+        }
+
+        let statement = try prepare(
+            """
+            UPDATE local_comments
+            SET postId = ?,
+                text = ?,
+                createdAt = ?,
+                updatedAt = ?,
+                serverVersion = ?,
+                syncStatus = CASE
+                    WHEN syncStatus = 'failed' THEN 'failed'
+                    ELSE 'synced'
+                END,
+                deletedAt = NULL
+            WHERE id = ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(postId, to: 1, in: statement)
+        try bind(text, to: 2, in: statement)
+        try bind(createdAt, to: 3, in: statement)
+        try bind(updatedAt, to: 4, in: statement)
+        try bind(serverVersion, to: 5, in: statement)
+        try bind(id, to: 6, in: statement)
+        try stepDone(statement)
+        try refreshPostSyncStatus(postId: postId)
+    }
+
+    func applyCommentDeleted(id: String, postId: String, deletedAt: Date, serverVersion: Int) throws {
+        guard try fetchPost(id: postId) != nil else {
+            return
+        }
+
+        let statement = try prepare(
+            """
+            UPDATE local_comments
+            SET deletedAt = ?,
+                serverVersion = ?,
+                syncStatus = 'synced',
+                updatedAt = ?
+            WHERE id = ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(deletedAt, to: 1, in: statement)
+        try bind(serverVersion, to: 2, in: statement)
+        try bind(deletedAt, to: 3, in: statement)
+        try bind(id, to: 4, in: statement)
         try stepDone(statement)
         try refreshPostSyncStatus(postId: postId)
     }

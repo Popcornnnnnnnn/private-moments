@@ -51,4 +51,25 @@ extension TimelineStore {
         let data = try JSONSerialization.data(withJSONObject: payload)
         return String(decoding: data, as: UTF8.self)
     }
+
+    func makeCreateCommentPayload(postId: String, text: String, createdAt: Date) throws -> String {
+        let payload: [String: String] = [
+            "postId": postId,
+            "text": text,
+            "createdAt": ISO8601DateFormatter().string(from: createdAt)
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func makeDeleteCommentPayload(postId: String, deletedAt: Date) throws -> String {
+        let payload: [String: String] = [
+            "postId": postId,
+            "deletedAt": ISO8601DateFormatter().string(from: deletedAt)
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        return String(decoding: data, as: UTF8.self)
+    }
 }

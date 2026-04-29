@@ -44,6 +44,20 @@ extension LocalDatabase {
 
             CREATE INDEX IF NOT EXISTS idx_local_media_postId ON local_media(postId);
 
+            CREATE TABLE IF NOT EXISTS local_comments (
+                id TEXT PRIMARY KEY,
+                postId TEXT NOT NULL REFERENCES local_posts(id) ON DELETE CASCADE,
+                text TEXT NOT NULL,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                serverVersion INTEGER,
+                syncStatus TEXT NOT NULL,
+                deletedAt TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_comments_postId ON local_comments(postId);
+            CREATE INDEX IF NOT EXISTS idx_local_comments_deletedAt ON local_comments(deletedAt);
+
             CREATE TABLE IF NOT EXISTS outbox_operations (
                 id TEXT PRIMARY KEY,
                 opId TEXT NOT NULL UNIQUE,
@@ -69,6 +83,8 @@ extension LocalDatabase {
         try addColumnIfNeeded(table: "local_media", column: "uploadError", definition: "TEXT")
         try addColumnIfNeeded(table: "local_media", column: "deletedAt", definition: "TEXT")
         try execute("CREATE INDEX IF NOT EXISTS idx_local_media_deletedAt ON local_media(deletedAt)")
+        try execute("CREATE INDEX IF NOT EXISTS idx_local_comments_postId ON local_comments(postId)")
+        try execute("CREATE INDEX IF NOT EXISTS idx_local_comments_deletedAt ON local_comments(deletedAt)")
     }
 
 

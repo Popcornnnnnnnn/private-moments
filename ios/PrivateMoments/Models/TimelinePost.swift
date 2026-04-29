@@ -28,9 +28,21 @@ struct TimelineMedia: Identifiable, Codable {
     var updatedAt: Date
 }
 
+struct TimelineComment: Identifiable, Codable {
+    var id: String
+    var postId: String
+    var text: String
+    var createdAt: Date
+    var updatedAt: Date
+    var serverVersion: Int?
+    var syncStatus: String
+    var deletedAt: Date?
+}
+
 struct TimelineItem: Identifiable {
     let post: TimelinePost
     let media: [TimelineMedia]
+    let comments: [TimelineComment]
 
     var id: String {
         post.id

@@ -207,4 +207,97 @@ extension TimelineStore {
             return false
         }
     }
+
+    func createComment(postId: String, text: String) async -> Bool {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let commentId = UUID().uuidString
+            let payload = try makeCreateCommentPayload(postId: postId, text: trimmedText, createdAt: now)
+            let comment = TimelineComment(
+                id: commentId,
+                postId: postId,
+                text: trimmedText,
+                createdAt: now,
+                updatedAt: now,
+                serverVersion: nil,
+                syncStatus: "pending",
+                deletedAt: nil
+            )
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "create_comment",
+                entityType: "comment",
+                entityId: commentId,
+                payloadJson: payload,
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.insertComment(comment, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+
+            if isAuthenticated {
+                Task {
+                    await syncNow()
+                }
+            }
+
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteComment(_ comment: TimelineComment) async {
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let payload = try makeDeleteCommentPayload(postId: comment.postId, deletedAt: now)
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "delete_comment",
+                entityType: "comment",
+                entityId: comment.id,
+                payloadJson: payload,
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.softDeleteComment(commentId: comment.id, deletedAt: now, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+
+            if isAuthenticated {
+                Task {
+                    await syncNow()
+                }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 }

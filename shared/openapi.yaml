@@ -875,12 +875,13 @@ components:
             - delete_post
             - update_post
             - update_post_favorite
-            - upsert_media
+            - create_comment
+            - delete_comment
         entityType:
           type: string
           enum:
             - post
-            - media
+            - comment
         entityId:
           type: string
           format: uuid
@@ -889,6 +890,11 @@ components:
           format: date-time
         payload:
           type: object
+          description: >
+            Operation-specific payload. `create_comment` requires `postId`, `text`, and optional `createdAt`.
+            `delete_comment` accepts optional `deletedAt`. Comment server changes use
+            `comment_created` with `{id, postId, text, createdAt, updatedAt, deletedAt}` and
+            `comment_deleted` with `{id, postId, deletedAt}`.
           additionalProperties: true
     SyncResponse:
       type: object

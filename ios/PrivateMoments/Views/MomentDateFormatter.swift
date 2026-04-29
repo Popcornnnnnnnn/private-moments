@@ -54,31 +54,12 @@ enum MomentDateFormatter {
         return formatter.string(from: date)
     }
 
-    static func dayJumpTitle(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
-        let dayDelta = daysBetween(date, and: now, calendar: calendar)
-        if dayDelta == 0 {
-            return "Today"
-        }
-
-        if dayDelta == 1 {
-            return "Yesterday"
-        }
-
-        if dayDelta == -1 {
-            return "Tomorrow"
-        }
-
-        if abs(dayDelta) <= 6 {
-            return weekdayTitle(for: date, calendar: calendar)
-        }
-
-        let currentYear = calendar.component(.year, from: now)
-        let year = calendar.component(.year, from: date)
-        if year == currentYear {
-            return dayJumpMonthDay(for: date, calendar: calendar)
-        }
-
-        return fullDate(for: date, calendar: calendar)
+    static func monthMenuTitle(for date: Date, calendar: Calendar = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMM yyyy"
+        return formatter.string(from: date)
     }
 
     private static func daysBetween(_ date: Date, and now: Date, calendar: Calendar) -> Int {
@@ -100,22 +81,6 @@ enum MomentDateFormatter {
         formatter.calendar = calendar
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "MMM d,"
-        return formatter.string(from: date)
-    }
-
-    private static func dayJumpMonthDay(for date: Date, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "MMM d"
-        return formatter.string(from: date)
-    }
-
-    private static func weekdayTitle(for date: Date, calendar: Calendar) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "EEEE"
         return formatter.string(from: date)
     }
 

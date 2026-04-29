@@ -62,6 +62,30 @@ extension LocalDatabase {
         return media
     }
 
+    func fetchComments(postId: String) throws -> [TimelineComment] {
+        let statement = try prepare(
+            """
+            SELECT id, postId, text, createdAt, updatedAt, serverVersion, syncStatus, deletedAt
+            FROM local_comments
+            WHERE postId = ?
+              AND deletedAt IS NULL
+            ORDER BY createdAt ASC
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(postId, to: 1, in: statement)
+        var comments: [TimelineComment] = []
+
+        while sqlite3_step(statement) == SQLITE_ROW {
+            comments.append(try timelineComment(statement))
+        }
+
+        return comments
+    }
+
     func insert(_ post: TimelinePost) throws {
         let statement = try prepare(
             """
@@ -112,6 +136,29 @@ extension LocalDatabase {
         try bind(media.checksum, to: 10, in: statement)
         try bind(media.createdAt, to: 11, in: statement)
         try bind(media.updatedAt, to: 12, in: statement)
+        try stepDone(statement)
+    }
+
+    func insert(_ comment: TimelineComment) throws {
+        let statement = try prepare(
+            """
+            INSERT INTO local_comments
+                (id, postId, text, createdAt, updatedAt, serverVersion, syncStatus, deletedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(comment.id, to: 1, in: statement)
+        try bind(comment.postId, to: 2, in: statement)
+        try bind(comment.text, to: 3, in: statement)
+        try bind(comment.createdAt, to: 4, in: statement)
+        try bind(comment.updatedAt, to: 5, in: statement)
+        try bind(comment.serverVersion, to: 6, in: statement)
+        try bind(comment.syncStatus, to: 7, in: statement)
+        try bind(comment.deletedAt, to: 8, in: statement)
         try stepDone(statement)
     }
 
@@ -196,6 +243,27 @@ extension LocalDatabase {
         return nil
     }
 
+    func fetchComment(id: String) throws -> TimelineComment? {
+        let statement = try prepare(
+            """
+            SELECT id, postId, text, createdAt, updatedAt, serverVersion, syncStatus, deletedAt
+            FROM local_comments
+            WHERE id = ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(id, to: 1, in: statement)
+
+        if sqlite3_step(statement) == SQLITE_ROW {
+            return try timelineComment(statement)
+        }
+
+        return nil
+    }
+
     func fetchOperation(opId: String) throws -> OutboxOperation? {
         let statement = try prepare(
             """
@@ -268,14 +336,40 @@ extension LocalDatabase {
 
     func refreshPostSyncStatus(postId: String) throws {
         let pendingOps = try count(
-            "SELECT COUNT(*) FROM outbox_operations WHERE entityId = ? AND status = 'pending'"
+            """
+            SELECT COUNT(*)
+            FROM outbox_operations o
+            WHERE o.status = 'pending'
+              AND (
+                  (o.entityType = 'post' AND o.entityId = ?)
+                  OR EXISTS (
+                      SELECT 1 FROM local_comments c
+                      WHERE c.id = o.entityId
+                        AND c.postId = ?
+                  )
+              )
+            """
         ) { statement in
             try self.bind(postId, to: 1, in: statement)
+            try self.bind(postId, to: 2, in: statement)
         }
         let failedOps = try count(
-            "SELECT COUNT(*) FROM outbox_operations WHERE entityId = ? AND status = 'failed'"
+            """
+            SELECT COUNT(*)
+            FROM outbox_operations o
+            WHERE o.status = 'failed'
+              AND (
+                  (o.entityType = 'post' AND o.entityId = ?)
+                  OR EXISTS (
+                      SELECT 1 FROM local_comments c
+                      WHERE c.id = o.entityId
+                        AND c.postId = ?
+                  )
+              )
+            """
         ) { statement in
             try self.bind(postId, to: 1, in: statement)
+            try self.bind(postId, to: 2, in: statement)
         }
         let failedMedia = try count(
             "SELECT COUNT(*) FROM local_media WHERE postId = ? AND uploadStatus = 'failed' AND deletedAt IS NULL"
@@ -374,6 +468,19 @@ extension LocalDatabase {
             checksum: optionalText(statement, 9),
             createdAt: try date(statement, 10),
             updatedAt: try date(statement, 11)
+        )
+    }
+
+    func timelineComment(_ statement: OpaquePointer) throws -> TimelineComment {
+        TimelineComment(
+            id: try text(statement, 0),
+            postId: try text(statement, 1),
+            text: try text(statement, 2),
+            createdAt: try date(statement, 3),
+            updatedAt: try date(statement, 4),
+            serverVersion: optionalInt(statement, 5),
+            syncStatus: try text(statement, 6),
+            deletedAt: try optionalDate(statement, 7)
         )
     }
 

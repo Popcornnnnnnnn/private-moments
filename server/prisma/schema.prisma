@@ -33,6 +33,8 @@ model Device {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdPosts Post[] @relation("CreatedPosts")
   updatedPosts Post[] @relation("UpdatedPosts")
+  createdComments Comment[] @relation("CreatedComments")
+  updatedComments Comment[] @relation("UpdatedComments")
   syncOperations SyncOperation[]
 
   @@index([userId])
@@ -58,6 +60,7 @@ model Post {
   createdByDevice Device? @relation("CreatedPosts", fields: [createdByDeviceId], references: [id], onDelete: SetNull)
   updatedByDevice Device? @relation("UpdatedPosts", fields: [updatedByDeviceId], references: [id], onDelete: SetNull)
   media           Media[]
+  comments        Comment[]
 
   @@index([occurredAt])
   @@index([deletedAt])
@@ -90,6 +93,29 @@ model Media {
   @@index([status])
   @@index([deletedAt])
   @@map("media")
+}
+
+model Comment {
+  id                String    @id
+  postId            String    @map("post_id")
+  text              String
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  clientCreatedAt   DateTime? @map("client_created_at")
+  clientUpdatedAt   DateTime? @map("client_updated_at")
+  serverVersion     Int       @default(0) @map("server_version")
+  createdByDeviceId String?   @map("created_by_device_id")
+  updatedByDeviceId String?   @map("updated_by_device_id")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdByDevice Device? @relation("CreatedComments", fields: [createdByDeviceId], references: [id], onDelete: SetNull)
+  updatedByDevice Device? @relation("UpdatedComments", fields: [updatedByDeviceId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([deletedAt])
+  @@index([serverVersion])
+  @@map("comments")
 }
 
 model SyncOperation {

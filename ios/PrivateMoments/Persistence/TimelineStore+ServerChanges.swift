@@ -102,6 +102,45 @@ extension TimelineStore {
 
             try database.applyMediaDeleted(mediaId: mediaId, postId: postId, deletedAt: deletedAt)
 
+        case "comment_created":
+            guard let id = change.payload["id"]?.stringValue,
+                  let postId = change.payload["postId"]?.stringValue,
+                  let text = change.payload["text"]?.stringValue,
+                  let createdAtValue = change.payload["createdAt"]?.stringValue,
+                  let updatedAtValue = change.payload["updatedAt"]?.stringValue else {
+                throw StoreError.invalidServerChange("comment_created is missing required fields")
+            }
+
+            guard let createdAt = Self.parseServerDate(createdAtValue) else {
+                throw StoreError.invalidServerChange("comment_created has an invalid createdAt")
+            }
+
+            guard let updatedAt = Self.parseServerDate(updatedAtValue) else {
+                throw StoreError.invalidServerChange("comment_created has an invalid updatedAt")
+            }
+
+            try database.applyCommentCreated(
+                id: id,
+                postId: postId,
+                text: text,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                serverVersion: change.version
+            )
+
+        case "comment_deleted":
+            guard let id = change.payload["id"]?.stringValue,
+                  let postId = change.payload["postId"]?.stringValue,
+                  let deletedAtValue = change.payload["deletedAt"]?.stringValue else {
+                throw StoreError.invalidServerChange("comment_deleted is missing required fields")
+            }
+
+            guard let deletedAt = Self.parseServerDate(deletedAtValue) else {
+                throw StoreError.invalidServerChange("comment_deleted has an invalid deletedAt")
+            }
+
+            try database.applyCommentDeleted(id: id, postId: postId, deletedAt: deletedAt, serverVersion: change.version)
+
         default:
             return
         }

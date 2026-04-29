@@ -217,6 +217,16 @@ async function applyOperation(
     return;
   }
 
+  if (operation.type === "create_comment" && operation.entityType === "comment") {
+    await applyCreateComment(tx, device, operation);
+    return;
+  }
+
+  if (operation.type === "delete_comment" && operation.entityType === "comment") {
+    await applyDeleteComment(tx, device, operation);
+    return;
+  }
+
   throw new OperationRejectedError(`Unsupported operation type: ${operation.type}`);
 }
 
@@ -549,6 +559,139 @@ async function applyDeletePost(
   });
 
   await tx.post.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      serverVersion: change.version,
+    },
+  });
+}
+
+async function applyCreateComment(
+  tx: Prisma.TransactionClient,
+  device: Device,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const postId = getString(operation.payload, "postId");
+  const text = getStringAllowingEmpty(operation.payload, "text");
+  const createdAt = getDate(operation.payload, "createdAt") ?? operation.clientCreatedAt;
+
+  if (!postId) {
+    throw new OperationRejectedError("create_comment.payload.postId is required");
+  }
+
+  if (text === null) {
+    throw new OperationRejectedError("create_comment.payload.text is required");
+  }
+
+  if (text.trim().length === 0) {
+    throw new OperationRejectedError("create_comment.payload.text cannot be empty");
+  }
+
+  const existingPost = await tx.post.findUnique({
+    where: {
+      id: postId,
+    },
+  });
+
+  if (!existingPost || existingPost.deletedAt) {
+    throw new OperationRejectedError("Post not found");
+  }
+
+  const existingComment = await tx.comment.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (existingComment) {
+    throw new OperationRejectedError("Comment already exists");
+  }
+
+  await tx.comment.create({
+    data: {
+      id: operation.entityId,
+      postId,
+      text: text.trim(),
+      clientCreatedAt: createdAt,
+      clientUpdatedAt: createdAt,
+      createdByDeviceId: device.id,
+      updatedByDeviceId: device.id,
+    },
+  });
+
+  const change = await tx.serverChange.create({
+    data: {
+      entityType: "comment",
+      entityId: operation.entityId,
+      changeType: "comment_created",
+      payloadJson: JSON.stringify({
+        id: operation.entityId,
+        postId,
+        text: text.trim(),
+        createdAt: createdAt.toISOString(),
+        updatedAt: createdAt.toISOString(),
+        deletedAt: null,
+      }),
+    },
+  });
+
+  await tx.comment.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      serverVersion: change.version,
+    },
+  });
+}
+
+async function applyDeleteComment(
+  tx: Prisma.TransactionClient,
+  device: Device,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const deletedAt = getDate(operation.payload, "deletedAt") ?? operation.clientCreatedAt;
+
+  const existingComment = await tx.comment.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+    include: {
+      post: true,
+    },
+  });
+
+  if (!existingComment || existingComment.post.deletedAt) {
+    throw new OperationRejectedError("Comment not found");
+  }
+
+  await tx.comment.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      deletedAt,
+      clientUpdatedAt: deletedAt,
+      updatedByDeviceId: device.id,
+    },
+  });
+
+  const change = await tx.serverChange.create({
+    data: {
+      entityType: "comment",
+      entityId: operation.entityId,
+      changeType: "comment_deleted",
+      payloadJson: JSON.stringify({
+        id: operation.entityId,
+        postId: existingComment.postId,
+        deletedAt: deletedAt.toISOString(),
+      }),
+    },
+  });
+
+  await tx.comment.update({
     where: {
       id: operation.entityId,
     },

@@ -6,7 +6,11 @@ extension LocalDatabase {
         let posts = try fetchPosts()
 
         return try posts.map { post in
-            TimelineItem(post: post, media: try fetchMedia(postId: post.id))
+            TimelineItem(
+                post: post,
+                media: try fetchMedia(postId: post.id),
+                comments: try fetchComments(postId: post.id)
+            )
         }
     }
 
@@ -15,7 +19,11 @@ extension LocalDatabase {
             return nil
         }
 
-        return TimelineItem(post: post, media: try fetchMedia(postId: post.id))
+        return TimelineItem(
+            post: post,
+            media: try fetchMedia(postId: post.id),
+            comments: try fetchComments(postId: post.id)
+        )
     }
 
     func insertPost(_ post: TimelinePost, media: [TimelineMedia], operation: OutboxOperation) throws {
@@ -126,6 +134,42 @@ extension LocalDatabase {
             }
 
             try insert(operation)
+        }
+    }
+
+    func insertComment(_ comment: TimelineComment, operation: OutboxOperation) throws {
+        try transaction {
+            try insert(comment)
+            try insert(operation)
+            try refreshPostSyncStatus(postId: comment.postId)
+        }
+    }
+
+    func softDeleteComment(commentId: String, deletedAt: Date, operation: OutboxOperation) throws {
+        try transaction {
+            guard let comment = try fetchComment(id: commentId) else {
+                return
+            }
+
+            let statement = try prepare(
+                """
+                UPDATE local_comments
+                SET deletedAt = ?,
+                    syncStatus = 'pending',
+                    updatedAt = ?
+                WHERE id = ?
+                """
+            )
+            defer {
+                sqlite3_finalize(statement)
+            }
+
+            try bind(deletedAt, to: 1, in: statement)
+            try bind(deletedAt, to: 2, in: statement)
+            try bind(commentId, to: 3, in: statement)
+            try stepDone(statement)
+            try insert(operation)
+            try refreshPostSyncStatus(postId: comment.postId)
         }
     }
 }

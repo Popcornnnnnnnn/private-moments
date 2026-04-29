@@ -28,25 +28,55 @@ This file is the explicit capability and coverage contract for the project.
 - Source: workflow alignment discussion 2026-04-30
 - Validation: Completion summaries name the verification class used and include the command or inspection evidence.
 
+### R008 — A user can add and delete private plain-text comments on an existing moment from the iOS moment detail view, with comments displayed under that moment without changing the main timeline feed density.
+- Class: functional
+- Status: active
+- Description: A user can add and delete private plain-text comments on an existing moment from the iOS moment detail view, with comments displayed under that moment without changing the main timeline feed density.
+- Why it matters: The user wants lightweight follow-up thoughts attached to a moment while preserving the main timeline as a quiet feed.
+- Source: M002 planning discussion 2026-04-30
+- Primary owning slice: M002/S02
+- Supporting slices: M002/S01,M002/S03
+- Validation: A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered.
+
+### R009 — Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
+- Class: functional
+- Status: active
+- Description: Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
+- Why it matters: Comments are user data; keeping them local-only would create avoidable loss and future migration risk.
+- Source: M002 planning discussion 2026-04-30
+- Primary owning slice: M002/S01
+- Supporting slices: M002/S02,M002/S03
+- Validation: Server sync tests or scripted API checks prove create/delete comment operations are idempotent, emit server changes, and are applied by iOS without advancing cursor before local persistence succeeds.
+
+### R010 — Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
+- Class: constraint
+- Status: active
+- Description: Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
+- Why it matters: Moments should stay a private expression space rather than becoming a social comment system or structured writing tool.
+- Source: M002 planning discussion 2026-04-30
+- Primary owning slice: M002/S02
+- Supporting slices: M002/S01,M002/S03
+- Validation: Implementation review confirms comments use plain strings, no nested thread model is exposed in iOS UI, and docs describe comments as private notes rather than social comments.
+
 ## Validated
 
-### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
+### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-only jump navigation from a low-frequency toolbar menu entry.
 - Class: functional
 - Status: validated
-- Description: The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
+- Description: The timeline must keep feed browsing as the primary experience while offering lightweight month-only jump navigation from a low-frequency toolbar menu entry.
 - Why it matters: As content grows, the user needs to return to a period of life without turning Moments into a database or management tool.
 - Source: M001 discussion
 - Primary owning slice: M001/S01
-- Validation: S01 completed: root-level and iOS XcodeGen specs generate successfully; generic iOS build passed; TimelineDateJumpModelsTests passed 5/5 on iPhone 17 simulator. Toolbar-only date jump menu remains the only date navigation entry, with month targets and day row targets wired through TimelineView.
+- Validation: Refined after user review: the toolbar calendar menu is month-only to avoid long nested day lists; exact date retrieval is deferred to future enhanced search. TimelineDateJumpModelsTests validate month grouping, month menu labels, filtered-item inputs, and count-free labels.
 
-### R005 — Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
+### R005 — Date navigation must only show existing months with moments, use life-feeling month labels, and avoid daily counts, daily submenus, or database-style date browsing.
 - Class: constraint
 - Status: validated
-- Description: Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
+- Description: Date navigation must only show existing months with moments, use life-feeling month labels, and avoid daily counts, daily submenus, or database-style date browsing.
 - Why it matters: The feature should support returning to lived time, not statistical archive management.
 - Source: M001 discussion
 - Primary owning slice: M001/S01
-- Validation: S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder.
+- Validation: Refined after user review: TimelineDateJumpBuilder no longer generates day groups for the calendar menu. Tests validate month-only groups, abbreviated menu labels, caller-filtered inputs, newest item month anchors, and count/statistics-free labels.
 
 ### R006 — Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
 - Class: functional
@@ -73,14 +103,17 @@ This file is the explicit capability and coverage contract for the project.
 | R001 | operational | active | none | none | A completed non-trivial change includes fresh verification output and either updated docs/fact sources or an explicit note that none were affected. |
 | R002 | operational | active | none | none | High-risk changes have a milestone or slice context/plan before code changes and include success criteria plus verification evidence. |
 | R003 | operational | active | none | none | Completion summaries name the verification class used and include the command or inspection evidence. |
-| R004 | functional | validated | M001/S01 | none | S01 completed: root-level and iOS XcodeGen specs generate successfully; generic iOS build passed; TimelineDateJumpModelsTests passed 5/5 on iPhone 17 simulator. Toolbar-only date jump menu remains the only date navigation entry, with month targets and day row targets wired through TimelineView. |
-| R005 | constraint | validated | M001/S01 | none | S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder. |
+| R004 | functional | validated | M001/S01 | none | Refined after user review: the toolbar calendar menu is month-only to avoid long nested day lists; exact date retrieval is deferred to future enhanced search. TimelineDateJumpModelsTests validate month grouping, month menu labels, filtered-item inputs, and count-free labels. |
+| R005 | constraint | validated | M001/S01 | none | Refined after user review: TimelineDateJumpBuilder no longer generates day groups for the calendar menu. Tests validate month-only groups, abbreviated menu labels, caller-filtered inputs, newest item month anchors, and count/statistics-free labels. |
 | R006 | functional | validated | M001/S02 | none | Validated by `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test` after creating an available iPhone 16 simulator: 14 XCTest cases passed, covering dash, bullet, numbered increment, empty-item exit, normal paragraph fallback, non-list fallback, invalid range fallback, max-int fallback, and emoji/Unicode UTF-16 safety. App integration also built with `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`. Manual UAT script is recorded in S02-UAT for tactile cursor/save verification. |
 | R007 | constraint | validated | M001/S02 | none | Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled. |
+| R008 | functional | active | M002/S02 | M002/S01,M002/S03 | A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered. |
+| R009 | functional | active | M002/S01 | M002/S02,M002/S03 | Server sync tests or scripted API checks prove create/delete comment operations are idempotent, emit server changes, and are applied by iOS without advancing cursor before local persistence succeeds. |
+| R010 | constraint | active | M002/S02 | M002/S01,M002/S03 | Implementation review confirms comments use plain strings, no nested thread model is exposed in iOS UI, and docs describe comments as private notes rather than social comments. |
 
 ## Coverage Summary
 
-- Active requirements: 3
-- Mapped to slices: 3
+- Active requirements: 6
+- Mapped to slices: 6
 - Validated: 4 (R004, R005, R006, R007)
 - Unmapped active requirements: 0

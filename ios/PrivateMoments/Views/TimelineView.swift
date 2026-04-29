@@ -100,7 +100,7 @@ struct TimelineView: View {
                                 return
                             }
 
-                            withAnimation(.easeInOut(duration: 0.24)) {
+                            withAnimation(.timingCurve(0.22, 0.0, 0.16, 1.0, duration: 0.75)) {
                                 proxy.scrollTo(request.targetID, anchor: .top)
                             }
                         }
@@ -126,23 +126,15 @@ struct TimelineView: View {
 
                     Menu {
                         ForEach(groupedItems) { group in
-                            Menu(group.title) {
-                                Button("Jump to Month") {
-                                    dateJumpRequest = TimelineDateJumpRequest(targetID: group.id)
-                                }
-
-                                ForEach(group.days) { day in
-                                    Button(day.title) {
-                                        dateJumpRequest = TimelineDateJumpRequest(targetID: day.targetItemID)
-                                    }
-                                }
+                            Button(group.menuTitle) {
+                                dateJumpRequest = TimelineDateJumpRequest(targetID: group.id)
                             }
                         }
                     } label: {
                         Image(systemName: "calendar")
                     }
                     .disabled(groupedItems.isEmpty)
-                    .accessibilityLabel("Jump to date")
+                    .accessibilityLabel("Jump to month")
 
                     Button {
                         isComposerPresented = true
