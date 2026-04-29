@@ -131,7 +131,7 @@ Comment operations：
 }
 ```
 
-Server 会为 comment 操作写入 `comment_created` / `comment_deleted` server changes。iOS 只在本地成功应用这些 server changes 后推进 cursor；comment change 解析错误会带 `comment_created` 或 `comment_deleted` 上下文，但不把评论正文写入错误信息。
+Server 会为 comment 操作写入 `comment_created` / `comment_deleted` server changes。当前 iOS 的 `delete_comment` payload 会包含 `postId`，用于本地把 comment 操作的同步状态刷新回 parent moment；server 处理删除时仍以既有 comment row 推导 parent `postId`，并在 emitted deletion change 中返回它。iOS 只在本地成功应用这些 server changes 后推进 cursor；comment change 解析错误会带 `comment_created` 或 `comment_deleted` 上下文，但不把评论正文写入错误信息。
 
 重要规则：
 
@@ -204,7 +204,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {

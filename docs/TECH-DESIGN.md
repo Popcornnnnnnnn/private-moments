@@ -75,7 +75,7 @@ private-moments/
 
 当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字和图片、手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩与远端图片缓存、设置页存储诊断、英文人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、月份跳转、详情页、编辑、软删除同步，以及 Mac 后台状态页和 Posts 运维管理。
 
-当前 comment 基础设施已经具备 contract 层能力：Mac server 有 private comments 表和 `create_comment` / `delete_comment` sync operations，iOS 本地 SQLite 有 `local_comments` 表、outbox payload builders 和 server change apply 逻辑。可见 UI 入口尚未开放；评论仍是后续详情页功能的底层数据能力。
+Private Comments 已作为 shipped detail-view 功能接入本地优先同步。Mac server 有 `comments` 表和 `create_comment` / `delete_comment` sync operations；iOS 本地 SQLite 有 `local_comments` 表、outbox payload builders 和 server change apply 逻辑。用户只在 Moment detail 里创建和删除 private plain-text follow-up notes；主时间线保持安静，不显示 comment badge、count、dot、preview 或搜索入口。
 
 当前 UI 设计原则是保持主时间线安静：筛选、月份跳转、收藏和管理能力应尽量藏在 toolbar menu、滑动操作或详情页里，避免把主界面做成后台管理界面。详细原则见 `docs/DESIGN-PRINCIPLES.md`。
 
@@ -196,7 +196,7 @@ Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server
 {
   "app": "PrivateMoments",
   "dataVersion": 1,
-  "schemaVersion": 1,
+  "schemaVersion": 4,
   "createdAt": "2026-04-28T00:00:00.000Z",
   "mediaLayoutVersion": 1
 }
@@ -304,7 +304,7 @@ deleted
 
 ### Comment
 
-Private comments 是附着在 post 下的单层 plain-text note。当前服务端 schema 和 sync contract 已支持，iOS 也有本地表和同步 plumbing；可见 UI 入口尚未开放。
+Private comments 是附着在 post 下的单层 plain-text note。当前 iOS UI 只在 Moment detail 暴露 `Private Comments` 区域和 `Add` 入口；主 timeline 不显示评论数量、徽标、预览或搜索入口。
 
 ```text
 comment
@@ -324,9 +324,11 @@ comment
 说明：
 
 - `postId` 指向所属 post。
-- `text` 是普通字符串，不渲染 Markdown，不支持 replies、likes、mentions 或 public author identity。
+- `text` 是普通字符串，不渲染 Markdown，不支持 replies、likes、mentions、rich text 或 public author identity。
 - `deletedAt` 为软删除时间。
 - `serverVersion` 用于增量同步。
+- Parent post 软删除后，评论不再有可见入口；server change apply 和本地查询都应避免让 orphan visible comments 留在 UI 中。
+- 现有排障信号包括 iOS `SyncBadge` / outbox 状态、`local_comments`、`outbox_operations`、server `comments`、`sync_operations`、`TimelineStore.errorMessage` 和 build/test output；这些信号不应记录或复制评论正文。
 
 ### SyncOperation
 
@@ -553,7 +555,7 @@ POST   /api/v1/admin/devices/:deviceId/clean-posts
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 1,
+  "schemaVersion": 4,
   "acceptedOps": ["op-uuid-1", "op-uuid-2"],
   "rejectedOps": [],
   "serverChanges": [

@@ -177,6 +177,19 @@ Mac 通过 Tailscale 或私有 VPN 被 iPhone 访问，不直接暴露公网。
 - 保存成功或用户主动丢弃时清除编辑草稿。
 - 详情页弱显示 iPhone 本地最后编辑时间。
 
+### Private Comments
+
+作为用户，我希望能在某条 Moment 的详情页里补充只给自己看的短句，这样后续想到的解释、上下文或小心情可以留在原 Moment 下，而不需要把主时间线变成讨论区。
+
+验收标准：
+
+- Private Comments 只出现在 Moment detail，不在主时间线显示 badge、count、dot、preview 或搜索入口。
+- 评论是私密 plain text follow-up notes；保存 Markdown-like 文本时按普通文本保留，不做 Markdown rendering。
+- 支持创建和删除单层评论；删除评论不删除 parent moment。
+- 删除 parent moment 后，该 Moment 及其评论都不再作为可见内容出现。
+- 不支持 replies、likes、mentions、public author identity、rich text 或任何公开社交机制。
+- Private Comments 参与本地优先同步；离线创建/删除先进入本机 outbox，Mac 可达后再同步。
+
 ### 删除
 
 作为用户，我希望可以删除不想保留的内容，这样记录可控。

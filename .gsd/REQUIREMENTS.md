@@ -38,16 +38,6 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: M002/S01,M002/S03
 - Validation: A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered.
 
-### R010 — Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
-- Class: constraint
-- Status: active
-- Description: Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
-- Why it matters: Moments should stay a private expression space rather than becoming a social comment system or structured writing tool.
-- Source: M002 planning discussion 2026-04-30
-- Primary owning slice: M002/S02
-- Supporting slices: M002/S01,M002/S03
-- Validation: Implementation review confirms comments use plain strings, no nested thread model is exposed in iOS UI, and docs describe comments as private notes rather than social comments.
-
 ## Validated
 
 ### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-only jump navigation from a low-frequency toolbar menu entry.
@@ -96,6 +86,16 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: M002/S02,M002/S03
 - Validation: S01 validated the private comment sync contract: T02 added server Prisma schema/migration plus idempotent `create_comment` and `delete_comment` operations emitting `comment_created`/`comment_deleted`; T03 added iOS `local_comments`, payload builders, outbox plumbing, and strict server-change apply before cursor advancement. Verification: `npm run server:prisma:generate && npm run server:build`, scripted server comment sync smoke test, `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`, and iOS XCTest payload coverage passed.
 
+### R010 — Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
+- Class: constraint
+- Status: validated
+- Description: Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
+- Why it matters: Moments should stay a private expression space rather than becoming a social comment system or structured writing tool.
+- Source: M002 planning discussion 2026-04-30
+- Primary owning slice: M002/S02
+- Supporting slices: M002/S01,M002/S03
+- Validation: Validated by implementation boundaries, tests, and durable docs in M002/S03/T02: comments remain plain strings with no replies/likes/mentions/Markdown rendering/public author identity; iOS XCTest coverage passed for Markdown-like literal text and no-rich-text/no-reply policy; PRD, TECH-DESIGN, OPERATOR-RUNBOOK, INTEGRATION-GUIDE, and sync protocol now describe Private Comments as private single-level plain-text notes rather than social comments.
+
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
@@ -109,11 +109,11 @@ This file is the explicit capability and coverage contract for the project.
 | R007 | constraint | validated | M001/S02 | none | Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled. |
 | R008 | functional | active | M002/S02 | M002/S01,M002/S03 | A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered. |
 | R009 | functional | validated | M002/S01 | M002/S02,M002/S03 | S01 validated the private comment sync contract: T02 added server Prisma schema/migration plus idempotent `create_comment` and `delete_comment` operations emitting `comment_created`/`comment_deleted`; T03 added iOS `local_comments`, payload builders, outbox plumbing, and strict server-change apply before cursor advancement. Verification: `npm run server:prisma:generate && npm run server:build`, scripted server comment sync smoke test, `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`, and iOS XCTest payload coverage passed. |
-| R010 | constraint | active | M002/S02 | M002/S01,M002/S03 | Implementation review confirms comments use plain strings, no nested thread model is exposed in iOS UI, and docs describe comments as private notes rather than social comments. |
+| R010 | constraint | validated | M002/S02 | M002/S01,M002/S03 | Validated by implementation boundaries, tests, and durable docs in M002/S03/T02: comments remain plain strings with no replies/likes/mentions/Markdown rendering/public author identity; iOS XCTest coverage passed for Markdown-like literal text and no-rich-text/no-reply policy; PRD, TECH-DESIGN, OPERATOR-RUNBOOK, INTEGRATION-GUIDE, and sync protocol now describe Private Comments as private single-level plain-text notes rather than social comments. |
 
 ## Coverage Summary
 
-- Active requirements: 5
-- Mapped to slices: 5
-- Validated: 5 (R004, R005, R006, R007, R009)
+- Active requirements: 4
+- Mapped to slices: 4
+- Validated: 6 (R004, R005, R006, R007, R009, R010)
 - Unmapped active requirements: 0

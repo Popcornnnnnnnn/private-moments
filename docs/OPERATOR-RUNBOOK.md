@@ -202,6 +202,94 @@ WHERE m.uploadStatus='uploaded'
 
 Cache recovery 健康状态下，`missing_visible_media` 应为 `0`。
 
+## Private Comments UAT
+
+Private Comments 是 Moment detail 里的私密 follow-up notes。UAT 目标是证明 create/delete、同步状态和持久化都工作，同时确认主 timeline 没有变成评论流。记录证据时只记录 aggregate counts、状态和命令结果；不要把密码、device token、server URL 中的 secret、或私密评论正文粘贴到日志、issue、handoff 或聊天里。
+
+### 前置条件
+
+- Mac server 已启动，并且真实 iPhone 能通过 Tailscale、Tailscale Serve HTTPS 或 LAN URL 访问。
+- iPhone 已安装当前 Debug app，并在 Settings 中登录同一 Mac server。
+- 如果需要验证 server SQLite，先确认 active server 使用的 database 已应用 schema version 4 migration；`GET /api/v1/health` 或 Admin Overview 应显示 `schemaVersion: 4`。
+- UAT 文本可以包含多行和 Markdown-like 字符，例如 `# heading`、`**bold**`、`- item`，但预期是 plain text literal，不应渲染为 Markdown。
+
+### iPhone UI 步骤
+
+1. 打开 Moments，选择一条已同步或可同步的 Moment。
+2. 进入 Moment detail，找到 `Private Comments` 区域。
+3. 点击 `Add`，创建第一条 private comment。
+4. 再创建第二条 private comment，建议使用多行和 Markdown-like literal 文本。
+5. 确认两条 comment 只出现在 Moment detail；返回主 timeline，确认没有 comment badge、count、dot、preview 或搜索入口。
+6. 删除其中一条 comment。
+7. 确认 parent moment 仍可见，剩余 comment 仍在 detail 中可见，被删除 comment 不再可见。
+8. 等待 `SyncBadge` / outbox 状态从 pending 或 syncing 清空；如果 Mac 暂不可达，应记录为 blocked 或 pending，而不是把它写成 passed。
+
+### 本机 timeline non-clutter 静态检查
+
+```bash
+! rg -n "comment|Comment" ios/PrivateMoments/Views/TimelineRow.swift ios/PrivateMoments/Views/TimelineView.swift
+```
+
+该检查应无命中，用来防止 Private Comments 在主 timeline 行或主 timeline view 中引入 badge/count/preview/search surface。
+
+### 复制 iPhone app Library container
+
+```bash
+rm -rf .tmp/device-app-library-check
+mkdir -p .tmp/device-app-library-check
+xcrun devicectl device copy from \
+  --device "wwz 的 iphone" \
+  --domain-type appDataContainer \
+  --domain-identifier com.popcornnnnnn.privatemoments \
+  --source Library \
+  --destination .tmp/device-app-library-check \
+  --timeout 60
+```
+
+如果 install、launch、手动 UI、container copy 或 DB inspection 被阻塞，在 handoff 中记录：阻塞步骤、错误摘要、是否已完成前置检查、以及哪些证据仍未获得。不要补写推断性结论。
+
+### iPhone SQLite aggregate checks
+
+只查询计数和状态，不查询 `text` 字段：
+
+```bash
+sqlite3 '.tmp/device-app-library-check/Application Support/PrivateMoments/private-moments.sqlite' <<'SQL'
+SELECT COUNT(*) AS local_comments_total FROM local_comments;
+SELECT COUNT(*) AS local_comments_visible FROM local_comments WHERE deletedAt IS NULL;
+SELECT syncStatus, COUNT(*) AS count FROM local_comments GROUP BY syncStatus ORDER BY syncStatus;
+SELECT type, status, COUNT(*) AS count
+FROM outbox_operations
+WHERE type IN ('create_comment', 'delete_comment')
+GROUP BY type, status
+ORDER BY type, status;
+SQL
+```
+
+健康结果取决于本次 UAT 创建和删除的数量，但至少应能看到 `local_comments` 中有对应 aggregate 变化；最终已同步时 comment outbox 不应长期停留在 pending/failed。若仍 pending，应同时记录当前 server reachability 和 Settings > Sync 状态。
+
+### Server SQLite aggregate checks
+
+先确认正在查询的是 active server database；开发环境常见位置取决于 `PRIVATE_MOMENTS_DATA_DIR` / `DATABASE_URL`。只查询 aggregate，不输出 comment body：
+
+```bash
+sqlite3 '<active-server-app.sqlite>' <<'SQL'
+SELECT COUNT(*) AS comments_total FROM comments;
+SELECT COUNT(*) AS comments_visible FROM comments WHERE deleted_at IS NULL;
+SELECT type, COUNT(*) AS count
+FROM sync_operations
+WHERE type IN ('create_comment', 'delete_comment')
+GROUP BY type
+ORDER BY type;
+SELECT rejected_at IS NOT NULL AS rejected, COUNT(*) AS count
+FROM sync_operations
+WHERE type IN ('create_comment', 'delete_comment')
+GROUP BY rejected
+ORDER BY rejected;
+SQL
+```
+
+健康结果应显示 comment create/delete operations 已进入 `sync_operations`，没有意外 rejected rows；`comments_visible` 应反映删除后一条仍可见、被删 comment 不可见。若 active database 没有 `comments` 表，先处理 schema version 4 migration 或 server data-dir mismatch，再重跑 UAT。
+
 ## Troubleshooting
 
 ### Login Fails With App Transport Security

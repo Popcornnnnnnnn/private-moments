@@ -65,9 +65,11 @@ Last reconciled: 2026-04-30
 - `server/src/api/media.ts`
 - `ios/PrivateMoments/Views/MomentDetailView.swift`
 
-## M002/S03 T01 私密评论验证记录（2026-04-30）
+## M002/S03 私密评论收尾状态（2026-04-30）
 
-本轮只记录 current-session 证据，不把不可用证据推断成 requirement validation：
+T02 已将 durable docs 对齐到 shipped Private Comments：PRD 描述详情页-only plain-text follow-up notes，TECH-DESIGN 描述 schema version 4、`local_comments` / server `comments` / outbox 架构和 timeline non-clutter 约束，OPERATOR-RUNBOOK 增加 Private Comments UAT 与 aggregate SQLite 检查路径，INTEGRATION-GUIDE 和 sync protocol 对齐 `schemaVersion: 4` 与 `delete_comment` payload 中可选 `postId` 的当前客户端行为。
+
+T01/T02 只记录 current-session 证据，不把不可用证据推断成 requirement validation：
 
 - 已通过 `npm run server:build`。
 - 已通过 iPhone 16 simulator 上的 `xcodebuild test`：16 个 XCTest 全部通过，其中包含 comment sync payload、plain-text/Markdown-like literal、delete selection 和 no-rich-text/no-reply policy 覆盖。
@@ -77,12 +79,11 @@ Last reconciled: 2026-04-30
 - 自动化环境无法执行真实 iPhone 上的手势 UAT：打开已有 moment detail、添加两条私密评论（含多行和 Markdown-like literal）、删除其中一条、确认 parent moment 和剩余评论仍可见、确认主 timeline 无 badge/count/dot/preview/search surface、等待 sync pending state 清空。因此 R008 仍不能仅凭本轮证据标记 validated。
 - 已复制 iPhone app `Library` container 并只查询 aggregate SQLite counts，不记录 comment body：`local_comments_total=0`、`local_comments_visible=0`、comment outbox ops/pending 均为 `0`。该设备当前没有可证明本次 create/delete UAT 的 comment rows。
 - 本地检查到 `server/data/app.sqlite` 和 `server/prisma/dev.db` 都有 `sync_operations`，但没有 `comments` table；server-side comment durability aggregate proof 在当前 archive 上不可用。后续真实 UAT 前需要确认 active dev server 使用的 database 已应用 schema version 4 migration，且查询时不要输出私密评论正文。
-- R010 本轮已有测试和实现边界证据，但长期 docs 更新仍在 S03/T02，因此暂不把 requirement 状态改为 validated。
+- R010 的长期 docs 更新已在 S03/T02 完成；如果 requirement validation 只要求文档对齐，可以在后续 requirement review 中标记 validated。R008 仍需要真实 iPhone 手动 UAT 才能关闭。
 
 ## 下一步合理工作
 
-- 继续 M002/S03/T02：更新 PRD、TECH-DESIGN、OPERATOR-RUNBOOK、INTEGRATION-GUIDE、sync protocol 和 handoff，使私密评论的 shipped behavior、schema version 4、UAT/SQLite 检查路径清晰一致。
-- 后续如要关闭 R008，需要在真实 iPhone 手动完成 private comments UAT，并在 copied app DB 与 active server DB 中只记录 aggregate counts/status，不记录评论正文。
+- 后续如要关闭 R008，需要按 `docs/OPERATOR-RUNBOOK.md` 的 Private Comments UAT 在真实 iPhone 手动完成 create/delete/sync 验证，并在 copied app DB 与 active server DB 中只记录 aggregate counts/status，不记录评论正文。
 - 开始新工作前，先用 `docs/WORKFLOW.md` 判断走 quick track 还是 milestone track。
 - 继续 feature work 时，不要把主 timeline 变复杂。
 - 扩展 Posts management 前，先把 Admin UI 拆成更小的 React components。

@@ -64,7 +64,7 @@ Observability Impact:
   - Files: `docs/OPERATOR-RUNBOOK.md`, `docs/HANDOFF.md`, `.gsd/REQUIREMENTS.md`, `ios/PrivateMoments/Views/TimelineRow.swift`, `ios/PrivateMoments/Views/TimelineView.swift`
   - Verify: `npm run server:build`; `cd ios && xcodegen generate && xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination 'platform=iOS Simulator,name=iPhone 16'`; `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`; `! rg -n "comment|Comment" ios/PrivateMoments/Views/TimelineRow.swift ios/PrivateMoments/Views/TimelineView.swift`; optional `npm run ios:device` plus manual UAT and SQLite aggregate checks.
 
-- [ ] **T02: Update durable docs for shipped private comments** `est:1.5h`
+- [x] **T02: Update durable docs for shipped private comments** `est:1.5h`
   Why: S01 and S02 changed product behavior and contracts, but long-lived docs still have drift: `docs/TECH-DESIGN.md` describes comment UI as not open, and `docs/INTEGRATION-GUIDE.md` contains a stale `schemaVersion: 3` example. S03 must leave cold-reader docs accurate and operational.
 
 Files: `docs/PRD.md`, `docs/TECH-DESIGN.md`, `docs/OPERATOR-RUNBOOK.md`, `docs/INTEGRATION-GUIDE.md`, `shared/sync-protocol.md`, `docs/HANDOFF.md`

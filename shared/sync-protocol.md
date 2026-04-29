@@ -164,10 +164,11 @@ Server behavior:
 - Rejects comments for missing or deleted posts.
 - Emits `comment_created` with `{ id, postId, text, createdAt, updatedAt, deletedAt: null }`.
 
-`delete_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload:
+`delete_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload. Clients may include `postId` so local sync-status refresh can map the comment operation back to the parent post; the server derives the authoritative `postId` from the existing comment row when emitting deletion changes.
 
 ```json
 {
+  "postId": "post-id",
   "deletedAt": "2026-04-29T12:08:00Z"
 }
 ```
@@ -176,7 +177,7 @@ Server behavior:
 
 - Soft-deletes the comment.
 - Emits `comment_deleted` with `{ id, postId, deletedAt }`.
-- Does not expose replies, likes, mentions, Markdown rendering, or public author identity.
+- Does not expose replies, likes, mentions, Markdown rendering, rich text, or public author identity.
 
 ## Cursor Rules
 
