@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "taskId": "T03",
+  "unitId": "M001/S02/T03",
+  "timestamp": 1777486058921,
+  "passed": false,
+  "discoverySource": "task-plan",
+  "checks": [
+    {
+      "command": "cd ios",
+      "exitCode": 0,
+      "durationMs": 7,
+      "verdict": "pass"
+    },
+    {
+      "command": "xcodegen generate",
+      "exitCode": 0,
+      "durationMs": 56,
+      "verdict": "pass"
+    },
+    {
+      "command": "xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test",
+      "exitCode": 70,
+      "durationMs": 61171,
+      "verdict": "fail"
+    },
+    {
+      "command": "xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build",
+      "exitCode": 0,
+      "durationMs": 2585,
+      "verdict": "pass"
+    }
+  ],
+  "retryAttempt": 1,
+  "maxRetries": 2
+}

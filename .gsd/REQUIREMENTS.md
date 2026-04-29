@@ -28,24 +28,6 @@ This file is the explicit capability and coverage contract for the project.
 - Source: workflow alignment discussion 2026-04-30
 - Validation: Completion summaries name the verification class used and include the command or inspection evidence.
 
-### R006 — Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
-- Class: functional
-- Status: active
-- Description: Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
-- Why it matters: This preserves lightweight expression while removing common friction when writing a few short lines.
-- Source: M001 discussion
-- Primary owning slice: M001/S02
-- Validation: In both New Moment and Edit Moment, pressing Return after `- item`, `• item`, or `1. item` continues the list; pressing Return on an empty generated list item exits the list.
-
-### R007 — Moments must not introduce Markdown rendering, rich-text formatting, headings, bold, quotes, or link previews as part of the list continuation work.
-- Class: constraint
-- Status: active
-- Description: Moments must not introduce Markdown rendering, rich-text formatting, headings, bold, quotes, or link previews as part of the list continuation work.
-- Why it matters: The app should remain an expression space rather than becoming a Markdown editor or writing tool.
-- Source: M001 discussion
-- Primary owning slice: M001/S02
-- Validation: Saved posts remain plain text and timeline/detail rendering does not interpret Markdown formatting.
-
 ## Validated
 
 ### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
@@ -66,6 +48,24 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M001/S01
 - Validation: S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder.
 
+### R006 — Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
+- Class: functional
+- Status: validated
+- Description: Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
+- Why it matters: This preserves lightweight expression while removing common friction when writing a few short lines.
+- Source: M001 discussion
+- Primary owning slice: M001/S02
+- Validation: Validated by `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test` after creating an available iPhone 16 simulator: 14 XCTest cases passed, covering dash, bullet, numbered increment, empty-item exit, normal paragraph fallback, non-list fallback, invalid range fallback, max-int fallback, and emoji/Unicode UTF-16 safety. App integration also built with `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`. Manual UAT script is recorded in S02-UAT for tactile cursor/save verification.
+
+### R007 — Moments must not introduce Markdown rendering, rich-text formatting, headings, bold, quotes, or link previews as part of the list continuation work.
+- Class: constraint
+- Status: validated
+- Description: Moments must not introduce Markdown rendering, rich-text formatting, headings, bold, quotes, or link previews as part of the list continuation work.
+- Why it matters: The app should remain an expression space rather than becoming a Markdown editor or writing tool.
+- Source: M001 discussion
+- Primary owning slice: M001/S02
+- Validation: Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled.
+
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
@@ -75,12 +75,12 @@ This file is the explicit capability and coverage contract for the project.
 | R003 | operational | active | none | none | Completion summaries name the verification class used and include the command or inspection evidence. |
 | R004 | functional | validated | M001/S01 | none | S01 completed: root-level and iOS XcodeGen specs generate successfully; generic iOS build passed; TimelineDateJumpModelsTests passed 5/5 on iPhone 17 simulator. Toolbar-only date jump menu remains the only date navigation entry, with month targets and day row targets wired through TimelineView. |
 | R005 | constraint | validated | M001/S01 | none | S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder. |
-| R006 | functional | active | M001/S02 | none | In both New Moment and Edit Moment, pressing Return after `- item`, `• item`, or `1. item` continues the list; pressing Return on an empty generated list item exits the list. |
-| R007 | constraint | active | M001/S02 | none | Saved posts remain plain text and timeline/detail rendering does not interpret Markdown formatting. |
+| R006 | functional | validated | M001/S02 | none | Validated by `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test` after creating an available iPhone 16 simulator: 14 XCTest cases passed, covering dash, bullet, numbered increment, empty-item exit, normal paragraph fallback, non-list fallback, invalid range fallback, max-int fallback, and emoji/Unicode UTF-16 safety. App integration also built with `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`. Manual UAT script is recorded in S02-UAT for tactile cursor/save verification. |
+| R007 | constraint | validated | M001/S02 | none | Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled. |
 
 ## Coverage Summary
 
-- Active requirements: 5
-- Mapped to slices: 5
-- Validated: 2 (R004, R005)
+- Active requirements: 3
+- Mapped to slices: 3
+- Validated: 4 (R004, R005, R006, R007)
 - Unmapped active requirements: 0

@@ -15,7 +15,7 @@
 - [x] **S01: S01** `risk:medium` `depends:[]`
   > After this: From the timeline toolbar calendar menu, the user can choose an existing month or a date with moments and the feed jumps to that point.
 
-- [ ] **S02: S02** `risk:high` `depends:[]`
+- [x] **S02: S02** `risk:high` `depends:[]`
   > After this: When feasible, typing a bullet or numbered list in New Moment or Edit Moment continues the list on Return and exits on an empty list item.
 
 ## Boundary Map

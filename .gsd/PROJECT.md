@@ -33,6 +33,7 @@ Implemented capabilities include:
 - Photo library and camera import.
 - Manual occurred date/time.
 - Composer and edit drafts.
+- Plain-text list continuation in New Moment and Edit Moment for `- `, `• `, and numbered prefixes, including numbered auto-increment and empty-item exit.
 - Offline outbox sync with delayed retry.
 - Media upload, compression, thumbnail recovery, and local cache recovery.
 - Timeline browsing with English human-friendly dates and temporary floating month hint.
@@ -47,6 +48,7 @@ Implemented capabilities include:
 - Content management features must help the user return to lived time, not turn Moments into an archive/database manager.
 - Date navigation must stay derived from currently visible timeline items, so active search/filter state controls available month/day jump targets.
 - Input assistance must reduce friction for lightweight expression, not turn Moments into a Markdown editor or writing tool.
+- List continuation is plain string editing only; saved/rendered posts remain literal plain text with no Markdown/rich-text interpretation.
 - App-facing UI copy should remain primarily English unless explicitly requested otherwise.
 - Sync cursor advancement is data-sensitive: the client must only advance after all returned server changes are applied.
 - Media recovery should prefer robust batch thumbnail recovery for iOS/Tailscale reliability.
@@ -74,4 +76,4 @@ Every non-trivial change must close with a short summary, fresh verification evi
 
 ## Milestone Sequence
 
-- [~] M001: Timeline Navigation and Lightweight Input — S01 date jump is complete/validated; S02 plain-text list continuation remains open.
+- [x] M001: Timeline Navigation and Lightweight Input — completed. Delivered quiet toolbar-only month/day timeline jumping from visible items plus shared plain-text list continuation in New Moment and Edit Moment. Automated XCTest/build verification passed; manual tactile UAT for menu/editor feel remains a follow-up.
