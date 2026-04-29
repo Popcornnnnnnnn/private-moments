@@ -28,24 +28,6 @@ This file is the explicit capability and coverage contract for the project.
 - Source: workflow alignment discussion 2026-04-30
 - Validation: Completion summaries name the verification class used and include the command or inspection evidence.
 
-### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
-- Class: functional
-- Status: active
-- Description: The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
-- Why it matters: As content grows, the user needs to return to a period of life without turning Moments into a database or management tool.
-- Source: M001 discussion
-- Primary owning slice: M001/S01
-- Validation: User can open the toolbar calendar menu, choose an existing month or a date within that month, and the timeline scrolls to the first matching moment without adding a persistent calendar/archive UI.
-
-### R005 — Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
-- Class: constraint
-- Status: active
-- Description: Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
-- Why it matters: The feature should support returning to lived time, not statistical archive management.
-- Source: M001 discussion
-- Primary owning slice: M001/S01
-- Validation: Date jump menu displays entries such as month titles and day labels without moment counts, and there is no empty-date selection path.
-
 ### R006 — Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
 - Class: functional
 - Status: active
@@ -55,6 +37,35 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M001/S02
 - Validation: In both New Moment and Edit Moment, pressing Return after `- item`, `• item`, or `1. item` continues the list; pressing Return on an empty generated list item exits the list.
 
+### R007 — Moments must not introduce Markdown rendering, rich-text formatting, headings, bold, quotes, or link previews as part of the list continuation work.
+- Class: constraint
+- Status: active
+- Description: Moments must not introduce Markdown rendering, rich-text formatting, headings, bold, quotes, or link previews as part of the list continuation work.
+- Why it matters: The app should remain an expression space rather than becoming a Markdown editor or writing tool.
+- Source: M001 discussion
+- Primary owning slice: M001/S02
+- Validation: Saved posts remain plain text and timeline/detail rendering does not interpret Markdown formatting.
+
+## Validated
+
+### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
+- Class: functional
+- Status: validated
+- Description: The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
+- Why it matters: As content grows, the user needs to return to a period of life without turning Moments into a database or management tool.
+- Source: M001 discussion
+- Primary owning slice: M001/S01
+- Validation: S01 completed: root-level and iOS XcodeGen specs generate successfully; generic iOS build passed; TimelineDateJumpModelsTests passed 5/5 on iPhone 17 simulator. Toolbar-only date jump menu remains the only date navigation entry, with month targets and day row targets wired through TimelineView.
+
+### R005 — Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
+- Class: constraint
+- Status: validated
+- Description: Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
+- Why it matters: The feature should support returning to lived time, not statistical archive management.
+- Source: M001 discussion
+- Primary owning slice: M001/S01
+- Validation: S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder.
+
 ## Traceability
 
 | ID | Class | Status | Primary owner | Supporting | Proof |
@@ -62,13 +73,14 @@ This file is the explicit capability and coverage contract for the project.
 | R001 | operational | active | none | none | A completed non-trivial change includes fresh verification output and either updated docs/fact sources or an explicit note that none were affected. |
 | R002 | operational | active | none | none | High-risk changes have a milestone or slice context/plan before code changes and include success criteria plus verification evidence. |
 | R003 | operational | active | none | none | Completion summaries name the verification class used and include the command or inspection evidence. |
-| R004 | functional | active | M001/S01 | none | User can open the toolbar calendar menu, choose an existing month or a date within that month, and the timeline scrolls to the first matching moment without adding a persistent calendar/archive UI. |
-| R005 | constraint | active | M001/S01 | none | Date jump menu displays entries such as month titles and day labels without moment counts, and there is no empty-date selection path. |
+| R004 | functional | validated | M001/S01 | none | S01 completed: root-level and iOS XcodeGen specs generate successfully; generic iOS build passed; TimelineDateJumpModelsTests passed 5/5 on iPhone 17 simulator. Toolbar-only date jump menu remains the only date navigation entry, with month targets and day row targets wired through TimelineView. |
+| R005 | constraint | validated | M001/S01 | none | S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder. |
 | R006 | functional | active | M001/S02 | none | In both New Moment and Edit Moment, pressing Return after `- item`, `• item`, or `1. item` continues the list; pressing Return on an empty generated list item exits the list. |
+| R007 | constraint | active | M001/S02 | none | Saved posts remain plain text and timeline/detail rendering does not interpret Markdown formatting. |
 
 ## Coverage Summary
 
-- Active requirements: 6
-- Mapped to slices: 6
-- Validated: 0
+- Active requirements: 5
+- Mapped to slices: 5
+- Validated: 2 (R004, R005)
 - Unmapped active requirements: 0

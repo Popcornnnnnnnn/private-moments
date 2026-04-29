@@ -23,6 +23,7 @@ The intended network boundary is Tailscale or another private VPN. The project i
 - Mac server: Node.js, TypeScript, Fastify, Prisma, SQLite, local file storage, auth, sync, media, admin APIs, and static Admin UI hosting.
 - Admin UI: React + Vite, built separately and served by Fastify.
 - Shared contracts: OpenAPI route contract and sync protocol notes under `shared/`.
+- XcodeGen specs: `ios/project.yml` is the canonical iOS spec for normal iOS work, and root `project.yml` mirrors it for automation that runs XcodeGen from the repository root.
 
 ## Current Product Surface
 
@@ -35,7 +36,7 @@ Implemented capabilities include:
 - Offline outbox sync with delayed retry.
 - Media upload, compression, thumbnail recovery, and local cache recovery.
 - Timeline browsing with English human-friendly dates and temporary floating month hint.
-- Search, filters, favorites, month jump, detail view, editing, image gallery, and soft delete.
+- Search, filters, favorites, quiet toolbar-only month/day date jump, detail view, editing, image gallery, and soft delete.
 - Settings pages for connection, sync, advanced sync, and storage diagnostics.
 - Mac Admin Overview and Posts management.
 - Device binding via stable device keys to avoid duplicate physical-device registrations.
@@ -44,6 +45,7 @@ Implemented capabilities include:
 
 - The main iOS timeline must stay simple. Low-frequency controls belong in toolbar menus, swipe actions, detail views, or settings.
 - Content management features must help the user return to lived time, not turn Moments into an archive/database manager.
+- Date navigation must stay derived from currently visible timeline items, so active search/filter state controls available month/day jump targets.
 - Input assistance must reduce friction for lightweight expression, not turn Moments into a Markdown editor or writing tool.
 - App-facing UI copy should remain primarily English unless explicitly requested otherwise.
 - Sync cursor advancement is data-sensitive: the client must only advance after all returned server changes are applied.
@@ -72,4 +74,4 @@ Every non-trivial change must close with a short summary, fresh verification evi
 
 ## Milestone Sequence
 
-- [ ] M001: Timeline Navigation and Lightweight Input — Add quiet month/day date jump and bounded plain-text list continuation while preserving Moments as a private expression feed.
+- [~] M001: Timeline Navigation and Lightweight Input — S01 date jump is complete/validated; S02 plain-text list continuation remains open.

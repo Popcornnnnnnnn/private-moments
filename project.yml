@@ -1,3 +1,5 @@
+# Root XcodeGen spec for automation that runs iOS verification from the repository root.
+# Keep in sync with ios/project.yml; source paths are rooted at this directory.
 name: PrivateMoments
 options:
   bundleIdPrefix: local.private-moments
@@ -11,7 +13,7 @@ targets:
       - iOS
     deploymentTarget: "17.0"
     sources:
-      - PrivateMoments
+      - ios/PrivateMoments
     dependencies:
       - sdk: libsqlite3.tbd
     settings:
@@ -25,7 +27,7 @@ targets:
         CURRENT_PROJECT_VERSION: 2
         SWIFT_VERSION: 5.0
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: PrivateMoments/Info.plist
+        INFOPLIST_FILE: ios/PrivateMoments/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: 1
   PrivateMomentsTests:
@@ -35,7 +37,7 @@ targets:
       - iOS
     deploymentTarget: "17.0"
     sources:
-      - PrivateMomentsTests
+      - ios/PrivateMomentsTests
     dependencies:
       - target: PrivateMoments
     hostApplication: PrivateMoments
@@ -53,7 +55,7 @@ targets:
       - iOS
     deploymentTarget: "17.0"
     sources:
-      - PrivateMomentsListContinuationTests
+      - ios/PrivateMomentsListContinuationTests
     dependencies:
       - target: PrivateMoments
     hostApplication: PrivateMoments
