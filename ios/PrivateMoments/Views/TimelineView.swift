@@ -8,7 +8,7 @@ struct TimelineView: View {
     @State private var pendingDelete: TimelineItem?
     @State private var searchText = ""
     @State private var selectedFilter: TimelineFilter = .all
-    @State private var monthJumpRequest: TimelineMonthJump?
+    @State private var dateJumpRequest: TimelineDateJumpRequest?
     @State private var floatingMonthTitle: String?
     @State private var isFloatingMonthVisible = false
     @State private var lastFloatingMonthAnchor: MonthAnchorValue?
@@ -43,6 +43,7 @@ struct TimelineView: View {
                                             TimelineRow(item: item) { media, index in
                                                 gallery = MediaGallery(media: media, startIndex: index)
                                             }
+                                            .id(item.id)
                                             .contentShape(Rectangle())
                                             .onTapGesture {
                                                 detailRoute = DetailRoute(postId: item.id)
@@ -94,13 +95,13 @@ struct TimelineView: View {
                                     .allowsHitTesting(false)
                             }
                         }
-                        .onChange(of: monthJumpRequest) { _, request in
+                        .onChange(of: dateJumpRequest) { _, request in
                             guard let request else {
                                 return
                             }
 
                             withAnimation(.easeInOut(duration: 0.24)) {
-                                proxy.scrollTo(request.monthID, anchor: .top)
+                                proxy.scrollTo(request.targetID, anchor: .top)
                             }
                         }
                     }
@@ -125,15 +126,23 @@ struct TimelineView: View {
 
                     Menu {
                         ForEach(groupedItems) { group in
-                            Button(group.title) {
-                                monthJumpRequest = TimelineMonthJump(monthID: group.id)
+                            Menu(group.title) {
+                                Button("Jump to Month") {
+                                    dateJumpRequest = TimelineDateJumpRequest(targetID: group.id)
+                                }
+
+                                ForEach(group.days) { day in
+                                    Button(day.title) {
+                                        dateJumpRequest = TimelineDateJumpRequest(targetID: day.targetItemID)
+                                    }
+                                }
                             }
                         }
                     } label: {
                         Image(systemName: "calendar")
                     }
                     .disabled(groupedItems.isEmpty)
-                    .accessibilityLabel("Jump to month")
+                    .accessibilityLabel("Jump to date")
 
                     Button {
                         isComposerPresented = true
@@ -181,34 +190,8 @@ struct TimelineView: View {
         }
     }
 
-    private var groupedItems: [TimelineMonthGroup] {
-        let idFormatter = DateFormatter()
-        idFormatter.dateFormat = "yyyy-MM"
-
-        let groups = Dictionary(grouping: filteredItems) { item in
-            idFormatter.string(from: item.post.occurredAt)
-        }
-
-        return groups
-            .compactMap { id, items -> TimelineMonthGroup? in
-                guard let representative = items.first?.post.occurredAt else {
-                    return nil
-                }
-
-                return TimelineMonthGroup(
-                    id: id,
-                    title: MomentDateFormatter.monthTitle(for: representative),
-                    items: items.sorted { $0.post.occurredAt > $1.post.occurredAt }
-                )
-            }
-            .sorted { lhs, rhs in
-                guard let left = lhs.items.first?.post.occurredAt,
-                      let right = rhs.items.first?.post.occurredAt else {
-                    return lhs.title > rhs.title
-                }
-
-                return left > right
-            }
+    private var groupedItems: [TimelineDateJumpMonthGroup] {
+        TimelineDateJumpBuilder.groups(from: filteredItems)
     }
 
     private var filteredItems: [TimelineItem] {
@@ -278,7 +261,7 @@ struct TimelineView: View {
         }
     }
 
-    private func monthAnchor(for group: TimelineMonthGroup) -> some View {
+    private func monthAnchor(for group: TimelineDateJumpMonthGroup) -> some View {
         Color.clear
             .frame(height: 1)
             .listRowInsets(EdgeInsets())
@@ -412,12 +395,6 @@ private enum TimelineFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private struct TimelineMonthGroup: Identifiable {
-    let id: String
-    let title: String
-    let items: [TimelineItem]
-}
-
 private struct MonthAnchorValue: Equatable {
     let id: String
     let title: String
@@ -448,9 +425,9 @@ private struct FloatingMonthIndicator: View {
     }
 }
 
-private struct TimelineMonthJump: Equatable {
+private struct TimelineDateJumpRequest: Equatable {
     let requestID = UUID()
-    let monthID: String
+    let targetID: TimelineItem.ID
 }
 
 private struct DetailRoute: Identifiable, Hashable {

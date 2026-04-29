@@ -71,7 +71,7 @@ Negative Tests:
   - Files: `ios/project.yml`, `ios/PrivateMoments/Views/TimelineDateJumpModels.swift`, `ios/PrivateMoments/Views/MomentDateFormatter.swift`, `ios/PrivateMomentsTests/TimelineDateJumpModelsTests.swift`, `ios/PrivateMoments/Models/TimelinePost.swift`
   - Verify: cd ios && xcodegen generate && xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO
 
-- [ ] **T02: Wire toolbar month/day menu to timeline scrolling** `est:1h`
+- [x] **T02: Wire toolbar month/day menu to timeline scrolling** `est:1h`
   Expected `skills_used` frontmatter: `accessibility`, `test`, `verify-before-complete`.
 
 Connect the date jump model to the real `TimelineView` toolbar. Keep the existing quiet calendar toolbar surface, but generalize the jump request from month-only to a target ID that can point either at an existing month anchor or at a visible row ID. Add stable row IDs to rendered `TimelineRow` values so day jumps have real `ScrollViewReader` targets.
