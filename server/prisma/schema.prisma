@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  devices Device[]
+
+  @@map("users")
+}
+
+model Device {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  name      String
+  deviceKey String?   @map("device_key")
+  tokenHash String    @unique @map("token_hash")
+  platform  String
+  lastSeenAt DateTime? @map("last_seen_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdPosts Post[] @relation("CreatedPosts")
+  updatedPosts Post[] @relation("UpdatedPosts")
+  syncOperations SyncOperation[]
+
+  @@index([userId])
+  @@index([revokedAt])
+  @@unique([userId, platform, deviceKey])
+  @@map("devices")
+}
+
+model Post {
+  id                String    @id
+  text              String
+  isFavorite        Boolean   @default(false) @map("is_favorite")
+  occurredAt        DateTime  @map("occurred_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  clientCreatedAt   DateTime? @map("client_created_at")
+  clientUpdatedAt   DateTime? @map("client_updated_at")
+  serverVersion     Int       @default(0) @map("server_version")
+  createdByDeviceId String?   @map("created_by_device_id")
+  updatedByDeviceId String?   @map("updated_by_device_id")
+
+  createdByDevice Device? @relation("CreatedPosts", fields: [createdByDeviceId], references: [id], onDelete: SetNull)
+  updatedByDevice Device? @relation("UpdatedPosts", fields: [updatedByDeviceId], references: [id], onDelete: SetNull)
+  media           Media[]
+
+  @@index([occurredAt])
+  @@index([deletedAt])
+  @@index([serverVersion])
+  @@map("posts")
+}
+
+model Media {
+  id                  String    @id
+  postId              String    @map("post_id")
+  kind                String
+  status              String
+  compressedPath      String?   @map("compressed_path")
+  originalPath        String?   @map("original_path")
+  thumbnailPath       String?   @map("thumbnail_path")
+  originalPreserved   Boolean   @default(false) @map("original_preserved")
+  width               Int?
+  height              Int?
+  compressedSizeBytes Int?      @map("compressed_size_bytes")
+  originalSizeBytes   Int?      @map("original_size_bytes")
+  checksum            String?
+  sortOrder           Int       @default(0) @map("sort_order")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("media")
+}
+
+model SyncOperation {
+  id              String    @id @default(uuid())
+  opId            String    @map("op_id")
+  deviceId        String    @map("device_id")
+  type            String
+  entityType      String    @map("entity_type")
+  entityId        String    @map("entity_id")
+  payloadJson     String    @map("payload_json")
+  receivedAt      DateTime  @default(now()) @map("received_at")
+  appliedAt       DateTime? @map("applied_at")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?   @map("rejection_reason")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, opId])
+  @@index([entityType, entityId])
+  @@map("sync_operations")
+}
+
+model ServerChange {
+  version    Int      @id @default(autoincrement())
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  changeType String   @map("change_type")
+  payloadJson String  @map("payload_json")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@map("server_changes")
+}

@@ -1,0 +1,929 @@
+openapi: 3.1.0
+info:
+  title: Private Moments API
+  version: 0.1.0
+  description: API contract for the Mac server used by the iOS app and admin UI.
+servers:
+  - url: http://127.0.0.1:3210
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/health:
+    get:
+      summary: Check server health and schema versions.
+      security: []
+      responses:
+        "200":
+          description: Server is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/auth/login:
+    post:
+      summary: Exchange the single-user password for a long-lived device token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /api/v1/devices:
+    get:
+      summary: List authorized devices.
+      responses:
+        "200":
+          description: Devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - devices
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+  /api/v1/devices/{deviceId}:
+    delete:
+      summary: Revoke an authorized device.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Device revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - device
+                properties:
+                  device:
+                    $ref: "#/components/schemas/Device"
+  /api/v1/sync:
+    post:
+      summary: Push local device changes and pull server changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "200":
+          description: Sync completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResponse"
+  /api/v1/media/upload:
+    post:
+      summary: Upload a media file for a post.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - mediaId
+                - postId
+                - variant
+                - file
+              properties:
+                mediaId:
+                  type: string
+                  format: uuid
+                postId:
+                  type: string
+                  format: uuid
+                variant:
+                  type: string
+                  enum:
+                    - compressed
+                    - original
+                    - thumbnail
+                originalPreserved:
+                  type: boolean
+                  default: false
+                sortOrder:
+                  type: integer
+                  default: 0
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Upload accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media
+                properties:
+                  media:
+                    type: object
+                    required:
+                      - id
+                      - postId
+                      - variant
+                      - status
+                      - path
+                      - sizeBytes
+                      - checksum
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      postId:
+                        type: string
+                        format: uuid
+                      variant:
+                        type: string
+                      status:
+                        type: string
+                      path:
+                        type: string
+                      sizeBytes:
+                        type: integer
+                      checksum:
+                        type: string
+  /api/v1/media/batch-download:
+    post:
+      summary: Download multiple media variants as base64 JSON payloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mediaIds
+              properties:
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                variant:
+                  type: string
+                  default: thumbnail
+                  enum:
+                    - compressed
+                    - original
+                    - thumbnail
+      responses:
+        "200":
+          description: Downloadable media payloads. Missing or deleted media are skipped.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media
+                properties:
+                  media:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MediaBatchDownloadItem"
+  /api/v1/media/{mediaId}:
+    get:
+      summary: Download a media variant.
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: variant
+          in: query
+          schema:
+            type: string
+            default: compressed
+            enum:
+              - compressed
+              - original
+              - thumbnail
+      responses:
+        "200":
+          description: Media bytes.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+  /api/v1/timeline:
+    get:
+      summary: Read server timeline.
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Timeline page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+                  nextCursor:
+                    type:
+                      - string
+                      - "null"
+  /api/v1/posts/{postId}:
+    get:
+      summary: Read one post by ID.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Post.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - post
+                properties:
+                  post:
+                    $ref: "#/components/schemas/Post"
+  /api/v1/search:
+    get:
+      summary: Search server archive by text.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Search results.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+  /api/v1/admin/status:
+    get:
+      summary: Read operational status and storage diagnostics.
+      responses:
+        "200":
+          description: Admin status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatusResponse"
+  /api/v1/admin/logs:
+    get:
+      summary: Read recent server logs for the Mac admin UI.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Recent logs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - logs
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/v1/admin/posts:
+    get:
+      summary: List posts for the Mac Admin Posts page.
+      parameters:
+        - name: deleted
+          in: query
+          schema:
+            type: string
+            default: active
+            enum:
+              - active
+              - deleted
+              - all
+        - name: deviceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Admin post list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - posts
+                  - nextCursor
+                  - searchLimited
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminPost"
+                  nextCursor:
+                    type:
+                      - string
+                      - "null"
+                  searchLimited:
+                    type: boolean
+  /api/v1/admin/posts/{postId}:
+    get:
+      summary: Read one Admin post detail.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Admin post detail.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - post
+                properties:
+                  post:
+                    $ref: "#/components/schemas/AdminPost"
+    delete:
+      summary: Soft delete one post from Admin.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Soft-deleted post.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - post
+                properties:
+                  post:
+                    anyOf:
+                      - $ref: "#/components/schemas/AdminPost"
+                      - type: "null"
+  /api/v1/admin/devices/{deviceId}/clean-posts/preview:
+    get:
+      summary: Preview permanent cleanup for posts created by one device.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cleanup preview.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - device
+                  - candidateCount
+                properties:
+                  device:
+                    $ref: "#/components/schemas/Device"
+                  candidateCount:
+                    type: integer
+  /api/v1/admin/devices/{deviceId}/clean-posts:
+    post:
+      summary: Permanently clean posts created by one device.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirmDeviceName
+              properties:
+                confirmDeviceName:
+                  type: string
+      responses:
+        "200":
+          description: Cleanup result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - device
+                  - deletedPosts
+                  - deletedMediaFiles
+                  - failedMediaFiles
+                properties:
+                  device:
+                    $ref: "#/components/schemas/Device"
+                  deletedPosts:
+                    type: integer
+                  deletedMediaFiles:
+                    type: integer
+                  failedMediaFiles:
+                    type: integer
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - ok
+        - serverVersion
+        - schemaVersion
+        - dataDir
+      properties:
+        ok:
+          type: boolean
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        dataDir:
+          type: string
+    LoginRequest:
+      type: object
+      required:
+        - password
+        - deviceName
+        - platform
+      properties:
+        password:
+          type: string
+        deviceName:
+          type: string
+        deviceKey:
+          type: string
+          description: Stable physical-device or browser-installation key used to rebind repeated logins.
+        platform:
+          type: string
+          enum:
+            - ios
+            - mac
+            - web
+    LoginResponse:
+      type: object
+      required:
+        - deviceId
+        - deviceToken
+        - serverVersion
+        - schemaVersion
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        deviceToken:
+          type: string
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+    Device:
+      type: object
+      required:
+        - id
+        - name
+        - platform
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        platform:
+          type: string
+        lastSeenAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        revokedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    Post:
+      type: object
+      required:
+        - id
+        - text
+        - isFavorite
+        - occurredAt
+        - media
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        isFavorite:
+          type: boolean
+        occurredAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+    Media:
+      type: object
+      required:
+        - id
+        - kind
+        - status
+        - sortOrder
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - image
+        status:
+          type: string
+          enum:
+            - pending
+            - uploaded
+            - failed
+            - deleted
+        sortOrder:
+          type: integer
+        originalPreserved:
+          type: boolean
+        width:
+          type:
+            - integer
+            - "null"
+        height:
+          type:
+            - integer
+            - "null"
+        compressedSizeBytes:
+          type:
+            - integer
+            - "null"
+        originalSizeBytes:
+          type:
+            - integer
+            - "null"
+        checksum:
+          type:
+            - string
+            - "null"
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        compressedUrl:
+          type:
+            - string
+            - "null"
+        originalUrl:
+          type:
+            - string
+            - "null"
+        thumbnailUrl:
+          type:
+            - string
+            - "null"
+    MediaBatchDownloadItem:
+      type: object
+      required:
+        - id
+        - variant
+        - contentType
+        - fileName
+        - base64
+      properties:
+        id:
+          type: string
+          format: uuid
+        variant:
+          type: string
+        contentType:
+          type: string
+        fileName:
+          type: string
+        base64:
+          type: string
+    AdminStatusResponse:
+      type: object
+      required:
+        - serverVersion
+        - schemaVersion
+        - dataDir
+        - uptimeSeconds
+        - counts
+        - storage
+      properties:
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        dataDir:
+          type: string
+        uptimeSeconds:
+          type: integer
+        counts:
+          $ref: "#/components/schemas/AdminStatusCounts"
+        storage:
+          $ref: "#/components/schemas/ServerStorageStats"
+    AdminStatusCounts:
+      type: object
+      required:
+        - activeDevices
+        - revokedDevices
+        - posts
+        - deletedPosts
+        - media
+      properties:
+        activeDevices:
+          type: integer
+        revokedDevices:
+          type: integer
+        posts:
+          type: integer
+        deletedPosts:
+          type: integer
+        media:
+          type: integer
+    ServerStorageStats:
+      type: object
+      required:
+        - totalBytes
+        - databaseBytes
+        - mediaBytes
+        - logsBytes
+        - availableBytes
+      properties:
+        totalBytes:
+          type: integer
+          format: int64
+        databaseBytes:
+          type: integer
+          format: int64
+        mediaBytes:
+          type: integer
+          format: int64
+        logsBytes:
+          type: integer
+          format: int64
+        availableBytes:
+          type: integer
+          format: int64
+    AdminPost:
+      type: object
+      required:
+        - id
+        - text
+        - isFavorite
+        - occurredAt
+        - createdAt
+        - updatedAt
+        - deletedAt
+        - serverVersion
+        - mediaCount
+        - totalMediaCount
+        - media
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        isFavorite:
+          type: boolean
+        occurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        clientCreatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        clientUpdatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        serverVersion:
+          type: integer
+        createdByDevice:
+          anyOf:
+            - $ref: "#/components/schemas/Device"
+            - type: "null"
+        updatedByDevice:
+          anyOf:
+            - $ref: "#/components/schemas/Device"
+            - type: "null"
+        mediaCount:
+          type: integer
+        totalMediaCount:
+          type: integer
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+    SyncRequest:
+      type: object
+      required:
+        - deviceId
+        - lastSyncCursor
+        - localChanges
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        lastSyncCursor:
+          type: integer
+          minimum: 0
+        localChanges:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncOperation"
+    SyncOperation:
+      type: object
+      required:
+        - opId
+        - type
+        - entityType
+        - entityId
+        - clientCreatedAt
+        - payload
+      properties:
+        opId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - create_post
+            - delete_post
+            - update_post
+            - update_post_favorite
+            - upsert_media
+        entityType:
+          type: string
+          enum:
+            - post
+            - media
+        entityId:
+          type: string
+          format: uuid
+        clientCreatedAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+    SyncResponse:
+      type: object
+      required:
+        - serverVersion
+        - schemaVersion
+        - acceptedOps
+        - rejectedOps
+        - serverChanges
+        - nextSyncCursor
+      properties:
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        acceptedOps:
+          type: array
+          items:
+            type: string
+        rejectedOps:
+          type: array
+          items:
+            type: object
+            required:
+              - opId
+              - reason
+            properties:
+              opId:
+                type: string
+              reason:
+                type: string
+        serverChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        nextSyncCursor:
+          type: integer

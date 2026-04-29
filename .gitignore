@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.env
+.DS_Store
+*.log
+.tmp/
+
+# iOS/Xcode generated output
+ios/PrivateMoments.xcodeproj/
+ios/build/
+ios/build-*/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Local development databases
+server/dev.db
+server/dev.db-*
+server/prisma/dev.db
+server/prisma/dev.db-*
+
+# Runtime data
+data/
