@@ -7,6 +7,8 @@ Last reconciled: 2026-04-29
 - Mac server builds and runs with Fastify, Prisma, SQLite, file storage, auth, sync, media upload, media download, admin routes, and static Admin UI hosting.
 - iOS app builds as `Moments` and installs on the paired iPhone with `npm run ios:device`.
 - Admin UI builds with `npm run admin:build` and is served at `/admin/`.
+- Project workflow is now documented in `docs/WORKFLOW.md` and enforced for agents through `AGENTS.md`.
+- `.gsd/` is the structured source for current project facts, requirements, decisions, and milestone state; `docs/` remains the stable human-facing documentation set.
 - Real iPhone verification on 2026-04-29 showed:
   - `local_posts`: 8
   - visible local posts: 5
@@ -65,6 +67,7 @@ These files are still worth splitting when they become active edit targets:
 
 ## Next Sensible Work
 
+- Use `docs/WORKFLOW.md` to choose quick track vs milestone track before starting new work.
 - Continue feature work without adding visible clutter to the main timeline.
 - Split Admin UI into smaller React components before expanding Posts management.
 - Split server API handlers when adding new admin/sync/media behavior.

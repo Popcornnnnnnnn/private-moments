@@ -21,3 +21,12 @@ server/prisma/dev.db-*
 
 # Runtime data
 data/
+
+# Agent/runtime state
+.bg-shell/
+.gsd/runtime/
+.gsd/exec/
+.gsd/browser-state/
+.gsd/browser-baselines/
+.gsd/gsd.db-shm
+.gsd/gsd.db-wal

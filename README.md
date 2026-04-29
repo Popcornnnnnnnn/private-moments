@@ -8,6 +8,7 @@ Current status: MVP local build. The Mac server, admin UI, sync API, and native 
 - [Technical Design](docs/TECH-DESIGN.md)
 - [Integration Guide](docs/INTEGRATION-GUIDE.md)
 - [Operator Runbook](docs/OPERATOR-RUNBOOK.md)
+- [Workflow](docs/WORKFLOW.md)
 - [Handoff](docs/HANDOFF.md)
 - [Design Principles](docs/DESIGN-PRINCIPLES.md)
 
@@ -22,11 +23,7 @@ npm run admin:build
 npm run server:dev
 ```
 
-Before first start, edit `server/.env` and set:
-
-```text
-PRIVATE_MOMENTS_INITIAL_PASSWORD=your-password
-```
+Before first start, set `PRIVATE_MOMENTS_INITIAL_PASSWORD` in `server/.env`. Agents should collect this value with secure secret handling instead of asking users to paste credentials into chat or documentation.
 
 This password is only used to create the first local user when the database has no users.
 

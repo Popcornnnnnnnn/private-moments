@@ -26,6 +26,31 @@ Private Moments is a private, local-first personal timeline:
 - `docs/INTEGRATION-GUIDE.md`: API usage and route reference.
 - `docs/OPERATOR-RUNBOOK.md`: setup, operations, iPhone install, troubleshooting.
 - `docs/HANDOFF.md`: current working state and follow-up notes.
+- `docs/WORKFLOW.md`: project workflow, documentation ownership, verification levels, and closure rules.
+
+## Persistent Workflow
+
+Use `.gsd/` as the structured source for current project facts, requirements, decisions, and milestone state. Use `docs/` as the stable human-facing documentation set.
+
+Work defaults to lightweight continuous maintenance. Upgrade to milestone/slice planning before implementation when a change can affect sync semantics, SQLite schema migrations, media storage or recovery, backup or restore, auth/security boundaries, cross-device behavior, or real-device recovery.
+
+Every non-trivial change must close with:
+
+- A concise change summary.
+- Fresh verification evidence from the current session.
+- Known issues, limitations, or next steps.
+- Updates to affected `.gsd` fact-source files.
+- Updates to affected human-facing docs when usage, operation, architecture, or product behavior changed.
+
+Keep docs single-purpose:
+
+- `docs/PRD.md`: product intent, user stories, goals, and non-goals.
+- `docs/TECH-DESIGN.md`: architecture, data flow, system design, and long-lived technical constraints.
+- `docs/OPERATOR-RUNBOOK.md`: setup, operation, verification, troubleshooting, and real-device checks.
+- `docs/INTEGRATION-GUIDE.md`: API route usage and integration reference.
+- `docs/HANDOFF.md`: current working state, recent important fixes, known risks, and next sensible work.
+- `docs/DESIGN-PRINCIPLES.md`: UI and product design principles.
+- `docs/WORKFLOW.md`: how work is planned, verified, closed, and documented.
 
 ## Commands
 
