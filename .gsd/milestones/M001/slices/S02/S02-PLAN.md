@@ -131,7 +131,7 @@ Done when: `PlainTextListEditor` compiles, helper tests still pass, and the app 
   - Files: `ios/PrivateMoments/Views/PlainTextListEditor.swift`, `ios/PrivateMomentsListContinuationTests/PlainTextListContinuationTests.swift`
   - Verify: cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
-- [ ] **T03: Wire shared editor into New Moment and Edit Moment** `est:45m`
+- [x] **T03: Wire shared editor into New Moment and Edit Moment** `est:45m`
   Executor skills: `test`, `verify-before-complete`.
 
 Why: The slice demo is only true when both New Moment and Edit Moment use the shared editor path. This task replaces the two `TextEditor` seams while preserving layout, draft autosave, save/update flows, and plain-text rendering boundaries.

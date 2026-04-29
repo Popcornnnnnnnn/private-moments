@@ -239,9 +239,8 @@ struct EditMomentView: View {
 
     private var editFieldsSection: some View {
         VStack(spacing: 0) {
-            TextEditor(text: $text)
+            PlainTextListEditor(text: $text)
                 .frame(minHeight: 160)
-                .scrollContentBackground(.hidden)
 
             Divider()
 

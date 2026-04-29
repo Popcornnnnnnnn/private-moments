@@ -17,7 +17,7 @@ struct ComposerView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextEditor(text: $text)
+                    PlainTextListEditor(text: $text)
                         .frame(minHeight: 140)
 
                     DatePicker("Date", selection: $occurredAt, displayedComponents: [.date, .hourAndMinute])
