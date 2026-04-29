@@ -31,3 +31,27 @@ data/
 .gsd/browser-baselines/
 .gsd/gsd.db-shm
 .gsd/gsd.db-wal
+
+# ── GSD baseline (auto-generated) ──
+.gsd-id
+.mcp.json
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+.env.*
+!.env.example
+.next/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+target/
+vendor/
+coverage/
+.cache/
+tmp/
