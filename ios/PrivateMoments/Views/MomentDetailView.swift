@@ -11,6 +11,8 @@ struct MomentDetailView: View {
     @State private var isEditing = false
     @State private var confirmDelete = false
     @State private var gallery: DetailMediaGallery?
+    @State private var commentDraft = ""
+    @State private var isSubmittingComment = false
 
     var body: some View {
         Group {
@@ -27,6 +29,14 @@ struct MomentDetailView: View {
 
                         if !item.media.isEmpty {
                             mediaGrid(item.media)
+                        }
+
+                        MomentCommentsSection(
+                            comments: item.comments,
+                            draftText: $commentDraft,
+                            isSubmitting: isSubmittingComment
+                        ) { text in
+                            await createComment(postId: item.post.id, text: text)
                         }
                     }
                     .padding()
@@ -108,6 +118,24 @@ struct MomentDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func createComment(postId: String, text: String) async -> Bool {
+        guard !isSubmittingComment else {
+            return false
+        }
+
+        await MainActor.run {
+            isSubmittingComment = true
+        }
+
+        let didCreate = await store.createComment(postId: postId, text: text)
+
+        await MainActor.run {
+            isSubmittingComment = false
+        }
+
+        return didCreate
     }
 
     private func mediaGrid(_ media: [TimelineMedia]) -> some View {

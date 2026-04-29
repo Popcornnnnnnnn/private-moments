@@ -50,4 +50,11 @@ final class MomentCommentUITests: XCTestCase {
         XCTAssertFalse(policy.submissionText()?.contains("<blockquote>") ?? true)
         XCTAssertFalse(policy.submissionText()?.contains("replyTo") ?? true)
     }
+
+    func testDraftClearsOnlyAfterSuccessfulSubmission() {
+        let policy = MomentCommentDraftPolicy(rawText: "retry this")
+
+        XCTAssertEqual(policy.draftText(afterSubmissionSucceeded: true), "")
+        XCTAssertEqual(policy.draftText(afterSubmissionSucceeded: false), "retry this")
+    }
 }

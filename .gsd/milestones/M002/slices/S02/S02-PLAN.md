@@ -62,7 +62,7 @@ Negative Tests (Q7): Empty string, whitespace/newline-only strings, strings with
   - Files: `ios/PrivateMoments/Views/MomentCommentsSection.swift`, `ios/PrivateMomentsTests/MomentCommentUITests.swift`, `ios/project.yml`
   - Verify: cd ios && xcodegen generate && xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination 'platform=iOS Simulator,name=iPhone 16'
 
-- [ ] **T02: Render and submit private comments in Moment detail** `est:1h`
+- [x] **T02: Render and submit private comments in Moment detail** `est:1h`
   Why: This task delivers the main R008 user-facing path: opening a moment detail shows comments under the moment and allows adding a private plain-text comment without touching timeline feed density.
 
 Skills expected in task plan frontmatter: `make-interfaces-feel-better`, `verify-before-complete`.

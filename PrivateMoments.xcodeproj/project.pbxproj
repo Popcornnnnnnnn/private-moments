@@ -17,6 +17,7 @@
 		49BAC84F64076C843D25FBEF /* ComposerDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D0D44F4407D31CCE2C39A7 /* ComposerDraftStore.swift */; };
 		49EE033526BA2443F187E4E1 /* TimelineStore+Mutations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C498131861F0CB40E275D05 /* TimelineStore+Mutations.swift */; };
 		4B2E6B365D0CC111136B3CFB /* TimelineDateJumpModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E1DBCC2D053719CDA25279 /* TimelineDateJumpModelsTests.swift */; };
+		50DF02F17AEC8C5F081A9F6D /* MomentCommentUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E74D58E2FA02657BC6B58E /* MomentCommentUITests.swift */; };
 		51E7693B516A45B233BA9708 /* LocalDatabase+Sync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE354C6BBDB9773CC3AB3C2F /* LocalDatabase+Sync.swift */; };
 		53FFD8D3A1FADB8763A1879A /* TimelineDateJumpModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F7ED4F68103681032CCADA /* TimelineDateJumpModels.swift */; };
 		59FC007F2EDFA0D1C3C0E639 /* TimelineStore+Payloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BDE6E131A3D57F82B3B2EE7 /* TimelineStore+Payloads.swift */; };
@@ -40,6 +41,7 @@
 		BC8DE1F9CEE4858074514719 /* LocalDatabase+Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 214BB9BC2946CBA9E29593EA /* LocalDatabase+Timeline.swift */; };
 		C0325564DB97A5E53455AFE6 /* PlainTextListContinuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62C32804BF97CFD935FF5F65 /* PlainTextListContinuationTests.swift */; };
 		C0E64219BCAD57FB9D844C10 /* MediaGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C69657E5ECDD630CFB8B846 /* MediaGalleryView.swift */; };
+		C1659C3ACA239DE52DACE9BF /* MomentCommentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C0F2C885C178566E18A6900 /* MomentCommentsSection.swift */; };
 		D0AD5146159E2F3051C9EEFF /* EditDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93AC740CDA299292E2F720CB /* EditDraftStore.swift */; };
 		D33FE600111948D5785CEFBA /* LocalDatabase+Records.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77A3A3C2AC04543BD816C10 /* LocalDatabase+Records.swift */; };
 		D5C9745C821E7D51D6F62847 /* PlainTextListEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD226404883BAD2C7D0D5BA /* PlainTextListEditor.swift */; };
@@ -93,6 +95,7 @@
 		62C32804BF97CFD935FF5F65 /* PlainTextListContinuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainTextListContinuationTests.swift; sourceTree = "<group>"; };
 		68C7A23276DB83BA4B52DB68 /* AppDirectories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDirectories.swift; sourceTree = "<group>"; };
 		6B5207F65CDC882108E77793 /* TimelineStore+ServerChanges.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimelineStore+ServerChanges.swift"; sourceTree = "<group>"; };
+		6C0F2C885C178566E18A6900 /* MomentCommentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MomentCommentsSection.swift; sourceTree = "<group>"; };
 		6E90F5D26B8EF2A307BB7AC9 /* TimelineStore+SyncRetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimelineStore+SyncRetry.swift"; sourceTree = "<group>"; };
 		760078F878FD9467869EF749 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		77E967E15F4D76061A672DF9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -107,6 +110,7 @@
 		AD046AEB64DA8C819CCD8E45 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		AEF2FFFABDAE7FA1292998B2 /* ImageCompression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCompression.swift; sourceTree = "<group>"; };
 		B2E7DD196C8A613C93EA95B1 /* PrivateMomentsListContinuationTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PrivateMomentsListContinuationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B4E74D58E2FA02657BC6B58E /* MomentCommentUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MomentCommentUITests.swift; sourceTree = "<group>"; };
 		B77A3A3C2AC04543BD816C10 /* LocalDatabase+Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalDatabase+Records.swift"; sourceTree = "<group>"; };
 		CB0FB3E5206AF1A68D8128B2 /* ZoomableLocalImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableLocalImage.swift; sourceTree = "<group>"; };
 		CE354C6BBDB9773CC3AB3C2F /* LocalDatabase+Sync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalDatabase+Sync.swift"; sourceTree = "<group>"; };
@@ -204,6 +208,7 @@
 			isa = PBXGroup;
 			children = (
 				DBD8EBCCF39A2D05A2B4E94F /* CommentSyncPayloadTests.swift */,
+				B4E74D58E2FA02657BC6B58E /* MomentCommentUITests.swift */,
 				F2E1DBCC2D053719CDA25279 /* TimelineDateJumpModelsTests.swift */,
 			);
 			name = PrivateMomentsTests;
@@ -215,6 +220,7 @@
 			children = (
 				8CF3B333861E67F771568CDC /* ComposerView.swift */,
 				2C69657E5ECDD630CFB8B846 /* MediaGalleryView.swift */,
+				6C0F2C885C178566E18A6900 /* MomentCommentsSection.swift */,
 				D4B9BB97EF1CC09D21459AF1 /* MomentDateFormatter.swift */,
 				94EEDB6F3C9C5A9809A33D2A /* MomentDetailView.swift */,
 				EDD226404883BAD2C7D0D5BA /* PlainTextListEditor.swift */,
@@ -382,6 +388,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				654807D87027094CABFE7D8B /* CommentSyncPayloadTests.swift in Sources */,
+				50DF02F17AEC8C5F081A9F6D /* MomentCommentUITests.swift in Sources */,
 				4B2E6B365D0CC111136B3CFB /* TimelineDateJumpModelsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -408,6 +415,7 @@
 				2758B811EA7DC30302B519D4 /* LocalDatabase.swift in Sources */,
 				700C6349916B9F0CBEFEEA34 /* LocalDatabaseError.swift in Sources */,
 				C0E64219BCAD57FB9D844C10 /* MediaGalleryView.swift in Sources */,
+				C1659C3ACA239DE52DACE9BF /* MomentCommentsSection.swift in Sources */,
 				7615AF57FE681A3468DA5012 /* MomentDateFormatter.swift in Sources */,
 				EA132BFBB63F3977FF1BFE70 /* MomentDetailView.swift in Sources */,
 				394A653B7F5BE62AA6A6CAA1 /* MomentEditMediaItem.swift in Sources */,
