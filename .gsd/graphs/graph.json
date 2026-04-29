@@ -98,6 +98,31 @@
       "confidence": "EXTRACTED"
     },
     {
+      "id": "slice:M002:S02",
+      "label": "S02: Private comments in Moment detail",
+      "type": "slice",
+      "confidence": "EXTRACTED",
+      "sourceFile": "milestones/M002/slices/S02/S02-PLAN.md"
+    },
+    {
+      "id": "task:M002:S02:T01",
+      "label": "T01: Add comment UI helper tests and plain-text policy",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S02:T02",
+      "label": "T02: Render and submit private comments in Moment detail",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "id": "task:M002:S02:T03",
+      "label": "T03: Add confirmed comment deletion and final timeline non-clutter proof",
+      "type": "task",
+      "confidence": "EXTRACTED"
+    },
+    {
       "id": "decision:M001:1",
       "label": "Keep date navigation in the existing toolbar calendar menu, with month submenus, direct Jump to Month actions, and day buttons rather than adding a calendar/archive surface.",
       "type": "decision",
@@ -492,6 +517,30 @@
       "confidence": "EXTRACTED"
     },
     {
+      "from": "milestone:M002",
+      "to": "slice:M002:S02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S02",
+      "to": "task:M002:S02:T01",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S02",
+      "to": "task:M002:S02:T02",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "from": "slice:M002:S02",
+      "to": "task:M002:S02:T03",
+      "type": "contains",
+      "confidence": "EXTRACTED"
+    },
+    {
       "from": "milestone:M001",
       "to": "decision:M001:1",
       "type": "relates_to",
@@ -732,5 +781,5 @@
       "confidence": "EXTRACTED"
     }
   ],
-  "builtAt": "2026-04-29T19:41:40.501Z"
+  "builtAt": "2026-04-29T19:54:52.662Z"
 }

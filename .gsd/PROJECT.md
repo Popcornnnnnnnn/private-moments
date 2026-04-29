@@ -4,7 +4,7 @@ Last updated: 2026-04-30
 
 ## What This Project Is
 
-Moments is a private expression space with no audience. It is a personal timeline app that feels like posting to a feed, but everything belongs only to the user: no likes, no comments, no pressure of being watched.
+Moments is a private expression space with no audience. It is a personal timeline app that feels like posting to a feed, but everything belongs only to the user: no likes, no public audience, no pressure of being watched.
 
 The product should preserve four north-star ideas:
 
@@ -19,7 +19,7 @@ The intended network boundary is Tailscale or another private VPN. The project i
 
 ## Current Architecture
 
-- iOS app: SwiftUI, local SQLite, local media cache, drafts, outbox sync, and real-device install support.
+- iOS app: SwiftUI, local SQLite, local media cache, drafts, outbox sync, comment persistence, and real-device install support.
 - Mac server: Node.js, TypeScript, Fastify, Prisma, SQLite, local file storage, auth, sync, media, admin APIs, and static Admin UI hosting.
 - Admin UI: React + Vite, built separately and served by Fastify.
 - Shared contracts: OpenAPI route contract and sync protocol notes under `shared/`.
@@ -38,6 +38,7 @@ Implemented capabilities include:
 - Media upload, compression, thumbnail recovery, and local cache recovery.
 - Timeline browsing with English human-friendly dates and temporary floating month hint.
 - Search, filters, favorites, quiet toolbar-only month/day date jump, detail view, editing, image gallery, and soft delete.
+- Private plain-text comments attached to moments, shown only in Moment detail with add/delete controls and existing sync-status visibility.
 - Settings pages for connection, sync, advanced sync, and storage diagnostics.
 - Mac Admin Overview and Posts management.
 - Device binding via stable device keys to avoid duplicate physical-device registrations.
@@ -45,6 +46,8 @@ Implemented capabilities include:
 ## Design Constraints
 
 - The main iOS timeline must stay simple. Low-frequency controls belong in toolbar menus, swipe actions, detail views, or settings.
+- Private comments are follow-up notes in Moment detail only; do not add comment badges, counts, previews, or search participation to the main timeline.
+- Comments remain plain text and single-level: no replies, likes, mentions, avatars/public author identity, Markdown rendering, rich text controls, comment media, or edit/thread affordances.
 - Content management features must help the user return to lived time, not turn Moments into an archive/database manager.
 - Date navigation must stay derived from currently visible timeline items, so active search/filter state controls available month/day jump targets.
 - Input assistance must reduce friction for lightweight expression, not turn Moments into a Markdown editor or writing tool.
@@ -77,3 +80,4 @@ Every non-trivial change must close with a short summary, fresh verification evi
 ## Milestone Sequence
 
 - [x] M001: Timeline Navigation and Lightweight Input — completed. Delivered quiet toolbar-only month/day timeline jumping from visible items plus shared plain-text list continuation in New Moment and Edit Moment. Automated XCTest/build verification passed; manual tactile UAT for menu/editor feel remains a follow-up.
+- [ ] M002: Private comments for moments — in progress. S01 delivered synced private-comment persistence and idempotent create/delete operations across server and iOS storage; S02 delivered the iOS Moment detail UI for viewing, adding, and confirmed deletion while keeping the main timeline uncluttered. S03 remains to complete real-device/cross-boundary UAT and human-facing documentation.
