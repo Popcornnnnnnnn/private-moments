@@ -57,4 +57,39 @@ final class MomentCommentUITests: XCTestCase {
         XCTAssertEqual(policy.draftText(afterSubmissionSucceeded: true), "")
         XCTAssertEqual(policy.draftText(afterSubmissionSucceeded: false), "retry this")
     }
+
+    func testMissingDeleteSelectionIsNoOp() {
+        let policy = MomentCommentDeletionPolicy(selectedComment: nil, deletingCommentID: nil)
+
+        XCTAssertNil(policy.commentToDelete)
+    }
+
+    func testConfirmingDeleteReturnsOnlySelectedComment() {
+        let selected = makeComment(id: "selected-comment")
+        let other = makeComment(id: "other-comment")
+        let policy = MomentCommentDeletionPolicy(selectedComment: selected, deletingCommentID: nil)
+
+        XCTAssertEqual(policy.commentToDelete?.id, selected.id)
+        XCTAssertNotEqual(policy.commentToDelete?.id, other.id)
+    }
+
+    func testDeleteAlreadyInProgressIsNoOp() {
+        let selected = makeComment(id: "selected-comment")
+        let policy = MomentCommentDeletionPolicy(selectedComment: selected, deletingCommentID: selected.id)
+
+        XCTAssertNil(policy.commentToDelete)
+    }
+
+    private func makeComment(id: String) -> TimelineComment {
+        TimelineComment(
+            id: id,
+            postId: "post-id",
+            text: "plain private text",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            serverVersion: nil,
+            syncStatus: "pending",
+            deletedAt: nil
+        )
+    }
 }

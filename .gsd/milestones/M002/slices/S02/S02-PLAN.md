@@ -77,7 +77,7 @@ Negative Tests (Q7): Whitespace-only submit disabled, empty comment list renders
   - Files: `ios/PrivateMoments/Views/MomentDetailView.swift`, `ios/PrivateMoments/Views/MomentCommentsSection.swift`
   - Verify: cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
-- [ ] **T03: Add confirmed comment deletion and final timeline non-clutter proof** `est:45m`
+- [x] **T03: Add confirmed comment deletion and final timeline non-clutter proof** `est:45m`
   Why: This closes the destructive half of R008 and proves R010/R008 constraints that comments remain detail-only, single-level, and not timeline clutter.
 
 Skills expected in task plan frontmatter: `make-interfaces-feel-better`, `verify-before-complete`.

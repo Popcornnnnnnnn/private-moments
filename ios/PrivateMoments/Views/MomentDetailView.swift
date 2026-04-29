@@ -13,6 +13,8 @@ struct MomentDetailView: View {
     @State private var gallery: DetailMediaGallery?
     @State private var commentDraft = ""
     @State private var isSubmittingComment = false
+    @State private var commentPendingDeletion: TimelineComment?
+    @State private var deletingCommentID: String?
 
     var body: some View {
         Group {
@@ -34,9 +36,12 @@ struct MomentDetailView: View {
                         MomentCommentsSection(
                             comments: item.comments,
                             draftText: $commentDraft,
-                            isSubmitting: isSubmittingComment
+                            isSubmitting: isSubmittingComment,
+                            deletingCommentID: deletingCommentID
                         ) { text in
                             await createComment(postId: item.post.id, text: text)
+                        } onDeleteRequest: { comment in
+                            requestCommentDelete(comment)
                         }
                     }
                     .padding()
@@ -88,6 +93,17 @@ struct MomentDetailView: View {
                 } message: {
                     Text("This removes the moment from your timeline and syncs the deletion to your Mac.")
                 }
+                .alert("Delete this private comment?", isPresented: commentDeleteConfirmationBinding) {
+                    Button("Cancel", role: .cancel) {
+                        commentPendingDeletion = nil
+                    }
+                    Button("Delete", role: .destructive) {
+                        confirmCommentDelete()
+                    }
+                    .disabled(deletingCommentID != nil)
+                } message: {
+                    Text("This removes the comment from this moment and syncs the deletion to your Mac.")
+                }
             } else {
                 ContentUnavailableView("Moment unavailable", systemImage: "rectangle.stack.badge.minus")
             }
@@ -136,6 +152,48 @@ struct MomentDetailView: View {
         }
 
         return didCreate
+    }
+
+    private var commentDeleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { commentPendingDeletion != nil },
+            set: { isPresented in
+                if !isPresented {
+                    commentPendingDeletion = nil
+                }
+            }
+        )
+    }
+
+    private func requestCommentDelete(_ comment: TimelineComment) {
+        guard deletingCommentID == nil else {
+            return
+        }
+
+        commentPendingDeletion = comment
+    }
+
+    private func confirmCommentDelete() {
+        let policy = MomentCommentDeletionPolicy(
+            selectedComment: commentPendingDeletion,
+            deletingCommentID: deletingCommentID
+        )
+        guard let comment = policy.commentToDelete else {
+            commentPendingDeletion = nil
+            return
+        }
+
+        deletingCommentID = comment.id
+        commentPendingDeletion = nil
+
+        Task {
+            await store.deleteComment(comment)
+            await MainActor.run {
+                if deletingCommentID == comment.id {
+                    deletingCommentID = nil
+                }
+            }
+        }
     }
 
     private func mediaGrid(_ media: [TimelineMedia]) -> some View {

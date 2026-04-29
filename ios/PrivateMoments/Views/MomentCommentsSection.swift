@@ -26,11 +26,27 @@ struct MomentCommentDraftPolicy: Equatable {
     }
 }
 
+struct MomentCommentDeletionPolicy {
+    let selectedComment: TimelineComment?
+    let deletingCommentID: String?
+
+    var commentToDelete: TimelineComment? {
+        guard let selectedComment,
+              deletingCommentID != selectedComment.id else {
+            return nil
+        }
+
+        return selectedComment
+    }
+}
+
 struct MomentCommentsSection: View {
     let comments: [TimelineComment]
     @Binding var draftText: String
     let isSubmitting: Bool
+    let deletingCommentID: String?
     let onSubmit: (String) async -> Bool
+    let onDeleteRequest: (TimelineComment) -> Void
 
     private var policy: MomentCommentDraftPolicy {
         MomentCommentDraftPolicy(rawText: draftText)
@@ -50,7 +66,13 @@ struct MomentCommentsSection: View {
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(comments) { comment in
-                        MomentCommentRow(comment: comment)
+                        MomentCommentRow(
+                            comment: comment,
+                            isDeleting: deletingCommentID == comment.id,
+                            onDeleteRequest: {
+                                onDeleteRequest(comment)
+                            }
+                        )
                     }
                 }
             }
@@ -128,23 +150,46 @@ struct MomentCommentsSection: View {
 
 private struct MomentCommentRow: View {
     let comment: TimelineComment
+    let isDeleting: Bool
+    let onDeleteRequest: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(comment.text)
-                .font(.body)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(comment.text)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
-                Text(comment.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(comment.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                Spacer()
+                    Spacer()
 
-                SyncBadge(status: comment.syncStatus)
+                    SyncBadge(status: comment.syncStatus)
+                }
             }
+
+            Button(role: .destructive, action: onDeleteRequest) {
+                ZStack {
+                    if isDeleting {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
+                .frame(width: 40, height: 40)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeleting)
+            .foregroundStyle(.red)
+            .accessibilityLabel("Delete private comment")
+            .accessibilityHint("Asks for confirmation before deleting this private comment.")
         }
         .padding(12)
         .background(Color(.tertiarySystemGroupedBackground))
