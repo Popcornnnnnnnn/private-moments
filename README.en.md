@@ -12,6 +12,31 @@ No followers. No engagement loop. No rented cloud archive.
 
 Just your moments, in a feed that belongs to you.
 
+## Screenshots
+
+The screenshots below use demo data and show the core iOS experience.
+
+<table>
+  <tr>
+    <td width="25%">
+      <img src="docs/assets/screenshots/ios-timeline.png" alt="Private Moments iOS timeline" width="220"><br>
+      <sub>Timeline: text, audio, comments, and AI-summary entry points stay in one feed.</sub>
+    </td>
+    <td width="25%">
+      <img src="docs/assets/screenshots/ios-summary.png" alt="Private Moments iOS AI Summary" width="220"><br>
+      <sub>AI Summary: long audio and video media can become structured summaries.</sub>
+    </td>
+    <td width="25%">
+      <img src="docs/assets/screenshots/ios-search.png" alt="Private Moments iOS search results" width="220"><br>
+      <sub>Search: find older moments by text, comments, transcripts, and summary matches.</sub>
+    </td>
+    <td width="25%">
+      <img src="docs/assets/screenshots/ios-diagnostics.png" alt="Private Moments iOS Storage and Diagnostics" width="220"><br>
+      <sub>Diagnostics: inspect local storage, sync state, and upload health on iPhone.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Why This Exists
 
 Most personal-memory tools push you toward one of two uncomfortable shapes:
