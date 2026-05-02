@@ -1,0 +1,1269 @@
+openapi: 3.1.0
+info:
+  title: Private Moments API
+  version: 0.1.0
+  description: API contract for the Mac server used by the iOS app and admin UI.
+servers:
+  - url: http://127.0.0.1:3210
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/health:
+    get:
+      summary: Check server health and schema versions.
+      security: []
+      responses:
+        "200":
+          description: Server is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/auth/login:
+    post:
+      summary: Exchange the single-user password for a long-lived device token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /api/v1/devices:
+    get:
+      summary: List authorized devices.
+      responses:
+        "200":
+          description: Devices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - devices
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+  /api/v1/devices/{deviceId}:
+    delete:
+      summary: Revoke an authorized device.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Device revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - device
+                properties:
+                  device:
+                    $ref: "#/components/schemas/Device"
+  /api/v1/sync:
+    post:
+      summary: Push local device changes and pull server changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "200":
+          description: Sync completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResponse"
+  /api/v1/ai/media-summary:
+    post:
+      summary: Generate or regenerate an AI summary for one audio/video media file.
+      description: >
+        The Mac server transcribes the stored audio/video media file locally, then
+        calls the configured external Chat Completions provider with the internal
+        transcript. Provider credentials stay server-side, and the iOS client only
+        receives generated summary metadata and lightweight failure status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaSummaryRequest"
+      responses:
+        "200":
+          description: Summary status or generated summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSummaryResponse"
+  /api/v1/ai/media-summary/{summaryId}:
+    delete:
+      summary: Soft delete one generated AI media summary.
+      parameters:
+        - name: summaryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted summary metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSummaryResponse"
+  /api/v1/media/upload:
+    post:
+      summary: Upload a media file for a post.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - mediaId
+                - postId
+                - variant
+                - file
+              properties:
+                mediaId:
+                  type: string
+                  format: uuid
+                postId:
+                  type: string
+                  format: uuid
+                variant:
+                  type: string
+                  enum:
+                    - compressed
+                    - original
+                    - thumbnail
+                kind:
+                  type: string
+                  enum:
+                    - image
+                    - video
+                    - audio
+                  default: image
+                mimeType:
+                  type: string
+                durationSeconds:
+                  type: number
+                transcriptionText:
+                  type: string
+                  description: Legacy optional transcript metadata for older clients; new iOS uploads omit it.
+                originalPreserved:
+                  type: boolean
+                  default: false
+                sortOrder:
+                  type: integer
+                  default: 0
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Upload accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media
+                properties:
+                  media:
+                    type: object
+                    required:
+                      - id
+                      - postId
+                      - variant
+                      - status
+                      - path
+                      - sizeBytes
+                      - checksum
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      postId:
+                        type: string
+                        format: uuid
+                      variant:
+                        type: string
+                      status:
+                        type: string
+                      path:
+                        type: string
+                      sizeBytes:
+                        type: integer
+                      checksum:
+                        type: string
+  /api/v1/media/batch-download:
+    post:
+      summary: Download multiple media variants as base64 JSON payloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mediaIds
+              properties:
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                variant:
+                  type: string
+                  default: thumbnail
+                  enum:
+                    - compressed
+                    - original
+                    - thumbnail
+      responses:
+        "200":
+          description: Downloadable media payloads. Missing or deleted media are skipped.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media
+                properties:
+                  media:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MediaBatchDownloadItem"
+  /api/v1/media/{mediaId}:
+    get:
+      summary: Download a media variant.
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: variant
+          in: query
+          schema:
+            type: string
+            default: compressed
+            enum:
+              - compressed
+              - original
+              - thumbnail
+      responses:
+        "200":
+          description: Media bytes.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+  /api/v1/timeline:
+    get:
+      summary: Read server timeline.
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Timeline page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+                  nextCursor:
+                    type:
+                      - string
+                      - "null"
+  /api/v1/posts/{postId}:
+    get:
+      summary: Read one post by ID.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Post.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - post
+                properties:
+                  post:
+                    $ref: "#/components/schemas/Post"
+  /api/v1/search:
+    get:
+      summary: Search server archive by post text, comments, and historical media transcript metadata.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Search results.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - posts
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Post"
+  /api/v1/admin/status:
+    get:
+      summary: Read operational status and storage diagnostics.
+      responses:
+        "200":
+          description: Admin status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatusResponse"
+  /api/v1/admin/logs:
+    get:
+      summary: Read recent server logs for the Mac admin UI.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Recent logs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - logs
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+  /api/v1/admin/posts:
+    get:
+      summary: List posts for the Mac Admin Posts page.
+      parameters:
+        - name: deleted
+          in: query
+          schema:
+            type: string
+            default: active
+            enum:
+              - active
+              - deleted
+              - all
+        - name: deviceId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Admin post list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - posts
+                  - nextCursor
+                  - searchLimited
+                properties:
+                  posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminPost"
+                  nextCursor:
+                    type:
+                      - string
+                      - "null"
+                  searchLimited:
+                    type: boolean
+  /api/v1/admin/posts/{postId}:
+    get:
+      summary: Read one Admin post detail.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Admin post detail.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - post
+                properties:
+                  post:
+                    $ref: "#/components/schemas/AdminPost"
+    delete:
+      summary: Soft delete one post from Admin.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Soft-deleted post.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - post
+                properties:
+                  post:
+                    anyOf:
+                      - $ref: "#/components/schemas/AdminPost"
+                      - type: "null"
+  /api/v1/admin/devices/{deviceId}/clean-posts/preview:
+    get:
+      summary: Preview permanent cleanup for posts created by one device.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cleanup preview.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - device
+                  - candidateCount
+                properties:
+                  device:
+                    $ref: "#/components/schemas/Device"
+                  candidateCount:
+                    type: integer
+  /api/v1/admin/devices/{deviceId}/clean-posts:
+    post:
+      summary: Permanently clean posts created by one device.
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirmDeviceName
+              properties:
+                confirmDeviceName:
+                  type: string
+      responses:
+        "200":
+          description: Cleanup result.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - device
+                  - deletedPosts
+                  - deletedMediaFiles
+                  - failedMediaFiles
+                properties:
+                  device:
+                    $ref: "#/components/schemas/Device"
+                  deletedPosts:
+                    type: integer
+                  deletedMediaFiles:
+                    type: integer
+                  failedMediaFiles:
+                    type: integer
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - ok
+        - serverVersion
+        - schemaVersion
+        - dataDir
+      properties:
+        ok:
+          type: boolean
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        dataDir:
+          type: string
+    LoginRequest:
+      type: object
+      required:
+        - password
+        - deviceName
+        - platform
+      properties:
+        password:
+          type: string
+        deviceName:
+          type: string
+        deviceKey:
+          type: string
+          description: Stable physical-device or browser-installation key used to rebind repeated logins.
+        platform:
+          type: string
+          enum:
+            - ios
+            - mac
+            - web
+    LoginResponse:
+      type: object
+      required:
+        - deviceId
+        - deviceToken
+        - serverVersion
+        - schemaVersion
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        deviceToken:
+          type: string
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+    Device:
+      type: object
+      required:
+        - id
+        - name
+        - platform
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        platform:
+          type: string
+        lastSeenAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        revokedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    Post:
+      type: object
+      required:
+        - id
+        - text
+        - isFavorite
+        - occurredAt
+        - media
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        isFavorite:
+          type: boolean
+        occurredAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+    Media:
+      type: object
+      required:
+        - id
+        - kind
+        - status
+        - sortOrder
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - image
+            - video
+            - audio
+        status:
+          type: string
+          enum:
+            - pending
+            - uploaded
+            - failed
+            - deleted
+        sortOrder:
+          type: integer
+        originalPreserved:
+          type: boolean
+        width:
+          type:
+            - integer
+            - "null"
+        height:
+          type:
+            - integer
+            - "null"
+        mimeType:
+          type:
+            - string
+            - "null"
+        durationSeconds:
+          type:
+            - number
+            - "null"
+        transcriptionText:
+          type:
+            - string
+            - "null"
+          description: Legacy transcript metadata when present; new iOS does not generate or display it.
+        compressedSizeBytes:
+          type:
+            - integer
+            - "null"
+        originalSizeBytes:
+          type:
+            - integer
+            - "null"
+        checksum:
+          type:
+            - string
+            - "null"
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        compressedUrl:
+          type:
+            - string
+            - "null"
+        originalUrl:
+          type:
+            - string
+            - "null"
+        thumbnailUrl:
+          type:
+            - string
+            - "null"
+    MediaSummaryRequest:
+      type: object
+      required:
+        - postId
+        - mediaId
+      properties:
+        postId:
+          type: string
+          format: uuid
+        mediaId:
+          type: string
+          format: uuid
+        forceRegenerate:
+          type: boolean
+          default: false
+    MediaSummaryResponse:
+      type: object
+      required:
+        - summary
+      properties:
+        summary:
+          $ref: "#/components/schemas/AISummary"
+    AISummary:
+      type: object
+      required:
+        - id
+        - postId
+        - mediaId
+        - status
+        - keyPoints
+        - sections
+        - documentBlocks
+        - promptVersion
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        postId:
+          type: string
+          format: uuid
+        mediaId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - transcribing
+            - summarizing
+            - ready
+            - failed
+            - deleted
+        format:
+          type:
+            - string
+            - "null"
+          enum:
+            - sentence
+            - summary_with_points
+            - sectioned
+            - document
+            - null
+        language:
+          type:
+            - string
+            - "null"
+        overview:
+          type:
+            - string
+            - "null"
+        keyPoints:
+          type: array
+          items:
+            type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/AISummarySection"
+        summaryText:
+          type:
+            - string
+            - "null"
+        documentTitle:
+          type:
+            - string
+            - "null"
+          description: Optional generated display title for v2 document-style summaries.
+        oneLiner:
+          type:
+            - string
+            - "null"
+          description: Short top-level summary for v2 document-style summaries.
+        documentBlocks:
+          type: array
+          description: Native block model rendered by iOS as a Markdown-like summary document. Empty for legacy summaries.
+          items:
+            $ref: "#/components/schemas/AISummaryDocumentBlock"
+        inputTranscriptLength:
+          type:
+            - integer
+            - "null"
+          description: Nullable when no usable transcript was produced or older generated records used a no-transcript path.
+        inputDurationSeconds:
+          type:
+            - number
+            - "null"
+        promptVersion:
+          type: string
+        provider:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        errorCode:
+          type:
+            - string
+            - "null"
+        errorMessage:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    AISummarySection:
+      type: object
+      required:
+        - heading
+        - bullets
+      properties:
+        heading:
+          type: string
+        bullets:
+          type: array
+          items:
+            type: string
+    AISummaryDocumentBlock:
+      type: object
+      required:
+        - kind
+        - level
+        - text
+        - items
+      properties:
+        kind:
+          type: string
+          enum:
+            - heading
+            - paragraph
+            - bullets
+            - numbered_list
+            - ai_suggested
+        level:
+          type: integer
+          enum:
+            - 0
+            - 1
+            - 2
+          description: Heading depth for heading blocks; 0 for non-heading blocks.
+        text:
+          type: string
+        items:
+          type: array
+          items:
+            type: string
+    MediaBatchDownloadItem:
+      type: object
+      required:
+        - id
+        - variant
+        - contentType
+        - fileName
+        - base64
+      properties:
+        id:
+          type: string
+          format: uuid
+        variant:
+          type: string
+        contentType:
+          type: string
+        fileName:
+          type: string
+        base64:
+          type: string
+    AdminStatusResponse:
+      type: object
+      required:
+        - serverVersion
+        - schemaVersion
+        - dataDir
+        - uptimeSeconds
+        - counts
+        - storage
+        - aiSummaries
+        - sync
+      properties:
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        dataDir:
+          type: string
+        uptimeSeconds:
+          type: integer
+        counts:
+          $ref: "#/components/schemas/AdminStatusCounts"
+        storage:
+          $ref: "#/components/schemas/ServerStorageStats"
+        aiSummaries:
+          $ref: "#/components/schemas/AdminAISummaryDiagnostics"
+        sync:
+          $ref: "#/components/schemas/AdminSyncDiagnostics"
+    AdminStatusCounts:
+      type: object
+      required:
+        - activeDevices
+        - revokedDevices
+        - posts
+        - deletedPosts
+        - media
+      properties:
+        activeDevices:
+          type: integer
+        revokedDevices:
+          type: integer
+        posts:
+          type: integer
+        deletedPosts:
+          type: integer
+        media:
+          type: integer
+    AdminAISummaryDiagnostics:
+      type: object
+      required:
+        - total
+        - transcribing
+        - summarizing
+        - ready
+        - failed
+        - deleted
+        - recent
+      properties:
+        total:
+          type: integer
+        transcribing:
+          type: integer
+        summarizing:
+          type: integer
+        ready:
+          type: integer
+        failed:
+          type: integer
+        deleted:
+          type: integer
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAISummaryDiagnosticItem"
+    AdminSyncDiagnostics:
+      type: object
+      required:
+        - latestServerChangeVersion
+      properties:
+        latestServerChangeVersion:
+          type: integer
+    AdminAISummaryDiagnosticItem:
+      type: object
+      required:
+        - id
+        - mediaId
+        - status
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        mediaId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - transcribing
+            - summarizing
+            - failed
+        errorCode:
+          type:
+            - string
+            - "null"
+        inputTranscriptLength:
+          type:
+            - integer
+            - "null"
+        inputDurationSeconds:
+          type:
+            - number
+            - "null"
+        ageSeconds:
+          type: integer
+          description: Seconds since this non-ready summary record was last updated.
+        retryHint:
+          type: string
+          description: Human-readable diagnostic hint for the current summary state.
+        updatedAt:
+          type: string
+          format: date-time
+    ServerStorageStats:
+      type: object
+      required:
+        - totalBytes
+        - databaseBytes
+        - mediaBytes
+        - logsBytes
+        - availableBytes
+      properties:
+        totalBytes:
+          type: integer
+          format: int64
+        databaseBytes:
+          type: integer
+          format: int64
+        mediaBytes:
+          type: integer
+          format: int64
+        logsBytes:
+          type: integer
+          format: int64
+        availableBytes:
+          type: integer
+          format: int64
+    AdminPost:
+      type: object
+      required:
+        - id
+        - text
+        - isFavorite
+        - occurredAt
+        - createdAt
+        - updatedAt
+        - deletedAt
+        - serverVersion
+        - mediaCount
+        - totalMediaCount
+        - media
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        isFavorite:
+          type: boolean
+        occurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        clientCreatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        clientUpdatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        serverVersion:
+          type: integer
+        createdByDevice:
+          anyOf:
+            - $ref: "#/components/schemas/Device"
+            - type: "null"
+        updatedByDevice:
+          anyOf:
+            - $ref: "#/components/schemas/Device"
+            - type: "null"
+        mediaCount:
+          type: integer
+        totalMediaCount:
+          type: integer
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/Media"
+    SyncRequest:
+      type: object
+      required:
+        - deviceId
+        - lastSyncCursor
+        - localChanges
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        lastSyncCursor:
+          type: integer
+          minimum: 0
+        localChanges:
+          type: array
+          items:
+            $ref: "#/components/schemas/SyncOperation"
+    SyncOperation:
+      type: object
+      required:
+        - opId
+        - type
+        - entityType
+        - entityId
+        - clientCreatedAt
+        - payload
+      properties:
+        opId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - create_post
+            - delete_post
+            - update_post
+            - update_post_favorite
+            - create_comment
+            - delete_comment
+            - update_media_transcription
+            - upsert_media
+        entityType:
+          type: string
+          enum:
+            - post
+            - comment
+            - media
+        entityId:
+          type: string
+          format: uuid
+        clientCreatedAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          description: >
+            Operation-specific payload. `create_comment` uses `entityType: comment`,
+            `entityId` as the comment id, and payload `{postId, text, createdAt}`.
+            `text` is plain text and must be non-empty and at most 500 characters.
+            `delete_comment` uses payload `{postId, deletedAt}`. Server changes include
+            `comment_created` with `{id, postId, text, createdAt, updatedAt, deletedAt}`
+            and `comment_deleted` with `{id, postId, deletedAt}`.
+            `update_media_transcription` is retained for older clients. It uses
+            `entityType: media` and payload `{postId, transcriptionText, updatedAt}`;
+            server changes include `media_transcription_updated` with
+            `{id, postId, transcriptionText, updatedAt}`.
+          additionalProperties: true
+    SyncResponse:
+      type: object
+      required:
+        - serverVersion
+        - schemaVersion
+        - acceptedOps
+        - rejectedOps
+        - serverChanges
+        - nextSyncCursor
+      properties:
+        serverVersion:
+          type: string
+        schemaVersion:
+          type: integer
+        acceptedOps:
+          type: array
+          items:
+            type: string
+        rejectedOps:
+          type: array
+          items:
+            type: object
+            required:
+              - opId
+              - reason
+            properties:
+              opId:
+                type: string
+              reason:
+                type: string
+        serverChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        nextSyncCursor:
+          type: integer

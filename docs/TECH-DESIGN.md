@@ -1,0 +1,917 @@
+# Private Moments Technical Design
+
+## 1. 架构概览
+
+Private Moments 采用 iOS 原生 App + Mac 自托管服务端的本地优先架构。
+
+```text
+iPhone App
+  Swift + SwiftUI
+  SQLite3 local database
+  local drafts
+  local timeline cache
+  outbox sync queue
+  media compression
+        |
+        | Tailscale / private VPN
+        | HTTPS or HTTP over private network
+        v
+Mac Server
+  Node.js + TypeScript
+  Fastify API
+  Prisma + SQLite
+  local file storage
+  launchd login service
+        |
+        v
+Mac Admin UI
+  React + Vite
+  served by Fastify
+```
+
+Mac 是最终归档源，iPhone 是本地优先缓存和待同步队列。iPhone 离线时可以完整创建内容和浏览已有本地内容；Mac 可达后再通过 sync endpoint 对账。
+
+## 2. Monorepo 结构
+
+项目放在 `private-moments/` 子目录，不直接在上层 `07-github` 根目录工作。
+
+建议结构：
+
+```text
+private-moments/
+  ios/
+    PrivateMoments.xcodeproj
+    PrivateMoments/
+  server/
+    package.json
+    src/
+      api/
+      auth/
+      config/
+      db/
+      media/
+      sync/
+      admin/
+      logging/
+    prisma/
+      schema.prisma
+      migrations/
+  admin/
+    package.json
+    src/
+  shared/
+    openapi.yaml
+    sync-protocol.md
+  docs/
+    PRD.md
+    TECH-DESIGN.md
+    INTEGRATION-GUIDE.md
+    OPERATOR-RUNBOOK.md
+    HANDOFF.md
+    DESIGN-PRINCIPLES.md
+```
+
+当前仓库已经包含 `ios/`、`server/`、`admin/`、`shared/` 的 MVP 骨架和可编译实现。
+
+当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，主时间线单用户私密评论，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、英文人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、月份跳转、详情页、编辑、软删除同步，以及 Mac 后台状态页和 Posts 运维管理。
+
+当前 UI 设计原则是保持主时间线安静：筛选、月份跳转、收藏和管理能力应尽量藏在 toolbar menu、滑动操作或详情页里，避免把主界面做成后台管理界面。详细原则见 `docs/DESIGN-PRINCIPLES.md`。
+
+iOS 主要模块已经按职责拆分。`TimelineStore` 按 session、mutations、sync、server changes、media、payloads 和 sync retry 拆分；`LocalDatabase` 按 schema、records、timeline、sync、storage stats 和 SQLite helper 拆分；`TimelineView` 拆出 `TimelineRow`、`MomentDateFormatter`、`MediaGalleryView` 和 `ZoomableLocalImage`。设置页存储诊断拆在 `StorageStats.swift` 和 `StorageSettingsView.swift`。后续继续加功能时优先扩展这些小文件，不再把同步、数据库或主界面逻辑塞回单一大文件。
+
+## 2.1 时间线交互决策
+
+时间线 UI 保持英文体系和低干扰原则。`MomentDateFormatter` 负责把 `occurredAt` 转换为 `Just now`、`2 min ago`、`Today 2:40 PM`、`Yesterday 2:40 PM`、`Apr 29, 2:40 PM` 这类更接近日常阅读的标签。月份标题不再作为列表里的常驻结构块，而是通过滚动时短暂出现的 `FloatingMonthIndicator` 提供方向感；停止滚动后自动淡出。
+
+时间线删除使用右侧 swipe action 打开居中的系统 `alert`。右滑删除不允许 full swipe，并在点击 Delete 后延迟约 180ms 展示确认框，让系统 swipe 行先收回，避免列表跳动。这里不要使用位置相关的 `confirmationDialog`，因为它会表现得像从某个列表行冒出的气泡，删除确认语义不够清楚。
+
+### 2.1.1 主时间线评论决策
+
+评论由主时间线直接承载，不走单独内部评论界面。每条动态下有轻量写评论入口，使用 `square.and.pencil` 小胶囊以区别于 `Summary` 的文本/AI 状态入口；有评论时显示真实数量和评论预览。默认预览最新两条评论，但预览内部按旧到新排列，避免阅读顺序倒置；`View all N comments` 和 `Show less` 在原位展开/折叠完整评论列表。
+
+评论输入使用底部输入栏。点击某条动态的评论按钮后，输入栏显示 `Commenting on: ...` 或 `Photo moment · N photos` 等目标摘要并聚焦键盘。Return 插入换行，`Send` 发送；发送成功后收起输入栏，展开该动态评论区，并把时间线滚到该 moment 的底部，让最新评论可见。切换目标或关闭非空草稿时需要确认丢弃。
+
+评论内容是 plain multiline text，最大 500 字符。第一版不支持评论作者、回复、点赞、媒体、Markdown/rich text 渲染、编辑或复制选择。长按评论行触发 `Delete comment?` 居中确认框；确认后只删除评论，不删除父动态。评论行不显示 `synced`、`pending` 或 `failed` 等逐条同步标识。
+
+搜索先应用既有筛选，再匹配动态正文或评论文本。命中评论时，时间线仍显示父动态，但评论预览优先展示最多两条匹配评论并轻量强调命中行；评论数量始终是真实未删除评论总数，不变成搜索命中数。历史转写 metadata 可继续作为旧数据兼容存在，但新发布的语音/视频不再在 iOS 本地生成 transcript，也不把 transcript 作为可见内容入口。
+
+## 2.2 详情与编辑决策
+
+详情页是单条动态的管理入口。时间线点击动态进入详情页，详情页负责查看完整内容、图片/视频/语音浏览播放、编辑入口和删除入口。图片浏览器只负责查看，不承担删除操作；视频使用全屏播放；语音使用轻量播放条。
+
+媒体模型支持 `image`、`video`、`audio` 三种 `kind`。每条动态只允许一种媒体类型：图片最多 9 张，视频 1 段，语音 1 段。视频从相册导入后在 iOS 端压缩为 720p H.264 MP4，并生成 JPEG poster 写入 `thumbnail` variant；时间线里由单例 muted autoplay center 选择当前最靠近视口中心的视频静音自动播放，滑走、打开详情/全屏/发布页时停止，点击视频仍进入全屏播放。语音通过 AVAudioRecorder 写入 AAC/M4A，本地播放进度按 media id 存在 UserDefaults；中途暂停或切走会保存进度，完整播放结束会清除该 media 的进度并让播放条回到 `0 / duration`。语音条是内联播放器，不显示重复的 `Audio` 标题，也不使用突兀的整块灰色卡片；正文语境由 moment text 或 comments 承担。iOS 不再使用 Speech framework 做本地转写，也不再上传 `transcriptionText`；语音/视频摘要由 Mac server 在媒体上传后先本地转写，再调用外部 summary API 处理。评论仍然是纯文字，不复用媒体模型。
+
+编辑采用直接覆盖模型：保存后原动态只显示最新文字、发生时间和图片列表，不提供可见历史版本。编辑页支持修改文字、发生时间、新增图片、删除图片和 9 张以内图片的长按拖拽重排。保存时，编辑页里的最终图片列表就是新状态；服务端软删除移除的图片，保留新增图片等待上传，重排后的 `sortOrder` 作为权威顺序。
+
+iOS 继续本地优先：编辑先写入本地 SQLite 和 outbox，网络可达后自动同步到 Mac。同步中或部分同步的动态暂不允许编辑，避免多个本地操作和媒体上传互相打架；已同步或失败的动态允许编辑。新增图片上传失败时，动态显示 `partial`。
+
+收藏是独立的轻量元数据操作，不进入编辑页。iOS 本地更新 `isFavorite` 并写入 `update_post_favorite` outbox operation；Mac 接收后更新 `posts.is_favorite`，写入 `post_favorite_updated` server change，再由其他设备同步。
+
+编辑草稿按 `postId` 保存在本机文件目录中。打开编辑页时如果有草稿，先询问继续编辑草稿或丢弃草稿。保存成功或用户主动丢弃后清除草稿。
+
+### 2.2.1 AI Summary 决策
+
+AI summary 是语音/视频之上的 server-side 生成 metadata，不是评论者或公开反馈。主时间线只在 audio/video media 已经有 ready summary 时显示 `Summary ready`；没有 ready summary、仍在处理、失败或 provider 未配置时，不在时间线显示 Summary 占位、transcript 或失败文案。
+
+iOS 点击 `Summary ready` 入口后打开底部 sheet，只显示 ready AI 摘要内容。生成路径由 Mac server 持有：完整 audio/video 上传到 `/api/v1/media/upload` 后，server 在后台优先使用 Mac 本地 `mlx-whisper` 把媒体文件转成内部 transcript，再把 transcript 交给外部 Chat Completions API 生成结构化 summary。iOS 不保存外部 AI API key，不直接访问外部 provider，也不展示 transcript fallback。生成结果保存为 `ai_summaries` / `local_ai_summaries`，可以复制、重新生成或删除；删除只隐藏/软删除 generated metadata，不影响原 post、media 或 comments。
+
+摘要输出采用结构化 JSON。`media-summary-v2` 的主要渲染字段是 `documentTitle`、`oneLiner` 和 `documentBlocks`，iOS 用 native SwiftUI 渲染成标题、一句话总结、折叠详情、列表和 `AI suggested` callout；`overview`、`keyPoints`、`sections` 只作为旧客户端兼容字段保留。服务端记录 `promptVersion`、provider、summary model、本地 transcription provider/model、输入 transcript hash/长度、duration、错误码和 timestamps；处理状态区分 `transcribing` 和 `summarizing`，便于在设置页排查卡住环节。日志只记录 id、状态、provider/model、错误码和输入长度，不记录 transcript 正文、summary 正文或 audio body。AI summary 当前不参与搜索，避免把生成内容和原始记忆混在一起。
+
+## 2.3 Mac Admin Posts 管理决策
+
+Mac Admin 的 Posts 功能定位为运维管理台，不替代 iPhone 的内容编辑入口。第一版采用 `Overview / Posts` 顶部 tab：Overview 保持服务、设备、日志和存储概览；Posts 负责内容查看、排查和清理测试数据。
+
+Posts 页面采用列表 + 右侧详情抽屉。列表用于快速扫描文字摘要、发生时间、媒体数量、创建设备、更新设备、删除状态和基础同步状态；详情抽屉用于查看完整正文、图片网格或媒体诊断、媒体状态、大小、checksum、`serverVersion`、创建/更新设备和删除时间。图片在详情抽屉内显示缩略图，点击后以全屏 lightbox 查看压缩展示图；语音/视频不在 Admin 内播放。
+
+列表默认只显示未删除 posts，可切换查看软删除 posts。普通列表沿用 cursor 分页，默认 50 条，支持 `Load more`。文本搜索用于定位少量记录，第一版限制最多 100 条，不做搜索分页。筛选能力包括创建设备、删除状态和文本搜索。
+
+后台单条删除只放在详情抽屉内，必须二次确认。单条删除采用软删除：服务端设置 `Post.deletedAt`，将该 post 下未删除媒体和 comments 标记为 deleted，并写入 `post_deleted` server change；iPhone 下次同步后隐藏本地缓存。第一版不做软删除恢复。
+
+设备行提供 `Clean posts` 危险操作，用于永久清理某设备创建的测试数据。该操作只匹配 `createdByDeviceId`，不匹配仅被该设备更新过的 posts。执行前必须展示候选数量和设备名，并要求输入设备名确认。执行后不自动撤销设备。
+
+永久清理会删除匹配 posts 的数据库记录和媒体文件，Posts 管理里不再显示这些记录。为保持 iPhone 与 Mac 一致，服务端在删除数据库记录前为每个 post 写入最小 `post_deleted` server change；下次 iPhone 同步时隐藏本地缓存。后台日志记录清理操作的设备、数量和操作者。
+
+设备绑定使用 `deviceKey` 防止重复注册。同一用户、同一平台、同一 `deviceKey` 只能对应一条 `Device`：iOS 使用 `UIDevice.identifierForVendor`，Mac Admin 浏览器使用本地 `localStorage` UUID。重复登录会更新原设备的 token、名称和 lastSeenAt，而不是插入新设备。为了兼容旧客户端，如果带 `deviceKey` 的登录找不到完全匹配记录，服务端会优先复用同名、同平台、未绑定 `deviceKey` 的旧设备记录。
+
+## 2.4 Settings Storage 诊断决策
+
+iOS Settings 的 Storage 功能主要是诊断入口。主 Settings 只显示一行摘要，例如 `iPhone 120 MB, Mac 430 MB`；详情页使用系统 Form 风格展示更细的信息，并提供一个窄范围清理动作：清理可重新从 Mac 下载的完整语音/视频缓存。
+
+本机统计由 iOS 直接扫描本地文件和 SQLite 状态：
+
+- 总占用。
+- SQLite 数据库、`-wal`、`-shm`。
+- 媒体缓存目录。
+- 可重新下载的完整语音/视频缓存大小。
+- 待同步操作数。
+- 待上传 media 数。
+- 失败上传数。
+
+Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server/src/storage/stats.ts` 统计数据目录总量、SQLite 相关文件、media 目录、logs 目录和数据目录所在卷的可用空间；同一个响应还返回 `aiSummaries` 轻量诊断。iOS 已登录且请求成功时显示 Mac Server 和 AI summary 诊断；如果 Mac 不在线、token 不可用或请求失败，详情页隐藏 Mac Server 区域，不弹错误。
+
+Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Settings 主界面变成后台管理台。当前清理动作只删除已上传且可重新下载的本机完整语音/视频文件；不会删除视频 poster、本地待上传媒体或 Mac 归档内容。
+
+## 3. 技术栈
+
+### iOS App
+
+- Swift。
+- SwiftUI。
+- 系统 SQLite3。当前先用轻量自写访问层减少外部依赖，后续如果本地查询复杂度上升，可以再替换为 GRDB。
+- 本地文件目录保存压缩图、待上传原图副本、视频、视频 poster 和语音文件。
+- 使用系统相册/相机能力。
+- 本地 outbox 队列驱动同步。
+- 失败同步或上传任务使用 5s、20s、60s、120s、300s 的延迟自动重试。
+- 发布草稿保存文字、发生时间和已准备媒体。
+- 远端同步来的压缩图和视频 poster 会下载到本地缓存后展示；完整语音/视频按播放需求下载。
+- Settings > Storage & Diagnostics 展示本机存储、同步健康状态和 AI summary 诊断；Mac 在线时额外展示服务端存储状态。
+
+### Mac Server
+
+- Node.js。
+- TypeScript。
+- Fastify。
+- Prisma。
+- SQLite。
+- 本地文件存储。
+- launchd 登录后自动启动。
+- `/api/v1/admin/status` 返回服务状态、计数、存储诊断和 AI summary 诊断。
+
+### Mac Admin UI
+
+- React。
+- Vite。
+- 构建后由 Fastify 静态托管。
+
+### Shared Contract
+
+- `shared/openapi.yaml` 描述 API 字段、认证和响应结构。
+- `shared/sync-protocol.md` 描述同步协议语义、幂等、冲突和 cursor 规则。
+
+## 4. Mac 数据目录
+
+默认数据目录：
+
+```text
+~/Library/Application Support/PrivateMoments/
+  manifest.json
+  app.sqlite
+  media/
+    compressed/
+    originals/
+    thumbnails/
+    temp/
+  exports/
+  logs/
+```
+
+### manifest.json
+
+`manifest.json` 用于记录数据目录版本，支持未来迁移和备份校验。
+
+草案：
+
+```json
+{
+  "app": "PrivateMoments",
+  "dataVersion": 1,
+  "schemaVersion": 6,
+  "createdAt": "2026-04-28T00:00:00.000Z",
+  "mediaLayoutVersion": 1
+}
+```
+
+## 5. 服务端数据模型
+
+服务端使用 Prisma + SQLite。媒体二进制文件不存入 SQLite，数据库只保存元数据和文件路径。
+
+### User
+
+MVP 只有单用户，但保留用户表有利于认证和未来扩展。
+
+字段草案：
+
+```text
+user
+  id
+  passwordHash
+  createdAt
+  updatedAt
+```
+
+### Device
+
+记录已授权设备和撤销状态。
+
+```text
+device
+  id
+  userId
+  name
+  deviceKey
+  tokenHash
+  platform
+  lastSeenAt
+  revokedAt
+  createdAt
+  updatedAt
+```
+
+`device token` 明文只在登录时返回给 iOS。服务端保存 `tokenHash`。
+
+`deviceKey` 用于复用同一个物理设备或同一个浏览器安装，避免重复登录时产生大量同名设备。iOS 使用 `UIDevice.identifierForVendor` 派生稳定 key；Mac Admin 浏览器使用 `localStorage` UUID。
+
+### Post
+
+```text
+post
+  id
+  text
+  isFavorite
+  occurredAt
+  createdAt
+  updatedAt
+  deletedAt
+  clientCreatedAt
+  clientUpdatedAt
+  serverVersion
+  createdByDeviceId
+  updatedByDeviceId
+```
+
+说明：
+
+- `occurredAt` 是用户可手动修改的发生时间，用于时间线和月份归档。
+- `isFavorite` 是收藏状态，独立于编辑流同步。
+- `createdAt`/`updatedAt` 是服务端记录时间。
+- `deletedAt` 为软删除时间。
+- `serverVersion` 用于增量同步。
+
+### Comment
+
+```text
+comment
+  id
+  postId
+  text
+  createdAt
+  updatedAt
+  deletedAt
+  clientCreatedAt
+  clientUpdatedAt
+  serverVersion
+  createdByDeviceId
+  updatedByDeviceId
+```
+
+评论是独立 local-first entity，但生命周期从属于 `post`。服务端拒绝给不存在或已删除 post 创建评论。删除父 post 时，服务端软删除其下未删除评论，但只发出 `post_deleted` server change，不额外发逐条 `comment_deleted`。
+
+### Media
+
+```text
+media
+  id
+  postId
+  kind
+  status
+  compressedPath
+  originalPath
+  thumbnailPath
+  originalPreserved
+  mimeType
+  durationSeconds
+  transcriptionText
+  width
+  height
+  compressedSizeBytes
+  originalSizeBytes
+  checksum
+  sortOrder
+  createdAt
+  updatedAt
+  deletedAt
+```
+
+`kind` 支持 `image`、`video` 和 `audio`。`transcriptionText` 是 schema version 6 的历史兼容字段；新 iOS 不再本机转写，也不再通过 upload metadata 写入该字段。
+
+`status` 可选：
+
+```text
+pending
+uploaded
+failed
+deleted
+```
+
+### AISummary
+
+AI 摘要是 media 的 generated metadata。每个 media 第一版最多一个当前 summary record，通过 `mediaId` 唯一约束定位。
+
+```text
+ai_summaries
+  id
+  postId
+  mediaId
+  status
+  format
+  language
+  overview
+  keyPointsJson
+  sectionsJson
+  summaryText
+  documentTitle
+  oneLiner
+  documentBlocksJson
+  inputTranscriptHash
+  inputTranscriptLength
+  inputDurationSeconds
+  promptVersion
+  provider
+  model
+  errorCode
+  errorMessage
+  requestedByDeviceId
+  createdAt
+  updatedAt
+  deletedAt
+```
+
+`status` 可选：
+
+```text
+transcribing
+summarizing
+ready
+failed
+deleted
+```
+
+服务端通过 `ai_summary_updated` 和 `ai_summary_deleted` server changes 同步结果。失败状态只影响 summary record，不改变 post/media/comment 的同步状态。`/api/v1/admin/status` 暴露轻量 AI summary diagnostics，Settings > Storage & Diagnostics 可查看 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项的错误码，不暴露 transcript 或 summary 正文。
+
+### SyncOperation
+
+服务端记录设备提交过的操作，用于幂等和排查。
+
+```text
+sync_operation
+  id
+  opId
+  deviceId
+  type
+  entityType
+  entityId
+  payloadJson
+  receivedAt
+  appliedAt
+  rejectedAt
+  rejectionReason
+```
+
+`opId` 由客户端生成，同一设备内唯一。服务端对 `(deviceId, opId)` 建唯一索引，避免重复创建。
+
+### ServerChange
+
+服务端变更日志，用于 sync cursor 拉取增量。
+
+```text
+server_change
+  version
+  entityType
+  entityId
+  changeType
+  payloadJson
+  createdAt
+```
+
+`version` 是单调递增的服务端序号。客户端的 `syncCursor` 指向最后已处理的 `version`。
+
+## 6. iOS 本地数据模型
+
+iOS 使用 SQLite，模型与服务端接近，但增加本地状态字段。
+
+### local_post
+
+```text
+local_post
+  id
+  text
+  isFavorite
+  occurredAt
+  localCreatedAt
+  localUpdatedAt
+  serverVersion
+  syncStatus
+  deletedAt
+```
+
+`syncStatus` 可选：
+
+```text
+draft
+pending
+partial
+synced
+failed
+deleted_pending
+```
+
+### local_media
+
+```text
+local_media
+  id
+  postId
+  kind
+  localCompressedPath
+  localOriginalStagingPath
+  localThumbnailPath
+  remoteCompressedPath
+  remoteOriginalPath
+  remoteThumbnailPath
+  originalPreserved
+  uploadStatus
+  mimeType
+  durationSeconds
+  transcriptionText
+  transcriptionStatus
+  transcriptionError
+  transcriptionUpdatedAt
+  sortOrder
+  checksum
+  createdAt
+  updatedAt
+```
+
+### local_comment
+
+```text
+local_comment
+  id
+  postId
+  text
+  localCreatedAt
+  localUpdatedAt
+  serverVersion
+  syncStatus
+  deletedAt
+```
+
+本地评论随 timeline item 一起读取，只在主时间线展示。`syncStatus` 是 iOS 本地兼容字段，用于支持曾经安装过旧评论 schema 的设备，不作为每条评论的 UI 标识展示。删除未同步的本地新评论时，iOS 会取消对应 pending `create_comment` operation，并只做本地软删除；已提交或已同步评论删除时写入 `delete_comment` outbox operation。
+
+### local_ai_summaries
+
+```text
+local_ai_summaries
+  id
+  postId
+  mediaId
+  status
+  format
+  language
+  overview
+  keyPointsJson
+  sectionsJson
+  summaryText
+  documentTitle
+  oneLiner
+  documentBlocksJson
+  inputTranscriptLength
+  inputDurationSeconds
+  promptVersion
+  provider
+  model
+  errorCode
+  errorMessage
+  createdAt
+  updatedAt
+  deletedAt
+```
+
+本地 AI summary 随 timeline item 一起读取。`ready` 状态在 timeline 只显示 `Summary ready`，点开 bottom sheet 才显示完整摘要；没有 ready summary 时不显示 Summary 入口，也不回退显示 transcript。新 summary 优先用 `documentTitle`、`oneLiner` 和 `documentBlocksJson` 渲染；老 summary 继续用 `overview`、`keyPointsJson` 和 `sectionsJson` 兼容显示。`transcribing`、`summarizing`、`failed` 和 `deleted` 状态都不会阻塞普通 sync、media upload 或评论。
+
+### outbox_operation
+
+```text
+outbox_operation
+  id
+  opId
+  type
+  entityType
+  entityId
+  payloadJson
+  status
+  attemptCount
+  lastError
+  createdAt
+  updatedAt
+  sentAt
+```
+
+`outbox_operation` 是本地优先架构的核心。UI 更新不等待网络成功，所有用户操作先写本地，再进入 outbox。
+
+### sync_state
+
+```text
+sync_state
+  key
+  value
+```
+
+关键值：
+
+```text
+deviceId
+lastSyncCursor
+lastSuccessfulSyncAt
+```
+
+## 7. API 设计
+
+所有 API 使用 `/api/v1` 前缀。响应中应包含 `serverVersion` 和 `schemaVersion`，至少在认证、健康检查和同步响应中提供。
+
+### 认证
+
+iOS API 使用 Bearer device token：
+
+```http
+Authorization: Bearer <device-token>
+```
+
+登录后返回长期 token。token 长期有效，可在后台撤销。高风险操作需要重新验证密码。
+
+### Core Endpoints
+
+```text
+GET    /api/v1/health
+POST   /api/v1/auth/login
+GET    /api/v1/devices
+DELETE /api/v1/devices/:deviceId
+POST   /api/v1/sync
+POST   /api/v1/ai/media-summary
+DELETE /api/v1/ai/media-summary/:summaryId
+POST   /api/v1/media/upload
+POST   /api/v1/media/batch-download
+GET    /api/v1/media/:mediaId
+GET    /api/v1/timeline
+GET    /api/v1/posts/:postId
+GET    /api/v1/search?q=...
+GET    /api/v1/admin/status
+GET    /api/v1/admin/logs
+GET    /api/v1/admin/posts
+GET    /api/v1/admin/posts/:postId
+DELETE /api/v1/admin/posts/:postId
+GET    /api/v1/admin/devices/:deviceId/clean-posts/preview
+POST   /api/v1/admin/devices/:deviceId/clean-posts
+```
+
+说明：
+
+- `/api/v1/timeline` 和 `/api/v1/posts/:postId` 主要用于读取和调试。
+- 离线创建、删除和未来编辑通过 `/api/v1/sync` 处理。
+- 图片、语音和视频文件通过 `/api/v1/media/upload` 上传，避免把大文件塞进 sync JSON；新 iOS 不随 multipart metadata 带 `transcriptionText`。
+- AI 摘要由 Mac server 在完整 audio/video 上传后后台触发：先用本地 `mlx-whisper` 转写，再调用外部 summary provider；`/api/v1/ai/media-summary` 仍可用于 regenerate。iOS 只拿到 summary metadata 和轻量错误状态。新摘要使用 `media-summary-v2` document block 模型：`documentTitle`、`oneLiner`、`documentBlocks` 是主要渲染字段，旧 `overview`、`keyPoints`、`sections` 保留作兼容。
+- iOS 拉取远端图片缩略图和视频 poster 时优先使用 `/api/v1/media/batch-download` 获取 base64 JSON，避免真机/Tailscale 场景下多次二进制下载超时。
+- Mac Admin 路由复用 Bearer device token，普通内容发布仍然只在 iOS 端进行。
+- `/api/v1/admin/status` 同时给 Mac Admin 和 iOS Settings > Storage & Diagnostics 使用；storage 字段包含 `totalBytes`、`databaseBytes`、`mediaBytes`、`logsBytes`、`availableBytes`，`sync.latestServerChangeVersion` 用于和 iPhone `lastSyncCursor` 对比，`aiSummaries` 字段包含 summary 状态计数和非 ready 项的安全错误 metadata。
+
+## 8. Sync Endpoint
+
+`sync endpoint` 本质上是一个 HTTP API，但语义是设备与服务器对账，而不是对单一资源做 CRUD。
+
+### 请求草案
+
+```json
+{
+  "deviceId": "device-uuid",
+  "lastSyncCursor": 120,
+  "localChanges": [
+    {
+      "opId": "op-uuid-1",
+      "type": "create_post",
+      "entityType": "post",
+      "entityId": "post-uuid",
+      "clientCreatedAt": "2026-04-28T10:00:00.000Z",
+      "payload": {
+        "text": "去了咖啡店",
+        "occurredAt": "2026-04-28T09:30:00.000Z",
+        "mediaIds": ["media-uuid-1"]
+      }
+    },
+    {
+      "opId": "op-uuid-2",
+      "type": "delete_post",
+      "entityType": "post",
+      "entityId": "post-uuid",
+      "clientCreatedAt": "2026-04-28T11:00:00.000Z",
+      "payload": {
+        "deletedAt": "2026-04-28T11:00:00.000Z"
+      }
+    }
+  ]
+}
+```
+
+### 响应草案
+
+```json
+{
+  "serverVersion": "0.1.0",
+  "schemaVersion": 8,
+  "acceptedOps": ["op-uuid-1", "op-uuid-2"],
+  "rejectedOps": [],
+  "serverChanges": [
+    {
+      "version": 121,
+      "entityType": "post",
+      "entityId": "post-uuid",
+      "changeType": "post_created",
+      "payload": {
+        "id": "post-uuid",
+        "text": "去了咖啡店",
+        "occurredAt": "2026-04-28T09:30:00.000Z",
+        "deletedAt": null
+      }
+    }
+  ],
+  "nextSyncCursor": 121
+}
+```
+
+### 同步规则
+
+- 客户端先写本地数据库，再写 outbox。
+- App 打开后自动触发同步。
+- 切到后台或锁屏后尽量继续传完当前同步任务。
+- 每个操作必须有 `opId`。
+- 服务端使用 `(deviceId, opId)` 保证幂等。
+- `syncCursor` 表示客户端已处理到的服务端 `server_change.version`。
+- 同步时客户端上传本地变化，同时拉取 `lastSyncCursor` 之后的服务端变化。
+- 多设备冲突使用最后写入胜出。
+- 服务端保留操作日志用于排查。
+- iOS 只在成功应用全部 `serverChanges` 后推进本地 cursor。
+- iOS 兼容带毫秒和不带毫秒的 ISO8601 时间；解析失败会让本轮同步失败，而不是静默跳过变更后推进 cursor。
+- `didApplySyncRecoveryV1` 用于 2026-04-29 的一次性恢复：如果本地为空或旧 cursor 可能已经错误推进，启动后会把 cursor 重置为 0 从服务端完整拉取。
+- 评论通过 `create_comment` 和 `delete_comment` 同步，对应 server changes 是 `comment_created` 和 `comment_deleted`。iOS 应用评论变更时如果找不到父 post，必须让本轮同步失败，不能推进 cursor。
+- `update_media_transcription` / `media_transcription_updated` 保留为旧客户端兼容同步；新 iOS 不再创建本地转写 operation。
+- AI 摘要通过独立 endpoint 生成，但结果仍通过 server changes 恢复和多设备同步；对应 server changes 是 `ai_summary_updated` 和 `ai_summary_deleted`。iOS 应用 AI summary 变更时如果找不到父 post 或 media，必须让本轮同步失败，不能推进 cursor。
+
+## 9. 媒体上传与回填流程
+
+媒体文件不直接放进 `/api/v1/sync`。
+
+推荐流程：
+
+1. iOS 生成 `postId` 和 `mediaId`。
+2. iOS 生成压缩展示图，并移除 EXIF/GPS。
+3. 如果用户选择保留原图，iOS 保留原图待上传副本。
+4. iOS 本地创建 post 和 media 记录。
+5. iOS 创建 `create_post` outbox operation。
+6. 同步时先通过 `/api/v1/media/upload` 上传媒体文件；视频额外上传 poster 作为 `thumbnail` variant。
+7. 完整 audio/video 上传成功后，Mac server 异步启动 AI summary job。
+8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、Storage & Diagnostics 刷新或手动 Sync Now 仍会拉取这种 server-originated metadata。
+9. 媒体可以逐项成功或失败。
+10. iOS 通过 `/api/v1/sync` 同步帖子、媒体元数据和 AI summary metadata。
+11. 服务端记录部分同步状态。
+12. 失败媒体保留在本地队列中自动重试。
+
+iOS 在保存展示图和上传文件前都会压缩图片。当前压缩展示策略是最大边 `1600px`、JPEG 质量 `0.72`，并移除 EXIF/GPS 等隐私元数据。上传时再次走压缩路径，因此旧版本遗留的 pending 大图也会在下一次上传前被压缩。
+
+媒体上传逐项执行；任意媒体失败不会阻塞本地时间线展示。失败后本地状态保持可重试，并由 sync retry 调度器按 5s、20s、60s、120s、300s 间隔自动重试。
+
+远端媒体回填：
+
+1. iOS 应用 `media_uploaded` 或远端 post 变更后，找出本地缺失的已上传图片缩略图或视频 poster。
+2. iOS 调用 `POST /api/v1/media/batch-download`，默认请求 `thumbnail` variant。
+3. 服务端用 macOS `sips` 按需生成最大边 800px 的 JPEG 缩略图，并把过大的旧缩略图重新压缩到目标范围。
+4. 服务端返回 base64 JSON：`id`、`variant`、`contentType`、`fileName`、`base64`。
+5. iOS 写入本地 media cache：图片缩略图更新 `localCompressedPath`，视频 poster 更新 `localThumbnailPath`。
+
+语音和视频完整文件默认不自动回填；点击播放时通过 `GET /api/v1/media/:mediaId?variant=compressed` 按需下载，成功后保存在本机缓存。历史转写文本属于 legacy metadata；新 summary 结果通过 sync 回填，不依赖完整媒体文件下载。Settings > Storage & Diagnostics 的清理动作只清理这类可重新下载的完整语音/视频缓存。
+
+保留 `GET /api/v1/media/:mediaId?variant=...` 作为单文件下载、完整音视频按需播放下载和 Admin 图片预览入口。iOS 主同步路径优先使用批量 JSON 下载缩略图/poster，因为 2026-04-29 真机验证发现多次独立二进制下载在 Tailscale/iOS 组合下更容易超时。
+
+### 部分同步
+
+如果文字和部分媒体已同步，但还有媒体上传失败，帖子状态为 `partial`。UI 可展示本地完整内容，设置页显示失败明细。
+
+## 10. 删除和清理
+
+MVP 支持删除，不支持完整回收站 UI。
+
+删除流程：
+
+1. 用户在 iOS 删除 post。
+2. iOS 设置本地 `deletedAt`。
+3. iOS 同时隐藏/软删除该 post 下本地评论。
+4. iOS 创建 `delete_post` outbox operation。
+5. 同步成功后服务端设置 `post.deletedAt`、相关 `media.deletedAt` 和该 post 下未删除 comments 的 `deletedAt`。
+6. 服务端 30 天后永久删除数据库记录和相关媒体文件。
+
+清理任务可由 Mac 服务端定时执行，也可在服务启动时执行一次。
+
+当前实现会在服务启动时执行一次清理，并在服务运行中每 6 小时清理一次 30 天前软删除的帖子和媒体文件。删除文件时只允许删除数据目录内部的相对路径，避免误删数据目录外文件。
+
+## 11. Mac 后台
+
+后台 UI 由 React + Vite 实现，构建后作为静态资源由 Fastify 托管。
+
+MVP 页面：
+
+- Overview：服务状态、版本、schemaVersion。
+- Devices：设备列表、撤销设备。
+- Storage：数据目录、数据库大小、媒体大小。
+- Sync：同步状态和失败概览。
+- Logs：文件日志。
+- Posts：内容运维列表、筛选、详情抽屉、图片预览、语音/视频转写查看、软删除和按设备清理测试数据。
+
+后续页面：
+
+- Trash：回收站和恢复。
+- Backup：导出 zip 备份。
+- Search：独立搜索增强；当前 Posts 页已有文本搜索。
+
+## 12. 日志
+
+服务端写文件日志到：
+
+```text
+~/Library/Application Support/PrivateMoments/logs/
+```
+
+MVP 不强制日志轮转，但日志格式应结构化，便于后台展示和排查。
+
+建议字段：
+
+```json
+{
+  "time": "2026-04-28T10:00:00.000Z",
+  "level": "info",
+  "event": "sync.completed",
+  "deviceId": "device-uuid",
+  "acceptedOps": 3,
+  "failedUploads": 1
+}
+```
+
+## 13. launchd 自启动
+
+Mac 服务端第一版使用 `launchd` 登录自启动。
+
+设计要求：
+
+- 服务进程读取固定数据目录。
+- 配置文件可放在数据目录或 `server/config`。
+- stdout/stderr 可由 launchd 接管。
+- 应用自身仍写文件日志。
+- 后续可增加菜单栏 App 包装启动状态。
+
+## 14. OpenAPI 与同步协议文档
+
+`shared/openapi.yaml` 描述：
+
+- `/api/v1/health`
+- `/api/v1/auth/login`
+- `/api/v1/devices`
+- `/api/v1/sync`
+- `/api/v1/ai/media-summary`
+- `/api/v1/media/upload`
+- `/api/v1/media/batch-download`
+- `/api/v1/timeline`
+- `/api/v1/search`
+- `/api/v1/admin/status`
+- `/api/v1/admin/logs`
+- `/api/v1/admin/posts`
+- Admin status 的 storage diagnostics 字段。
+- Media schema 的 audio/video `transcriptionText` 字段。
+- AI summary request/response schema 和 `ai_summary_updated` / `ai_summary_deleted` 同步语义。
+- Bearer token 认证。
+- 通用错误响应。
+
+`shared/sync-protocol.md` 描述：
+
+- `syncCursor` 语义。
+- `opId` 幂等。
+- outbox 处理顺序。
+- 媒体上传与帖子同步顺序。
+- 图片压缩、逐项上传和失败重试。
+- 旧客户端语音/视频转写 metadata 的 `update_media_transcription` 兼容同步。
+- 多设备最后写入胜出。
+- 删除和软删除。
+- 部分同步状态。
+
+## 15. 安全
+
+MVP 安全边界：
+
+- Tailscale 或私有 VPN。
+- 单用户密码登录。
+- Bearer device token。
+- 服务端保存 token hash。
+- 设备可撤销。
+- 高风险操作重新验证密码。
+- 外部 AI API key 只放在 Mac server 环境变量中，不进入 iOS、本地文档示例或日志。
+- Mac 文件权限。
+
+不做：
+
+- 端到端加密。
+- 应用级本地数据库加密。
+- 多用户权限。
+- OAuth。
+- 2FA。
+
+## 16. 性能和可靠性
+
+### iOS
+
+- 时间线本地优先渲染。
+- 本地 SQLite 保存全部文本元数据。
+- 已下载图片缩略图、视频 poster 和完整语音/视频缓存保存在本地。
+- 旧图片和远端完整语音/视频按需下载。
+- 同步不阻塞主 UI。
+- 图片压缩在后台任务中执行。
+- 失败同步和上传自动延迟重试。
+- Settings > Storage & Diagnostics 可快速查看本地占用、同步健康状态和 AI summary 诊断。
+
+### Mac
+
+- SQLite 对单用户场景足够。
+- 媒体文件存磁盘，数据库只存路径和元数据。
+- `server_change.version` 支持增量同步。
+- sync endpoint 支持批量操作和重试。
+- `/api/v1/admin/status` 暴露服务端数据目录存储诊断和 AI summary 诊断，供 Admin 和 iOS Settings 使用。
+- AI summary provider 失败只写入 `ai_summaries.status = failed`，不影响 post/media/comment sync，也不把私人 transcript 或 summary 正文写入正常日志。
+
+## 17. 未来阶段
+
+第二阶段：
+
+- 回收站 UI。
+- 应用内一键 zip 备份导出。
+- 更完整的 storage cleanup。
+- 多设备冲突提示。
+- 原图保留策略和空间管理。
+
+第三阶段：
+
+- iCloud Drive 备份包输出。
+- 多设备体验增强。
+- 原生后台传输优化。
+- 菜单栏 Mac App。
+- 开源安装文档完善。
+
+## 18. 已确认架构决策
+
+- iOS 原生 App 是主入口。
+- Mac 是服务器和后台。
+- 使用 Tailscale 或私有 VPN，不公网暴露。
+- Mac 是权威归档源。
+- iPhone 是本地优先缓存 + 待同步队列。
+- 单用户，但数据结构支持多设备。
+- 多设备冲突使用最后写入胜出 + 操作日志。
+- 时间线本地优先渲染 + 后台增量同步。
+- iPhone 缓存全部元数据、已下载图片缩略图、视频 poster 和按需下载的完整语音/视频缓存。
+- 文本搜索在 iPhone 本地和 Mac 后台都支持，覆盖动态正文、评论和语音/视频转写文本。
+- MVP 做发布、同步、详情、编辑、评论、音视频、转写、收藏、筛选、删除和 Mac Admin Posts 运维。
+- 第一版 AI 只做用户手动触发的 audio/video summary；不做自动人格、评论、评测、archive-wide analysis 或语义搜索。
+- 回收站 UI、备份导出、多设备冲突提示后置。

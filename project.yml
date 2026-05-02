@@ -1,0 +1,91 @@
+# Root XcodeGen spec for automation that runs iOS verification from the repository root.
+# Keep in sync with ios/project.yml; source paths are rooted at this directory.
+name: PrivateMoments
+options:
+  bundleIdPrefix: local.private-moments
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  PrivateMoments:
+    type: application
+    platform: iOS
+    supportedDestinations:
+      - iOS
+    deploymentTarget: "17.0"
+    sources:
+      - ios/PrivateMoments
+    dependencies:
+      - sdk: libsqlite3.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.privatemoments.app
+        PRODUCT_NAME: $(TARGET_NAME)
+        PRODUCT_MODULE_NAME: PrivateMoments
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 2
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ios/PrivateMoments/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: 1
+  PrivateMomentsTests:
+    type: bundle.unit-test
+    platform: iOS
+    supportedDestinations:
+      - iOS
+    deploymentTarget: "17.0"
+    sources:
+      - ios/PrivateMomentsTests
+    dependencies:
+      - target: PrivateMoments
+    hostApplication: PrivateMoments
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.privatemoments.app.tests
+        PRODUCT_NAME: PrivateMomentsTests
+        PRODUCT_MODULE_NAME: PrivateMomentsTests
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: YES
+  PrivateMomentsListContinuationTests:
+    type: bundle.unit-test
+    platform: iOS
+    supportedDestinations:
+      - iOS
+    deploymentTarget: "17.0"
+    sources:
+      - ios/PrivateMomentsListContinuationTests
+    dependencies:
+      - target: PrivateMoments
+    hostApplication: PrivateMoments
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.privatemoments.app.list-continuation-tests
+        PRODUCT_NAME: PrivateMomentsListContinuationTests
+        PRODUCT_MODULE_NAME: PrivateMomentsListContinuationTests
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  PrivateMoments:
+    shared: true
+    build:
+      targets:
+        PrivateMoments: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PrivateMomentsTests
+    archive:
+      config: Release
+  PrivateMomentsListContinuationTests:
+    shared: true
+    build:
+      targets:
+        PrivateMoments: all
+        PrivateMomentsListContinuationTests: [test]
+    test:
+      config: Debug
+      targets:
+        - PrivateMomentsListContinuationTests

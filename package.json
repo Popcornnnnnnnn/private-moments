@@ -1,0 +1,32 @@
+{
+  "name": "private-moments",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private, self-hosted personal timeline for iOS and Mac.",
+  "workspaces": [
+    "server",
+    "admin"
+  ],
+  "scripts": {
+    "setup:local": "scripts/setup-local.sh",
+    "admin:dev": "npm run dev -w admin",
+    "admin:build": "npm run build -w admin",
+    "admin:preview": "npm run preview -w admin",
+    "server:dev": "npm run dev -w server",
+    "server:build": "npm run build -w server",
+    "server:start": "npm run start -w server",
+    "server:typecheck": "npm run typecheck -w server",
+    "server:prisma:generate": "npm run prisma:generate -w server",
+    "server:prisma:migrate": "npm run prisma:migrate -w server",
+    "server:prisma:deploy": "npm run prisma:deploy -w server",
+    "verify:server": "npm run server:typecheck && npm run server:build && npm run admin:build",
+    "backup:local": "scripts/backup-local.sh",
+    "restore:local": "scripts/restore-local.sh",
+    "export:local": "scripts/export-local.sh",
+    "ios:simulator": "scripts/run-ios-simulator.sh",
+    "ios:device": "scripts/run-ios-device.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
