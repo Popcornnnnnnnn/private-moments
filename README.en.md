@@ -2,7 +2,7 @@
 
 [中文版本](README.md)
 
-> A private social feed for a life that does not need an audience.
+## A private social feed for a life that does not need an audience.
 
 Private Moments is an iPhone-first, Mac-hosted personal timeline for text, photos, voice notes, short videos, and the small comments you want to leave under your own memories.
 
