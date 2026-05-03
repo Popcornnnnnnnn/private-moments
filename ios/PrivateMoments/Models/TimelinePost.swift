@@ -4,6 +4,8 @@ struct TimelinePost: Identifiable, Codable {
     var id: String
     var text: String
     var isFavorite: Bool
+    var aiTagProcessedAt: Date?
+    var tagsUserEditedAt: Date?
     var occurredAt: Date
     var localCreatedAt: Date
     var localUpdatedAt: Date
@@ -11,6 +13,51 @@ struct TimelinePost: Identifiable, Codable {
     var serverVersion: Int?
     var syncStatus: String
     var deletedAt: Date?
+}
+
+struct TimelineTag: Identifiable, Codable, Equatable {
+    var id: String
+    var type: String
+    var name: String
+    var normalizedName: String
+    var colorHex: String?
+    var isDefault: Bool
+    var isArchived: Bool
+    var aiUsableAsPrimary: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var archivedAt: Date?
+
+    var isPrimary: Bool {
+        type == "primary"
+    }
+
+    var isTopic: Bool {
+        type == "topic"
+    }
+}
+
+struct TimelineTagAlias: Identifiable, Codable, Equatable {
+    var id: String
+    var tagId: String
+    var alias: String
+    var normalizedAlias: String
+    var createdAt: Date
+    var deletedAt: Date?
+}
+
+struct TimelineAssignedTag: Identifiable, Codable, Equatable {
+    var id: String
+    var postId: String
+    var tagId: String
+    var role: String
+    var source: String
+    var confidence: Double?
+    var aiSummaryId: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var tag: TimelineTag
 }
 
 struct TimelineMedia: Identifiable, Codable {
@@ -150,8 +197,17 @@ struct TimelineItem: Identifiable {
     let media: [TimelineMedia]
     let comments: [TimelineComment]
     let aiSummaries: [TimelineAISummary]
+    let tags: [TimelineAssignedTag]
 
     var id: String {
         post.id
+    }
+
+    var primaryTag: TimelineAssignedTag? {
+        tags.first { $0.role == "primary" && $0.deletedAt == nil && !$0.tag.isArchived }
+    }
+
+    var topicTags: [TimelineAssignedTag] {
+        tags.filter { $0.role == "topic" && $0.deletedAt == nil && !$0.tag.isArchived }
     }
 }

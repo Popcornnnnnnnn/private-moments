@@ -101,6 +101,8 @@ final class TimelineDateJumpModelsTests: XCTestCase {
                 id: id,
                 text: "Fixture \(id)",
                 isFavorite: isFavorite,
+                aiTagProcessedAt: nil,
+                tagsUserEditedAt: nil,
                 occurredAt: occurredAt,
                 localCreatedAt: occurredAt,
                 localUpdatedAt: occurredAt,
@@ -111,7 +113,8 @@ final class TimelineDateJumpModelsTests: XCTestCase {
             ),
             media: media,
             comments: [],
-            aiSummaries: []
+            aiSummaries: [],
+            tags: []
         )
     }
 

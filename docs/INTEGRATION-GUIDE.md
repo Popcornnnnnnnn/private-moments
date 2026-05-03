@@ -97,11 +97,20 @@ Request shape：
 
 - `create_post`
 - `update_post`
+- `insert_ai_title`
 - `update_post_favorite`
 - `delete_post`
 - `create_comment`
 - `delete_comment`
 - `update_media_transcription`
+- `upsert_tag`
+- `archive_tag`
+- `restore_tag`
+- `delete_tag`
+- `merge_tag`
+- `upsert_tag_alias`
+- `delete_tag_alias`
+- `set_post_tags`
 
 Comment operations 使用同一个 sync endpoint。`create_comment` 的 `entityType` 是 `comment`，`entityId` 是 comment id，payload 至少包含父 `postId` 和 `text`：
 
@@ -164,6 +173,50 @@ Comment operations 使用同一个 sync endpoint。`create_comment` 的 `entityT
 - Client 应用 `comment_created` 或 `comment_deleted` 时如果找不到父 post，应让本轮 sync 失败并保留原 cursor。
 - `update_media_transcription` 只作为旧客户端兼容路径更新 audio/video media 的文本 metadata；server 会发出 `media_transcription_updated` server change。
 - AI summary 由独立 endpoint 触发，但同步恢复仍走 server changes：`ai_summary_updated` 和 `ai_summary_deleted`。Client 应用这些变更时如果找不到父 post 或 media，应让本轮 sync 失败并保留原 cursor。
+- Smart Tags 作为一等 metadata 同步：词表 changes 是 `tag_updated` 和 `tag_alias_updated/deleted`，post 关联 changes 是 `post_tag_updated/deleted` 和 `post_tag_state_updated`。Client 应用 post tag assignment 时如果本地缺少对应 tag，应让本轮 sync 失败并保留原 cursor。
+
+## Smart Tags Sync
+
+Tag vocabulary 和 post assignments 分开同步。
+
+`create_post` 可以在 payload 中带可选 `primaryTagId`：
+
+```json
+{
+  "text": "今天学了一点 LLM",
+  "occurredAt": "2026-05-03T12:00:00.000Z",
+  "primaryTagId": "tag-primary-learning"
+}
+```
+
+`set_post_tags` 用于替换一条 moment 的完整标签集合：
+
+```json
+{
+  "opId": "op-set-post-tags",
+  "type": "set_post_tags",
+  "entityType": "post",
+  "entityId": "post-uuid",
+  "clientCreatedAt": "2026-05-03T12:05:00.000Z",
+  "payload": {
+    "primaryTagId": "tag-primary-learning",
+    "topicTagIds": ["topic-llm", "topic-reinforcement-learning"],
+    "updatedAt": "2026-05-03T12:05:00.000Z"
+  }
+}
+```
+
+词表操作：
+
+- `upsert_tag`：`entityType: "tag"`，payload `{type, name, colorHex, isDefault, aiUsableAsPrimary, updatedAt}`。
+- `archive_tag`：payload `{archivedAt}`，隐藏标签但保留历史。
+- `restore_tag`：恢复 archived tag。
+- `delete_tag`：payload `{deletedAt}`，仅用于 archived 且非 default 的 tag。server 会先广播活跃 assignment 的 `post_tag_deleted` 和活跃 alias 的 `tag_alias_deleted`，再广播 `tag_deleted`，并释放该 tag 的 normalized name。
+- `upsert_tag_alias`：`entityType: "tag_alias"`，payload `{tagId, alias}`。
+- `delete_tag_alias`：payload `{deletedAt}`。
+- `merge_tag`：`entityType: "tag"`，`entityId` 是 source topic tag，payload `{targetTagId, alias, mergedAt}`；server 会把 source 的活跃关联移动到 target、保留 source name 为 target alias，并 archive source tag。
+
+默认主标签由 server/iOS seed：`日记`、`想法`、`学习整理`、`情绪`、`碎碎念`、`复盘`。默认主标签不可重命名或归档；自定义主标签和 topic tag 通过 Settings > Tags 管理。AI 自动标签只在新 audio moment 的首次 ready summary 中应用一次。
 
 ## AI Media Summary
 
@@ -233,9 +286,9 @@ Response：
     "summaryText": "# 面试复盘\n\n这段语音主要复盘了一次面试后的感受、系统设计回答问题，以及下一次准备的重点。",
     "inputTranscriptLength": 320,
     "inputDurationSeconds": 86,
-    "promptVersion": "media-summary-v2",
+    "promptVersion": "media-summary-v3",
     "provider": "openai",
-    "model": "your-summary-model",
+    "model": "gpt-5.5",
     "errorCode": null,
     "errorMessage": null,
     "createdAt": "2026-04-30T12:20:00.000Z",
@@ -260,7 +313,9 @@ curl -X DELETE http://127.0.0.1:3210/api/v1/ai/media-summary/summary-uuid \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-AI summary generated metadata 会进入 iPhone 本地 Timeline search；当前 server `/api/v1/search` 仍只搜索 post text、comments 和历史 media transcription metadata。`media-summary-v2` 的主内容是 `documentTitle`、`oneLiner` 和 `documentBlocks`；`overview`、`keyPoints`、`sections` 和 `summaryText` 继续保留，主要用于 copy 文本和旧客户端兼容。排查时只记录 id、状态、provider/model、错误码和 transcript length；不要复制私人 transcript 或 summary 正文。`AI_TRANSCRIPTION_PROVIDER=local` 是默认路径，本地转写模型和超时可通过 `AI_LOCAL_TRANSCRIPTION_MODEL` / `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS` 覆盖。`/api/v1/admin/status` 的 `aiSummaries` 字段提供 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项，供 iOS Settings > Storage & Diagnostics 显示；recent diagnostics 还包含卡住时长和 retry hint。
+AI summary generated metadata 会进入 iPhone 本地 Timeline search；当前 server `/api/v1/search` 仍只搜索 post text、comments 和历史 media transcription metadata。`media-summary-v3` 的主内容是 `documentTitle`、`oneLiner` 和 `documentBlocks`；`overview`、`keyPoints`、`sections` 和 `summaryText` 继续保留，主要用于 copy 文本和旧客户端兼容。v3 要求可识别非空音频/转录生成 40 字符以内短标题，server 会在 provider 返回空/过长标题时从 `oneLiner` 派生 fallback。排查时只记录 id、状态、provider/model、错误码和 transcript length；不要复制私人 transcript 或 summary 正文。`AI_TRANSCRIPTION_PROVIDER=local` 是默认路径，本地转写模型和超时可通过 `AI_LOCAL_TRANSCRIPTION_MODEL` / `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS` 覆盖。`/api/v1/admin/status` 的 `aiSummaries` 字段提供 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项，供 iOS Settings > Storage & Diagnostics 显示；recent diagnostics 还包含卡住时长和 retry hint。
+
+新 audio 的 AI 标题写回通过 `insert_ai_title` 同步，不使用普通 `update_post`。payload 只包含 `{summaryId, mediaId, insertedAt}`；server 从自己的 ready audio summary 读取 `documentTitle`，验证 post/media/summary 关系和当前 post 没有行首 `# ` / `## ` 标题后，才发出 `post_updated`，并带 `updateSource: "ai_title"`。客户端应用该 change 时不应把它当作用户手动编辑。
 
 `ai_summary_updated` 是 server-originated change。客户端即使没有本地 outbox operation，也需要通过正常 sync pull 到这些变更；如果 Mac 上 summary 已经 ready 但 iPhone 仍不可见，先比较 iPhone `lastSyncCursor` 和 server `server_changes.version`。
 
@@ -329,7 +384,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {
@@ -367,11 +422,19 @@ Response shape：
         "updatedAt": "2026-05-01T10:20:30.000Z"
       }
     ]
+  },
+  "tags": {
+    "total": 18,
+    "primary": 6,
+    "topics": 12,
+    "archived": 1,
+    "aiAssignments": 4,
+    "manualAssignments": 9
   }
 }
 ```
 
-`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。`sync.latestServerChangeVersion` 是 Mac server 已写入的最大 `server_changes.version`，可和 iPhone `lastSyncCursor` 比较。`aiSummaries.recent` 只返回非 ready 项的状态、错误码、duration 和 transcript length，不返回 transcript 或 summary 正文。
+`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。`sync.latestServerChangeVersion` 是 Mac server 已写入的最大 `server_changes.version`，可和 iPhone `lastSyncCursor` 比较。`aiSummaries.recent` 只返回非 ready 项的状态、错误码、duration 和 transcript length，不返回 transcript 或 summary 正文。`tags` 只返回安全计数，不返回 post text、comment text、transcript 或 summary 正文。
 
 ## Admin Posts Filters
 

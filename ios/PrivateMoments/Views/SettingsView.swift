@@ -45,6 +45,45 @@ struct SettingsView: View {
                 Section("Storage & Diagnostics") {
                     StorageSummaryLink()
                 }
+
+                Section("Organization") {
+                    NavigationLink("Tags") {
+                        TagManagementView()
+                    }
+                }
+
+                Section("Appearance") {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Button {
+                            store.setAppAppearanceMode(mode)
+                        } label: {
+                            AppearanceModeRow(
+                                mode: mode,
+                                isSelected: store.appAppearanceMode == mode
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(store.appAppearanceMode == mode ? .isSelected : [])
+                    }
+                }
+
+                Section("Feature Modules") {
+                    Toggle(
+                        "Show Tags in Timeline",
+                        isOn: Binding(
+                            get: { store.showTagsInTimeline },
+                            set: { store.setShowTagsInTimeline($0) }
+                        )
+                    )
+
+                    Toggle(
+                        "AI Title Auto-Insert",
+                        isOn: Binding(
+                            get: { store.aiTitleAutoInsertEnabled },
+                            set: { store.setAITitleAutoInsertEnabled($0) }
+                        )
+                    )
+                }
             }
             .navigationTitle("Settings")
             .alert("Error", isPresented: errorBinding) {
@@ -111,6 +150,48 @@ struct SettingsView: View {
         }
 
         return .synced
+    }
+}
+
+private struct AppearanceModeRow: View {
+    let mode: AppAppearanceMode
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: mode.systemImageName)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+
+            Text(mode.title)
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 2)
+    }
+}
+
+private extension AppAppearanceMode {
+    var systemImageName: String {
+        switch self {
+        case .system:
+            return "circle.lefthalf.filled"
+        case .light:
+            return "sun.max"
+        case .dark:
+            return "moon"
+        }
     }
 }
 

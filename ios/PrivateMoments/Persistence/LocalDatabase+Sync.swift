@@ -404,6 +404,8 @@ extension LocalDatabase {
         id: String,
         text: String,
         isFavorite: Bool,
+        aiTagProcessedAt: Date?,
+        tagsUserEditedAt: Date?,
         occurredAt: Date,
         serverVersion: Int
     ) throws {
@@ -414,8 +416,9 @@ extension LocalDatabase {
             let statement = try prepare(
                 """
                 INSERT INTO local_posts
-                    (id, text, isFavorite, occurredAt, localCreatedAt, localUpdatedAt, localEditedAt, serverVersion, syncStatus, deletedAt)
-                VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'synced', NULL)
+                    (id, text, isFavorite, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
+                     localCreatedAt, localUpdatedAt, localEditedAt, serverVersion, syncStatus, deletedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'synced', NULL)
                 """
             )
             defer {
@@ -425,10 +428,12 @@ extension LocalDatabase {
             try bind(id, to: 1, in: statement)
             try bind(text, to: 2, in: statement)
             try bind(isFavorite ? 1 : 0, to: 3, in: statement)
-            try bind(occurredAt, to: 4, in: statement)
-            try bind(now, to: 5, in: statement)
-            try bind(now, to: 6, in: statement)
-            try bind(serverVersion, to: 7, in: statement)
+            try bind(aiTagProcessedAt, to: 4, in: statement)
+            try bind(tagsUserEditedAt, to: 5, in: statement)
+            try bind(occurredAt, to: 6, in: statement)
+            try bind(now, to: 7, in: statement)
+            try bind(now, to: 8, in: statement)
+            try bind(serverVersion, to: 9, in: statement)
             try stepDone(statement)
             return
         }
@@ -438,6 +443,8 @@ extension LocalDatabase {
             UPDATE local_posts
             SET text = ?,
                 isFavorite = ?,
+                aiTagProcessedAt = ?,
+                tagsUserEditedAt = ?,
                 occurredAt = ?,
                 serverVersion = ?,
                 syncStatus = CASE
@@ -455,10 +462,12 @@ extension LocalDatabase {
 
         try bind(text, to: 1, in: statement)
         try bind(isFavorite ? 1 : 0, to: 2, in: statement)
-        try bind(occurredAt, to: 3, in: statement)
-        try bind(serverVersion, to: 4, in: statement)
-        try bind(now, to: 5, in: statement)
-        try bind(id, to: 6, in: statement)
+        try bind(aiTagProcessedAt, to: 3, in: statement)
+        try bind(tagsUserEditedAt, to: 4, in: statement)
+        try bind(occurredAt, to: 5, in: statement)
+        try bind(serverVersion, to: 6, in: statement)
+        try bind(now, to: 7, in: statement)
+        try bind(id, to: 8, in: statement)
         try stepDone(statement)
         try refreshPostSyncStatus(postId: id)
     }
@@ -492,6 +501,7 @@ extension LocalDatabase {
         isFavorite: Bool?,
         occurredAt: Date,
         editedAt: Date,
+        isUserEdit: Bool = true,
         mediaOrder: [(id: String, sortOrder: Int)],
         serverVersion: Int
     ) throws {
@@ -506,7 +516,7 @@ extension LocalDatabase {
                     UPDATE local_posts
                     SET text = ?,
                         occurredAt = ?,
-                        localEditedAt = ?,
+                        localEditedAt = CASE WHEN ? = 1 THEN ? ELSE localEditedAt END,
                         serverVersion = ?,
                         localUpdatedAt = ?
                     WHERE id = ?
@@ -516,7 +526,7 @@ extension LocalDatabase {
                     SET text = ?,
                         isFavorite = ?,
                         occurredAt = ?,
-                        localEditedAt = ?,
+                        localEditedAt = CASE WHEN ? = 1 THEN ? ELSE localEditedAt END,
                         serverVersion = ?,
                         localUpdatedAt = ?
                     WHERE id = ?
@@ -531,16 +541,18 @@ extension LocalDatabase {
             if let isFavorite {
                 try bind(isFavorite ? 1 : 0, to: 2, in: statement)
                 try bind(occurredAt, to: 3, in: statement)
+                try bind(isUserEdit ? 1 : 0, to: 4, in: statement)
+                try bind(editedAt, to: 5, in: statement)
+                try bind(serverVersion, to: 6, in: statement)
+                try bind(now, to: 7, in: statement)
+                try bind(id, to: 8, in: statement)
+            } else {
+                try bind(occurredAt, to: 2, in: statement)
+                try bind(isUserEdit ? 1 : 0, to: 3, in: statement)
                 try bind(editedAt, to: 4, in: statement)
                 try bind(serverVersion, to: 5, in: statement)
                 try bind(now, to: 6, in: statement)
                 try bind(id, to: 7, in: statement)
-            } else {
-                try bind(occurredAt, to: 2, in: statement)
-                try bind(editedAt, to: 3, in: statement)
-                try bind(serverVersion, to: 4, in: statement)
-                try bind(now, to: 5, in: statement)
-                try bind(id, to: 6, in: statement)
             }
             try stepDone(statement)
 
@@ -946,6 +958,76 @@ extension LocalDatabase {
             try upsertAISummary(deletedSummary)
             try updatePostServerVersion(postId: summary.postId, serverVersion: serverVersion)
         }
+    }
+
+    func applyTagUpdated(_ tag: TimelineTag) throws {
+        try upsertTag(tag)
+    }
+
+    func applyTagAliasUpdated(_ alias: TimelineTagAlias) throws {
+        try upsertTagAlias(alias)
+    }
+
+    func applyTagAliasDeleted(_ alias: TimelineTagAlias) throws {
+        guard try fetchTag(id: alias.tagId) != nil else {
+            return
+        }
+
+        try upsertTagAlias(alias)
+    }
+
+    func applyPostTagUpdated(_ assignedTag: TimelineAssignedTag, serverVersion: Int) throws {
+        guard try fetchPost(id: assignedTag.postId) != nil else {
+            return
+        }
+
+        try transaction {
+            try upsertAssignedTag(assignedTag)
+            try updatePostServerVersion(postId: assignedTag.postId, serverVersion: serverVersion)
+        }
+    }
+
+    func applyPostTagDeleted(_ assignedTag: TimelineAssignedTag, serverVersion: Int) throws {
+        guard try fetchPost(id: assignedTag.postId) != nil else {
+            return
+        }
+
+        try transaction {
+            try upsertAssignedTag(assignedTag)
+            try updatePostServerVersion(postId: assignedTag.postId, serverVersion: serverVersion)
+        }
+    }
+
+    func applyPostTagStateUpdated(
+        postId: String,
+        aiTagProcessedAt: Date?,
+        tagsUserEditedAt: Date?,
+        serverVersion: Int
+    ) throws {
+        guard try fetchPost(id: postId) != nil else {
+            return
+        }
+
+        let statement = try prepare(
+            """
+            UPDATE local_posts
+            SET aiTagProcessedAt = ?,
+                tagsUserEditedAt = ?,
+                serverVersion = ?,
+                localUpdatedAt = ?
+            WHERE id = ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(aiTagProcessedAt, to: 1, in: statement)
+        try bind(tagsUserEditedAt, to: 2, in: statement)
+        try bind(serverVersion, to: 3, in: statement)
+        try bind(Date(), to: 4, in: statement)
+        try bind(postId, to: 5, in: statement)
+        try stepDone(statement)
     }
 
     private func updatePostServerVersion(postId: String, serverVersion: Int) throws {

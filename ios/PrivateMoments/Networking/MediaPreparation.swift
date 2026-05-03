@@ -139,4 +139,21 @@ enum AudioMediaInspector {
             durationSeconds: seconds.isFinite ? seconds : nil
         )
     }
+
+    static func prepareImportedAudio(from sourceURL: URL) async throws -> PreparedMomentMedia {
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw MediaPreparationError.audioFileUnavailable
+        }
+
+        let directory = try AppDirectories.draftMediaDirectory()
+        let mediaId = UUID().uuidString
+        let fileExtension = sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension
+        let destinationURL = directory.appending(path: "composer-audio-import-\(mediaId).\(fileExtension)")
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+
+        return try await preparedAudio(from: destinationURL)
+    }
 }

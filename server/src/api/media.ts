@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { access, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -23,6 +24,7 @@ const THUMBNAIL_MAX_EDGE = "800";
 const THUMBNAIL_MAX_BYTES = 180_000;
 const MEDIA_KINDS = new Set(["image", "video", "audio"]);
 const MAX_TRANSCRIPTION_LENGTH = 100_000;
+const UPLOAD_STREAM_TIMEOUT_MS = 240_000;
 
 interface MediaRouteContext {
   config: AppConfig;
@@ -219,27 +221,71 @@ export async function registerMediaRoutes(
     const extension = extensionForMimeType(file.mimetype, file.filename);
     const relativePath = relativeMediaPath(fields.variant, fields.mediaId, extension);
     const absolutePath = path.join(context.paths.dataDir, relativePath);
-    const writeResult = await writeUploadedFile(file, absolutePath);
-    const media = await upsertMediaRecord(context.prisma, fields, relativePath, writeResult);
-    if (fields.variant === "compressed" && (media.kind === "audio" || media.kind === "video")) {
-      enqueueMediaSummaryJob(context, {
-        postId: media.postId,
-        mediaId: media.id,
-        requestedByDeviceId: deviceId,
-      });
-    }
 
-    return reply.send({
-      media: {
-        id: media.id,
+    const uploadStartedAt = Date.now();
+    await context.fileLogger.info("media.upload_started", {
+      mediaId: fields.mediaId,
+      postId: fields.postId,
+      kind: fields.kind,
+      variant: fields.variant,
+      mimeType: file.mimetype,
+      expectedBytes: parseContentLength(request.headers["content-length"]),
+    });
+
+    let writeResult: { sizeBytes: number; checksum: string };
+    try {
+      writeResult = await writeUploadedFile(file, absolutePath);
+      await context.fileLogger.info("media.upload_received", {
+        mediaId: fields.mediaId,
+        postId: fields.postId,
+        kind: fields.kind,
+        variant: fields.variant,
+        sizeBytes: writeResult.sizeBytes,
+        elapsedMs: Date.now() - uploadStartedAt,
+      });
+
+      const media = await upsertMediaRecord(context.prisma, fields, relativePath, writeResult);
+      await context.fileLogger.info("media.upload_completed", {
+        mediaId: media.id,
         postId: media.postId,
+        kind: media.kind,
         variant: fields.variant,
         status: media.status,
-        path: relativePath,
         sizeBytes: writeResult.sizeBytes,
-        checksum: writeResult.checksum,
-      },
-    });
+        elapsedMs: Date.now() - uploadStartedAt,
+      });
+
+      if (fields.variant === "compressed" && (media.kind === "audio" || media.kind === "video")) {
+        enqueueMediaSummaryJob(context, {
+          postId: media.postId,
+          mediaId: media.id,
+          requestedByDeviceId: deviceId,
+        });
+      }
+
+      return reply.send({
+        media: {
+          id: media.id,
+          postId: media.postId,
+          variant: fields.variant,
+          status: media.status,
+          path: relativePath,
+          sizeBytes: writeResult.sizeBytes,
+          checksum: writeResult.checksum,
+        },
+      });
+    } catch (error) {
+      await context.fileLogger.warn("media.upload_failed", {
+        mediaId: fields.mediaId,
+        postId: fields.postId,
+        kind: fields.kind,
+        variant: fields.variant,
+        errorCode: mediaUploadErrorCode(error),
+        message: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - uploadStartedAt,
+      });
+      throw error;
+    }
   });
 }
 
@@ -459,25 +505,90 @@ async function writeUploadedFile(
   file: MultipartFile,
   absolutePath: string,
 ): Promise<{ sizeBytes: number; checksum: string }> {
+  const tracker = createUploadHashTracker();
+  const tempPath = tempUploadPath(absolutePath);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort(new Error("Media upload timed out"));
+  }, UPLOAD_STREAM_TIMEOUT_MS);
+  timeout.unref();
+
+  let output: ReturnType<typeof createWriteStream> | null = null;
+  try {
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    output = createWriteStream(tempPath, { flags: "wx" });
+    await pipeline(file.file, tracker.stream, output, { signal: controller.signal });
+    await rename(tempPath, absolutePath);
+  } catch (error) {
+    file.file.destroy();
+    output?.destroy();
+    await rm(tempPath, { force: true });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  return tracker.result();
+}
+
+function createUploadHashTracker(): {
+  stream: Transform;
+  result: () => { sizeBytes: number; checksum: string };
+} {
   const hash = createHash("sha256");
   let sizeBytes = 0;
 
-  file.file.on("data", (chunk: Buffer) => {
-    sizeBytes += chunk.length;
-    hash.update(chunk);
+  const stream = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      sizeBytes += chunk.length;
+      hash.update(chunk);
+      callback(null, chunk);
+    },
   });
 
-  try {
-    await pipeline(file.file, createWriteStream(absolutePath));
-  } catch (error) {
-    await rm(absolutePath, { force: true });
-    throw error;
+  return {
+    stream,
+    result: () => ({
+      sizeBytes,
+      checksum: hash.digest("hex"),
+    }),
+  };
+}
+
+function tempUploadPath(absolutePath: string): string {
+  const directory = path.dirname(absolutePath);
+  const extension = path.extname(absolutePath) || ".upload";
+  const baseName = path.basename(absolutePath, extension);
+  return path.join(directory, `.${baseName}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
+}
+
+function parseContentLength(value: string | string[] | undefined): number | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (!rawValue) {
+    return null;
   }
 
-  return {
-    sizeBytes,
-    checksum: hash.digest("hex"),
-  };
+  const parsed = Number(rawValue);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function mediaUploadErrorCode(error: unknown): string {
+  if (error instanceof Error && error.name === "AbortError") {
+    return "upload_timeout";
+  }
+
+  if (error instanceof Error && /premature close/i.test(error.message)) {
+    return "client_premature_close";
+  }
+
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && code.length > 0) {
+      return code.toLowerCase();
+    }
+  }
+
+  return "upload_failed";
 }
 
 async function upsertMediaRecord(

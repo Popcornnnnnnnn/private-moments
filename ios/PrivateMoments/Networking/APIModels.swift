@@ -77,6 +77,7 @@ struct AdminStatusResponse: Decodable {
     let counts: AdminStatusCounts
     let storage: ServerStorageStats
     let aiSummaries: AdminAISummaryDiagnostics?
+    let tags: AdminTagDiagnostics?
     let sync: AdminSyncDiagnostics?
 }
 
@@ -194,6 +195,15 @@ struct AdminAISummaryDiagnosticItem: Decodable, Equatable, Identifiable {
 
 struct AdminSyncDiagnostics: Decodable, Equatable {
     let latestServerChangeVersion: Int
+}
+
+struct AdminTagDiagnostics: Decodable, Equatable {
+    let total: Int
+    let primary: Int
+    let topics: Int
+    let archived: Int
+    let aiAssignments: Int
+    let manualAssignments: Int
 }
 
 enum JSONValue: Codable {

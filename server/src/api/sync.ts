@@ -1,14 +1,30 @@
+import { randomUUID } from "node:crypto";
+
 import type { Device, Prisma, PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
 import { SCHEMA_VERSION, SERVER_VERSION } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
+import {
+  cleanedTagName,
+  emitPostTagChange,
+  emitPostTagStateChange,
+  emitTagAliasChange,
+  emitTagChange,
+  emitTagDeletedChange,
+  isValidPostTagRole,
+  isValidTagType,
+  normalizeTagName,
+  upsertPostTag,
+} from "../tags/tagging.js";
 import { sendBadRequest, sendForbidden, sendUnauthorized } from "./http-errors.js";
 
 const MAX_LOCAL_CHANGES = 100;
 const MAX_COMMENT_LENGTH = 500;
 const MAX_TRANSCRIPTION_LENGTH = 100_000;
+const MAX_TAG_ALIAS_LENGTH = 40;
+const MAX_AI_TITLE_LENGTH = 40;
 
 interface SyncRouteContext {
   prisma: PrismaClient;
@@ -227,11 +243,20 @@ function isSupportedOperation(operation: SyncOperationInput): boolean {
   return (
     (operation.type === "create_post" && operation.entityType === "post") ||
     (operation.type === "update_post" && operation.entityType === "post") ||
+    (operation.type === "insert_ai_title" && operation.entityType === "post") ||
     (operation.type === "update_post_favorite" && operation.entityType === "post") ||
     (operation.type === "delete_post" && operation.entityType === "post") ||
     (operation.type === "update_media_transcription" && operation.entityType === "media") ||
     (operation.type === "create_comment" && operation.entityType === "comment") ||
-    (operation.type === "delete_comment" && operation.entityType === "comment")
+    (operation.type === "delete_comment" && operation.entityType === "comment") ||
+    (operation.type === "upsert_tag" && operation.entityType === "tag") ||
+    (operation.type === "archive_tag" && operation.entityType === "tag") ||
+    (operation.type === "restore_tag" && operation.entityType === "tag") ||
+    (operation.type === "delete_tag" && operation.entityType === "tag") ||
+    (operation.type === "merge_tag" && operation.entityType === "tag") ||
+    (operation.type === "upsert_tag_alias" && operation.entityType === "tag_alias") ||
+    (operation.type === "delete_tag_alias" && operation.entityType === "tag_alias") ||
+    (operation.type === "set_post_tags" && operation.entityType === "post")
   );
 }
 
@@ -247,6 +272,11 @@ async function applyOperation(
 
   if (operation.type === "update_post" && operation.entityType === "post") {
     await applyUpdatePost(tx, device, operation);
+    return;
+  }
+
+  if (operation.type === "insert_ai_title" && operation.entityType === "post") {
+    await applyInsertAITitle(tx, device, operation);
     return;
   }
 
@@ -275,6 +305,46 @@ async function applyOperation(
     return;
   }
 
+  if (operation.type === "upsert_tag" && operation.entityType === "tag") {
+    await applyUpsertTag(tx, operation);
+    return;
+  }
+
+  if (operation.type === "archive_tag" && operation.entityType === "tag") {
+    await applyArchiveTag(tx, operation);
+    return;
+  }
+
+  if (operation.type === "restore_tag" && operation.entityType === "tag") {
+    await applyRestoreTag(tx, operation);
+    return;
+  }
+
+  if (operation.type === "delete_tag" && operation.entityType === "tag") {
+    await applyDeleteTag(tx, operation);
+    return;
+  }
+
+  if (operation.type === "merge_tag" && operation.entityType === "tag") {
+    await applyMergeTag(tx, operation);
+    return;
+  }
+
+  if (operation.type === "upsert_tag_alias" && operation.entityType === "tag_alias") {
+    await applyUpsertTagAlias(tx, operation);
+    return;
+  }
+
+  if (operation.type === "delete_tag_alias" && operation.entityType === "tag_alias") {
+    await applyDeleteTagAlias(tx, operation);
+    return;
+  }
+
+  if (operation.type === "set_post_tags" && operation.entityType === "post") {
+    await applySetPostTags(tx, operation);
+    return;
+  }
+
   throw new OperationRejectedError(`Unsupported operation type: ${operation.type}`);
 }
 
@@ -286,6 +356,7 @@ async function applyCreatePost(
   const text = getStringAllowingEmpty(operation.payload, "text");
   const occurredAt = getDate(operation.payload, "occurredAt");
   const isFavorite = getBoolean(operation.payload, "isFavorite") ?? false;
+  const primaryTagId = getNullableString(operation.payload, "primaryTagId");
 
   if (text === null) {
     throw new OperationRejectedError("create_post.payload.text is required");
@@ -341,6 +412,27 @@ async function applyCreatePost(
       serverVersion: change.version,
     },
   });
+
+  if (primaryTagId) {
+    const tag = await tx.tag.findUnique({
+      where: {
+        id: primaryTagId,
+      },
+    });
+    if (!tag || tag.type !== "primary" || tag.isArchived) {
+      throw new OperationRejectedError("create_post.payload.primaryTagId must reference an active primary tag");
+    }
+
+    await upsertPostTag(tx, {
+      postId: operation.entityId,
+      tagId: primaryTagId,
+      role: "primary",
+      source: "manual",
+      confidence: null,
+      aiSummaryId: null,
+      now: operation.clientCreatedAt,
+    });
+  }
 }
 
 async function applyUpdatePost(
@@ -495,6 +587,118 @@ async function applyUpdatePost(
     },
     data: {
       serverVersion: latestVersion,
+    },
+  });
+}
+
+async function applyInsertAITitle(
+  tx: Prisma.TransactionClient,
+  device: Device,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const summaryId = getString(operation.payload, "summaryId");
+  const mediaId = getString(operation.payload, "mediaId");
+  const insertedAt = getDate(operation.payload, "insertedAt") ?? operation.clientCreatedAt;
+
+  if (!summaryId) {
+    throw new OperationRejectedError("insert_ai_title.payload.summaryId is required");
+  }
+
+  if (!mediaId) {
+    throw new OperationRejectedError("insert_ai_title.payload.mediaId is required");
+  }
+
+  const [post, summary] = await Promise.all([
+    tx.post.findUnique({
+      where: {
+        id: operation.entityId,
+      },
+      include: {
+        media: {
+          where: {
+            deletedAt: null,
+          },
+          orderBy: {
+            sortOrder: "asc",
+          },
+          select: {
+            id: true,
+            sortOrder: true,
+          },
+        },
+      },
+    }),
+    tx.aiSummary.findUnique({
+      where: {
+        id: summaryId,
+      },
+      include: {
+        media: true,
+      },
+    }),
+  ]);
+
+  if (!post || post.deletedAt) {
+    return;
+  }
+
+  if (
+    !summary ||
+    summary.deletedAt ||
+    summary.status !== "ready" ||
+    summary.postId !== post.id ||
+    summary.mediaId !== mediaId ||
+    summary.media.kind !== "audio" ||
+    summary.media.deletedAt
+  ) {
+    return;
+  }
+
+  const title = cleanedAITitle(summary.documentTitle);
+  if (!title || hasLeadingMarkdownTitle(post.text)) {
+    return;
+  }
+
+  const text = insertAITitleIntoText(title, post.text);
+  await tx.post.update({
+    where: {
+      id: post.id,
+    },
+    data: {
+      text,
+      clientUpdatedAt: insertedAt,
+      updatedByDeviceId: device.id,
+    },
+  });
+
+  const mediaOrder = post.media.map((media) => ({
+    id: media.id,
+    sortOrder: media.sortOrder,
+  }));
+  const change = await tx.serverChange.create({
+    data: {
+      entityType: "post",
+      entityId: post.id,
+      changeType: "post_updated",
+      payloadJson: JSON.stringify({
+        id: post.id,
+        text,
+        isFavorite: post.isFavorite,
+        occurredAt: post.occurredAt.toISOString(),
+        updatedAt: insertedAt.toISOString(),
+        updateSource: "ai_title",
+        media: mediaOrder,
+        deletedAt: null,
+      }),
+    },
+  });
+
+  await tx.post.update({
+    where: {
+      id: post.id,
+    },
+    data: {
+      serverVersion: change.version,
     },
   });
 }
@@ -847,6 +1051,552 @@ async function applyDeleteComment(
   });
 }
 
+async function applyUpsertTag(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const type = getString(operation.payload, "type");
+  const rawName = getString(operation.payload, "name");
+  const colorHex = getOptionalString(operation.payload, "colorHex");
+  const updatedAt = getDate(operation.payload, "updatedAt") ?? operation.clientCreatedAt;
+  const isDefault = getBoolean(operation.payload, "isDefault") ?? false;
+  const aiUsableAsPrimary = getBoolean(operation.payload, "aiUsableAsPrimary") ?? false;
+
+  if (!type || !isValidTagType(type)) {
+    throw new OperationRejectedError("upsert_tag.payload.type must be primary or topic");
+  }
+
+  const name = rawName ? cleanedTagName(rawName) : null;
+  if (!name) {
+    throw new OperationRejectedError("upsert_tag.payload.name is invalid");
+  }
+
+  const normalizedName = normalizeTagName(name);
+  const existingByName = await tx.tag.findUnique({
+    where: {
+      normalizedName,
+    },
+  });
+  if (existingByName && existingByName.id !== operation.entityId) {
+    throw new OperationRejectedError("Tag name already exists");
+  }
+
+  const tag = await tx.tag.upsert({
+    where: {
+      id: operation.entityId,
+    },
+    create: {
+      id: operation.entityId,
+      type,
+      name,
+      normalizedName,
+      colorHex,
+      isDefault,
+      isArchived: false,
+      aiUsableAsPrimary: type === "primary" ? aiUsableAsPrimary : false,
+      updatedAt,
+    },
+    update: {
+      type,
+      name,
+      normalizedName,
+      colorHex,
+      isDefault,
+      isArchived: false,
+      archivedAt: null,
+      aiUsableAsPrimary: type === "primary" ? aiUsableAsPrimary : false,
+    },
+  });
+
+  await emitTagChange(tx, tag);
+}
+
+async function applyArchiveTag(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const archivedAt = getDate(operation.payload, "archivedAt") ?? operation.clientCreatedAt;
+  const tag = await tx.tag.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (!tag) {
+    throw new OperationRejectedError("Tag not found");
+  }
+
+  const updated = await tx.tag.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      isArchived: true,
+      archivedAt,
+    },
+  });
+  await emitTagChange(tx, updated);
+}
+
+async function applyRestoreTag(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const tag = await tx.tag.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (!tag) {
+    throw new OperationRejectedError("Tag not found");
+  }
+
+  const updated = await tx.tag.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      isArchived: false,
+      archivedAt: null,
+    },
+  });
+  await emitTagChange(tx, updated);
+}
+
+async function applyDeleteTag(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const deletedAt = getDate(operation.payload, "deletedAt") ?? operation.clientCreatedAt;
+  const tag = await tx.tag.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (!tag) {
+    return;
+  }
+
+  if (tag.isDefault) {
+    throw new OperationRejectedError("Default primary tags cannot be deleted");
+  }
+
+  if (!tag.isArchived) {
+    throw new OperationRejectedError("Only archived tags can be deleted");
+  }
+
+  const activeAssignments = await tx.postTag.findMany({
+    where: {
+      tagId: tag.id,
+      deletedAt: null,
+    },
+  });
+
+  for (const assignment of activeAssignments) {
+    const deleted = await tx.postTag.update({
+      where: {
+        id: assignment.id,
+      },
+      data: {
+        updatedAt: deletedAt,
+        deletedAt,
+      },
+    });
+    await emitPostTagChange(tx, deleted, "post_tag_deleted");
+  }
+
+  const activeAliases = await tx.tagAlias.findMany({
+    where: {
+      tagId: tag.id,
+      deletedAt: null,
+    },
+  });
+
+  for (const alias of activeAliases) {
+    const deletedAlias = await tx.tagAlias.update({
+      where: {
+        id: alias.id,
+      },
+      data: {
+        deletedAt,
+      },
+    });
+    await emitTagAliasChange(tx, deletedAlias, "tag_alias_deleted");
+  }
+
+  await tx.tag.delete({
+    where: {
+      id: tag.id,
+    },
+  });
+  await emitTagDeletedChange(tx, tag, deletedAt);
+}
+
+async function applyMergeTag(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const targetTagId = getString(operation.payload, "targetTagId");
+  const rawAlias = getOptionalString(operation.payload, "alias");
+  const mergedAt = getDate(operation.payload, "mergedAt") ?? operation.clientCreatedAt;
+
+  if (!targetTagId) {
+    throw new OperationRejectedError("merge_tag.payload.targetTagId is required");
+  }
+
+  if (targetTagId === operation.entityId) {
+    throw new OperationRejectedError("merge_tag target must be different from source");
+  }
+
+  const [sourceTag, targetTag] = await Promise.all([
+    tx.tag.findUnique({ where: { id: operation.entityId } }),
+    tx.tag.findUnique({ where: { id: targetTagId } }),
+  ]);
+
+  if (!sourceTag || sourceTag.type !== "topic") {
+    throw new OperationRejectedError("merge_tag source must be an existing topic tag");
+  }
+
+  if (!targetTag || targetTag.type !== "topic" || targetTag.isArchived) {
+    throw new OperationRejectedError("merge_tag target must be an active topic tag");
+  }
+
+  const sourceAssignments = await tx.postTag.findMany({
+    where: {
+      tagId: sourceTag.id,
+      deletedAt: null,
+    },
+  });
+
+  for (const sourceAssignment of sourceAssignments) {
+    const existingTarget = await tx.postTag.findUnique({
+      where: {
+        postId_tagId: {
+          postId: sourceAssignment.postId,
+          tagId: targetTag.id,
+        },
+      },
+    });
+
+    if (existingTarget) {
+      const revivedTarget = await tx.postTag.update({
+        where: {
+          id: existingTarget.id,
+        },
+        data: {
+          role: "topic",
+          source: existingTarget.deletedAt ? sourceAssignment.source : existingTarget.source,
+          confidence: existingTarget.deletedAt ? sourceAssignment.confidence : existingTarget.confidence,
+          aiSummaryId: existingTarget.deletedAt ? sourceAssignment.aiSummaryId : existingTarget.aiSummaryId,
+          updatedAt: mergedAt,
+          deletedAt: null,
+        },
+      });
+      await emitPostTagChange(tx, revivedTarget, "post_tag_updated");
+
+      const deletedSource = await tx.postTag.update({
+        where: {
+          id: sourceAssignment.id,
+        },
+        data: {
+          updatedAt: mergedAt,
+          deletedAt: mergedAt,
+        },
+      });
+      await emitPostTagChange(tx, deletedSource, "post_tag_deleted");
+      continue;
+    }
+
+    const moved = await tx.postTag.update({
+      where: {
+        id: sourceAssignment.id,
+      },
+      data: {
+        tagId: targetTag.id,
+        role: "topic",
+        updatedAt: mergedAt,
+      },
+    });
+    await emitPostTagChange(tx, moved, "post_tag_updated");
+  }
+
+  const aliasName = cleanedTagName(rawAlias ?? sourceTag.name);
+  if (aliasName) {
+    const normalizedAlias = normalizeTagName(aliasName);
+    const existingAlias = await tx.tagAlias.findUnique({
+      where: {
+        normalizedAlias,
+      },
+    });
+    const conflictingTag = await tx.tag.findUnique({
+      where: {
+        normalizedName: normalizedAlias,
+      },
+    });
+
+    if (!conflictingTag || conflictingTag.id === targetTag.id || conflictingTag.id === sourceTag.id) {
+      if (!existingAlias || existingAlias.tagId === targetTag.id) {
+        const alias = await tx.tagAlias.upsert({
+          where: {
+            normalizedAlias,
+          },
+          create: {
+            id: randomUUID(),
+            tagId: targetTag.id,
+            alias: aliasName,
+            normalizedAlias,
+            deletedAt: null,
+          },
+          update: {
+            tagId: targetTag.id,
+            alias: aliasName,
+            deletedAt: null,
+          },
+        });
+        await emitTagAliasChange(tx, alias, "tag_alias_updated");
+      }
+    }
+  }
+
+  const archived = await tx.tag.update({
+    where: {
+      id: sourceTag.id,
+    },
+    data: {
+      isArchived: true,
+      archivedAt: mergedAt,
+      updatedAt: mergedAt,
+    },
+  });
+  await emitTagChange(tx, archived);
+}
+
+async function applyUpsertTagAlias(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const tagId = getString(operation.payload, "tagId");
+  const rawAlias = getString(operation.payload, "alias");
+
+  if (!tagId) {
+    throw new OperationRejectedError("upsert_tag_alias.payload.tagId is required");
+  }
+
+  const alias = rawAlias ? cleanedTagName(rawAlias) : null;
+  if (!alias || alias.length > MAX_TAG_ALIAS_LENGTH) {
+    throw new OperationRejectedError("upsert_tag_alias.payload.alias is invalid");
+  }
+
+  const tag = await tx.tag.findUnique({
+    where: {
+      id: tagId,
+    },
+  });
+  if (!tag || tag.isArchived) {
+    throw new OperationRejectedError("Tag not found");
+  }
+
+  const normalizedAlias = normalizeTagName(alias);
+  const existingByAlias = await tx.tagAlias.findUnique({
+    where: {
+      normalizedAlias,
+    },
+  });
+  if (existingByAlias && existingByAlias.id !== operation.entityId) {
+    throw new OperationRejectedError("Tag alias already exists");
+  }
+
+  const existingTag = await tx.tag.findUnique({
+    where: {
+      normalizedName: normalizedAlias,
+    },
+  });
+  if (existingTag && existingTag.id !== tagId) {
+    throw new OperationRejectedError("Tag alias conflicts with another tag");
+  }
+
+  const saved = await tx.tagAlias.upsert({
+    where: {
+      id: operation.entityId,
+    },
+    create: {
+      id: operation.entityId,
+      tagId,
+      alias,
+      normalizedAlias,
+      deletedAt: null,
+    },
+    update: {
+      tagId,
+      alias,
+      normalizedAlias,
+      deletedAt: null,
+    },
+  });
+
+  await emitTagAliasChange(tx, saved, "tag_alias_updated");
+}
+
+async function applyDeleteTagAlias(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const deletedAt = getDate(operation.payload, "deletedAt") ?? operation.clientCreatedAt;
+  const alias = await tx.tagAlias.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (!alias) {
+    throw new OperationRejectedError("Tag alias not found");
+  }
+
+  const deleted = await tx.tagAlias.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      deletedAt,
+    },
+  });
+
+  await emitTagAliasChange(tx, deleted, "tag_alias_deleted");
+}
+
+async function applySetPostTags(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const updatedAt = getDate(operation.payload, "updatedAt") ?? operation.clientCreatedAt;
+  const primaryTagId = getNullableString(operation.payload, "primaryTagId");
+  const topicTagIds = getStringArray(operation.payload, "topicTagIds", 20);
+
+  if (topicTagIds === null) {
+    throw new OperationRejectedError("set_post_tags.payload.topicTagIds must be an array");
+  }
+
+  const post = await tx.post.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+    include: {
+      tags: {
+        where: {
+          deletedAt: null,
+        },
+      },
+    },
+  });
+  if (!post || post.deletedAt) {
+    throw new OperationRejectedError("Post not found");
+  }
+
+  const desiredTagIds = new Set(topicTagIds);
+  if (primaryTagId) {
+    desiredTagIds.add(primaryTagId);
+  }
+
+  const tags = desiredTagIds.size > 0
+    ? await tx.tag.findMany({
+        where: {
+          id: {
+            in: Array.from(desiredTagIds),
+          },
+          isArchived: false,
+        },
+      })
+    : [];
+  const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+
+  if (primaryTagId) {
+    const tag = tagsById.get(primaryTagId);
+    if (!tag || tag.type !== "primary") {
+      throw new OperationRejectedError("set_post_tags.payload.primaryTagId must reference an active primary tag");
+    }
+  }
+
+  for (const topicTagId of topicTagIds) {
+    const tag = tagsById.get(topicTagId);
+    if (!tag || tag.type !== "topic") {
+      throw new OperationRejectedError("set_post_tags.payload.topicTagIds must reference active topic tags");
+    }
+  }
+
+  const desired = new Map<string, "primary" | "topic">();
+  if (primaryTagId) {
+    desired.set(primaryTagId, "primary");
+  }
+  for (const topicTagId of topicTagIds) {
+    desired.set(topicTagId, "topic");
+  }
+
+  for (const existing of post.tags) {
+    const desiredRole = desired.get(existing.tagId);
+    if (desiredRole === existing.role) {
+      if (existing.source !== "manual") {
+        const updated = await tx.postTag.update({
+          where: {
+            id: existing.id,
+          },
+          data: {
+            source: "manual",
+            confidence: null,
+            aiSummaryId: null,
+            updatedAt,
+          },
+        });
+        await emitPostTagChange(tx, updated, "post_tag_updated");
+      }
+      desired.delete(existing.tagId);
+      continue;
+    }
+
+    const deleted = await tx.postTag.update({
+      where: {
+        id: existing.id,
+      },
+      data: {
+        deletedAt: updatedAt,
+        updatedAt,
+      },
+    });
+    await emitPostTagChange(tx, deleted, "post_tag_deleted");
+  }
+
+  for (const [tagId, role] of desired) {
+    if (!isValidPostTagRole(role)) {
+      continue;
+    }
+
+    await upsertPostTag(tx, {
+      postId: post.id,
+      tagId,
+      role,
+      source: "manual",
+      confidence: null,
+      aiSummaryId: null,
+      now: updatedAt,
+    });
+  }
+
+  await tx.post.update({
+    where: {
+      id: post.id,
+    },
+    data: {
+      tagsUserEditedAt: updatedAt,
+      clientUpdatedAt: updatedAt,
+    },
+  });
+  await emitPostTagStateChange(tx, post.id, {
+    aiTagProcessedAt: post.aiTagProcessedAt,
+    tagsUserEditedAt: updatedAt,
+  });
+}
+
 async function markOperationRejected(
   prisma: PrismaClient,
   device: Device,
@@ -959,6 +1709,24 @@ function getStringAllowingEmpty(body: Record<string, unknown>, key: string): str
   return typeof value === "string" ? value : null;
 }
 
+function getOptionalString(body: Record<string, unknown>, key: string): string | null {
+  const value = body[key];
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function getNullableString(body: Record<string, unknown>, key: string): string | null {
+  const value = body[key];
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
 function getDate(body: Record<string, unknown>, key: string): Date | null {
   const value = getString(body, key);
   if (!value) {
@@ -998,6 +1766,35 @@ function getMediaOrder(body: Record<string, unknown>, key: string): MediaOrderIn
   return result;
 }
 
+function getStringArray(
+  body: Record<string, unknown>,
+  key: string,
+  maxItems: number,
+): string[] | null {
+  const value = body[key];
+  if (!Array.isArray(value) || value.length > maxItems) {
+    return null;
+  }
+
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string") {
+      return null;
+    }
+
+    const trimmed = item.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
 function getNonNegativeInteger(body: Record<string, unknown>, key: string): number | null {
   const value = body[key];
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
@@ -1014,4 +1811,56 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseJsonObject(value: string): Record<string, unknown> {
   const parsed = JSON.parse(value) as unknown;
   return isRecord(parsed) ? parsed : {};
+}
+
+function cleanedAITitle(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const withoutMarker = value.replace(/^\s*#{1,6}\s*/u, "");
+  const title = withoutMarker.replace(/\s+/gu, " ").trim();
+  if (!title || Array.from(title).length > MAX_AI_TITLE_LENGTH) {
+    return null;
+  }
+
+  return title;
+}
+
+function hasLeadingMarkdownTitle(text: string): boolean {
+  const lines = text.split(/\r?\n/u);
+  for (const line of lines) {
+    if (line.trim().length === 0) {
+      continue;
+    }
+
+    return markdownHeadingText(line) !== null;
+  }
+
+  return false;
+}
+
+function markdownHeadingText(line: string): string | null {
+  let value: string | null = null;
+  if (line.startsWith("## ")) {
+    value = line.slice(3);
+  } else if (line.startsWith("# ")) {
+    value = line.slice(2);
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function insertAITitleIntoText(title: string, text: string): string {
+  const heading = `## ${title}`;
+  if (text.trim().length === 0) {
+    return heading;
+  }
+
+  return `${heading}\n\n${text}`;
 }

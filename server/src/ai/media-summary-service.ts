@@ -15,6 +15,7 @@ import {
 import type { AppConfig } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
 import type { DataPaths } from "../storage/data-dir.js";
+import { applyAITagsFromSummary } from "../tags/tagging.js";
 
 export interface MediaSummaryJobContext {
   config: AppConfig;
@@ -42,6 +43,7 @@ const RETRYABLE_ERROR_CODES = new Set([
   "audio_input_timeout",
   "audio_input_failed",
 ]);
+type AITagApplicationResult = Awaited<ReturnType<typeof applyAITagsFromSummary>>;
 
 export function enqueueMediaSummaryJob(
   context: MediaSummaryJobContext,
@@ -175,10 +177,20 @@ export async function generateAndSaveMediaSummary(
       mimeType: media.mimeType,
       durationSeconds: media.durationSeconds,
     });
-    const ready = await saveSummaryReady(context.prisma, transcribing.id, output.summary, {
-      transcriptHash: output.transcriptHash,
-      transcriptLength: output.transcriptLength,
-    });
+    const readyResult = await saveSummaryReady(
+      context.prisma,
+      transcribing.id,
+      output.summary,
+      {
+        transcriptHash: output.transcriptHash,
+        transcriptLength: output.transcriptLength,
+      },
+      {
+        mediaKind: media.kind,
+        forceRegenerate: input.forceRegenerate === true,
+      },
+    );
+    const ready = readyResult.summary;
 
     const completedAt = Date.now();
     await context.fileLogger.info("ai.summary_ready", {
@@ -191,6 +203,15 @@ export async function generateAndSaveMediaSummary(
       elapsedMs: completedAt - jobStartedAt,
       transcriptionMs: transcriptReadyAt ? transcriptReadyAt - jobStartedAt : null,
       summarizationMs: transcriptReadyAt ? completedAt - transcriptReadyAt : null,
+    });
+    await logAITagResult(context.fileLogger, {
+      summaryId: ready.id,
+      postId: ready.postId,
+      mediaId: ready.mediaId,
+      mediaKind: media.kind,
+      forceRegenerate: input.forceRegenerate === true,
+      tagResult: readyResult.tagResult,
+      output: output.summary,
     });
 
     return ready;
@@ -377,7 +398,8 @@ async function saveSummaryReady(
   summaryId: string,
   output: MediaSummaryOutput,
   transcriptStats: { transcriptHash: string | null; transcriptLength: number | null },
-): Promise<AiSummary> {
+  tagInput: { mediaKind: string; forceRegenerate: boolean },
+): Promise<{ summary: AiSummary; tagResult: AITagApplicationResult }> {
   return prisma.$transaction(async (tx) => {
     const summary = await tx.aiSummary.update({
       where: {
@@ -402,7 +424,41 @@ async function saveSummaryReady(
     });
 
     await emitAISummaryChange(tx, summary, "ai_summary_updated");
-    return summary;
+    const tagResult = await applyAITagsFromSummary(tx, {
+      postId: summary.postId,
+      mediaKind: tagInput.mediaKind,
+      summaryId: summary.id,
+      output,
+      forceRegenerate: tagInput.forceRegenerate,
+    });
+    return { summary, tagResult };
+  });
+}
+
+async function logAITagResult(
+  fileLogger: FileLogger,
+  input: {
+    summaryId: string;
+    postId: string;
+    mediaId: string;
+    mediaKind: string;
+    forceRegenerate: boolean;
+    tagResult: AITagApplicationResult;
+    output: MediaSummaryOutput;
+  },
+): Promise<void> {
+  await fileLogger.info("ai.tags_processed", {
+    summaryId: input.summaryId,
+    postId: input.postId,
+    mediaId: input.mediaId,
+    mediaKind: input.mediaKind,
+    forceRegenerate: input.forceRegenerate,
+    appliedPrimary: input.tagResult.appliedPrimary,
+    appliedTopics: input.tagResult.appliedTopics,
+    skippedReason: input.tagResult.skippedReason,
+    suggestedPrimaryConfidence: input.output.suggestedTags.primary?.confidence ?? null,
+    suggestedTopicCount: input.output.suggestedTags.topics.length,
+    suggestedTopicConfidences: input.output.suggestedTags.topics.map((tag) => tag.confidence),
   });
 }
 

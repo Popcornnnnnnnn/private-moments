@@ -27,18 +27,19 @@
 
 - 新用户可以通过 `npm run setup:local` 跑起 Mac server 和 Admin UI。
 - iOS project 可以由 `ios/project.yml` 生成，不依赖个人 Team ID。
-- 默认 bundle id 是 `dev.privatemoments.app`，发布者可以用 `PRIVATE_MOMENTS_BUNDLE_ID` 或 XcodeGen 配置自行替换。
+- 默认 bundle id 是 `dev.privatemoments.app`，Share Extension 默认 bundle id 是 `dev.privatemoments.app.share`，App Group 默认是 `group.dev.privatemoments.app`。发布者可以用自己的 Apple Developer identifiers 替换。
 - 文档明确说明本地数据、AI provider、secret、backup/restore 的边界。
 - 公开仓库不包含任何私人数据库、媒体、设备日志、API key 或个人网络值。
 - 最小数据安全命令已提供：`backup:local`、`restore:local`、`export:local`。
+- 2026-05-03 公开版代码已同步 Share Extension、Smart Tags、AI summary v3、AI title auto-insert、moment text Markdown-like rendering、feature toggles 和 appearance 设置。
 
 ## 后续公开版优先级
 
 1. 跑完整 secret scan，包括当前工作区和新公开 repo history。
 2. 做一次 backup/restore/export 恢复演练。
-3. 补 GitHub 发布材料：issue templates、PR template、release notes。
-4. 收紧 production ATS/network 指南。
-5. 决定是否提供 Docker 或 launchd 的更简化安装路径。
+3. 在干净 Mac 上验证 setup flow 和 iOS project generation。
+4. 补 GitHub Actions、issue templates 和 PR template。
+5. 收紧 Share Extension signing / App Group 配置文档和 production ATS/network 指南。
 
 ## 与私有开发目录同步
 

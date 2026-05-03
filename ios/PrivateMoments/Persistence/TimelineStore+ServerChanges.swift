@@ -18,6 +18,8 @@ extension TimelineStore {
                 id: id,
                 text: text,
                 isFavorite: change.payload["isFavorite"]?.boolValue ?? false,
+                aiTagProcessedAt: change.payload["aiTagProcessedAt"]?.stringValue.flatMap(Self.parseServerDate),
+                tagsUserEditedAt: change.payload["tagsUserEditedAt"]?.stringValue.flatMap(Self.parseServerDate),
                 occurredAt: occurredAt,
                 serverVersion: change.version
             )
@@ -36,12 +38,14 @@ extension TimelineStore {
             let editedAtValue = change.payload["updatedAt"]?.stringValue
             let editedAt = editedAtValue.flatMap(Self.parseServerDate) ?? Date()
             let mediaOrder = parseMediaOrder(change.payload["media"])
+            let isUserEdit = change.payload["updateSource"]?.stringValue != "ai_title"
             try database.applyPostUpdated(
                 id: id,
                 text: text,
                 isFavorite: change.payload["isFavorite"]?.boolValue,
                 occurredAt: occurredAt,
                 editedAt: editedAt,
+                isUserEdit: isUserEdit,
                 mediaOrder: mediaOrder,
                 serverVersion: change.version
             )
@@ -164,10 +168,61 @@ extension TimelineStore {
         case "ai_summary_updated":
             let summary = try parseAISummaryPayload(change.payload, changeType: "ai_summary_updated")
             try database.applyAISummaryUpdated(summary, serverVersion: change.version)
+            try insertAITitleIfNeeded(for: summary, database: database)
 
         case "ai_summary_deleted":
             let summary = try parseAISummaryPayload(change.payload, changeType: "ai_summary_deleted")
             try database.applyAISummaryDeleted(summary, serverVersion: change.version)
+
+        case "tag_updated":
+            let tag = try parseTagPayload(change.payload, changeType: "tag_updated")
+            try database.applyTagUpdated(tag)
+
+        case "tag_deleted":
+            guard let id = change.payload["id"]?.stringValue else {
+                throw StoreError.invalidServerChange("tag_deleted is missing id")
+            }
+            try database.applyTagDeleted(id: id)
+
+        case "tag_alias_updated":
+            let alias = try parseTagAliasPayload(change.payload, changeType: "tag_alias_updated")
+            try database.applyTagAliasUpdated(alias)
+
+        case "tag_alias_deleted":
+            let alias = try parseTagAliasPayload(change.payload, changeType: "tag_alias_deleted")
+            try database.applyTagAliasDeleted(alias)
+
+        case "post_tag_updated":
+            guard let assignedTag = try parseAssignedTagPayload(
+                change.payload,
+                changeType: "post_tag_updated",
+                database: database
+            ) else {
+                throw StoreError.invalidServerChange("post_tag_updated references a missing local tag")
+            }
+            try database.applyPostTagUpdated(assignedTag, serverVersion: change.version)
+
+        case "post_tag_deleted":
+            if let assignedTag = try parseAssignedTagPayload(
+                change.payload,
+                changeType: "post_tag_deleted",
+                database: database,
+                allowMissingTag: true
+            ) {
+                try database.applyPostTagDeleted(assignedTag, serverVersion: change.version)
+            }
+
+        case "post_tag_state_updated":
+            guard let postId = change.payload["postId"]?.stringValue else {
+                throw StoreError.invalidServerChange("post_tag_state_updated is missing postId")
+            }
+
+            try database.applyPostTagStateUpdated(
+                postId: postId,
+                aiTagProcessedAt: change.payload["aiTagProcessedAt"]?.stringValue.flatMap(Self.parseServerDate),
+                tagsUserEditedAt: change.payload["tagsUserEditedAt"]?.stringValue.flatMap(Self.parseServerDate),
+                serverVersion: change.version
+            )
 
         default:
             return
@@ -230,6 +285,111 @@ extension TimelineStore {
             createdAt: createdAt,
             updatedAt: updatedAt,
             deletedAt: deletedAt
+        )
+    }
+
+    private func parseTagPayload(
+        _ payload: [String: JSONValue],
+        changeType: String
+    ) throws -> TimelineTag {
+        guard let id = payload["id"]?.stringValue,
+              let type = payload["type"]?.stringValue,
+              let name = payload["name"]?.stringValue,
+              let normalizedName = payload["normalizedName"]?.stringValue,
+              let isDefault = payload["isDefault"]?.boolValue,
+              let isArchived = payload["isArchived"]?.boolValue,
+              let aiUsableAsPrimary = payload["aiUsableAsPrimary"]?.boolValue,
+              let createdAtValue = payload["createdAt"]?.stringValue,
+              let updatedAtValue = payload["updatedAt"]?.stringValue else {
+            throw StoreError.invalidServerChange("\(changeType) is missing required fields")
+        }
+
+        guard let createdAt = Self.parseServerDate(createdAtValue),
+              let updatedAt = Self.parseServerDate(updatedAtValue) else {
+            throw StoreError.invalidServerChange("\(changeType) has invalid timestamps")
+        }
+
+        return TimelineTag(
+            id: id,
+            type: type,
+            name: name,
+            normalizedName: normalizedName,
+            colorHex: payload["colorHex"]?.stringValue,
+            isDefault: isDefault,
+            isArchived: isArchived,
+            aiUsableAsPrimary: aiUsableAsPrimary,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            archivedAt: payload["archivedAt"]?.stringValue.flatMap(Self.parseServerDate)
+        )
+    }
+
+    private func parseTagAliasPayload(
+        _ payload: [String: JSONValue],
+        changeType: String
+    ) throws -> TimelineTagAlias {
+        guard let id = payload["id"]?.stringValue,
+              let tagId = payload["tagId"]?.stringValue,
+              let alias = payload["alias"]?.stringValue,
+              let normalizedAlias = payload["normalizedAlias"]?.stringValue,
+              let createdAtValue = payload["createdAt"]?.stringValue else {
+            throw StoreError.invalidServerChange("\(changeType) is missing required fields")
+        }
+
+        guard let createdAt = Self.parseServerDate(createdAtValue) else {
+            throw StoreError.invalidServerChange("\(changeType) has invalid createdAt")
+        }
+
+        return TimelineTagAlias(
+            id: id,
+            tagId: tagId,
+            alias: alias,
+            normalizedAlias: normalizedAlias,
+            createdAt: createdAt,
+            deletedAt: payload["deletedAt"]?.stringValue.flatMap(Self.parseServerDate)
+        )
+    }
+
+    private func parseAssignedTagPayload(
+        _ payload: [String: JSONValue],
+        changeType: String,
+        database: LocalDatabase,
+        allowMissingTag: Bool = false
+    ) throws -> TimelineAssignedTag? {
+        guard let id = payload["id"]?.stringValue,
+              let postId = payload["postId"]?.stringValue,
+              let tagId = payload["tagId"]?.stringValue,
+              let role = payload["role"]?.stringValue,
+              let source = payload["source"]?.stringValue,
+              let createdAtValue = payload["createdAt"]?.stringValue,
+              let updatedAtValue = payload["updatedAt"]?.stringValue else {
+            throw StoreError.invalidServerChange("\(changeType) is missing required fields")
+        }
+
+        guard let createdAt = Self.parseServerDate(createdAtValue),
+              let updatedAt = Self.parseServerDate(updatedAtValue) else {
+            throw StoreError.invalidServerChange("\(changeType) has invalid timestamps")
+        }
+
+        guard let tag = try database.fetchTag(id: tagId) else {
+            if allowMissingTag {
+                return nil
+            }
+            throw StoreError.invalidServerChange("\(changeType) references a missing local tag")
+        }
+
+        return TimelineAssignedTag(
+            id: id,
+            postId: postId,
+            tagId: tagId,
+            role: role,
+            source: source,
+            confidence: payload["confidence"]?.doubleValue,
+            aiSummaryId: payload["aiSummaryId"]?.stringValue,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: payload["deletedAt"]?.stringValue.flatMap(Self.parseServerDate),
+            tag: tag
         )
     }
 

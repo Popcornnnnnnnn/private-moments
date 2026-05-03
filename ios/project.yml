@@ -12,8 +12,12 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - PrivateMoments
+      - Shared
     dependencies:
       - sdk: libsqlite3.tbd
+      - target: MomentsShareExtension
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.privatemoments.app
@@ -25,8 +29,32 @@ targets:
         SWIFT_VERSION: 5.0
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: PrivateMoments/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PrivateMoments/PrivateMoments.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: 1
+  MomentsShareExtension:
+    type: app-extension
+    platform: iOS
+    supportedDestinations:
+      - iOS
+    deploymentTarget: "17.0"
+    sources:
+      - ShareExtension
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.privatemoments.app.share
+        PRODUCT_NAME: Save to Moments
+        PRODUCT_MODULE_NAME: MomentsShareExtension
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 2
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+        TARGETED_DEVICE_FAMILY: 1
+        APPLICATION_EXTENSION_API_ONLY: YES
   PrivateMomentsTests:
     type: bundle.unit-test
     platform: iOS
@@ -69,6 +97,7 @@ schemes:
     build:
       targets:
         PrivateMoments: all
+        MomentsShareExtension: all
     run:
       config: Debug
     test:

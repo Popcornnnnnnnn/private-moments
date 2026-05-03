@@ -6,6 +6,7 @@ import { createPrismaClient } from "./db/prisma.js";
 import { FileLogger } from "./logging/file-logger.js";
 import { cleanupExpiredDeletedContent } from "./storage/cleanup.js";
 import { ensureDataDir } from "./storage/data-dir.js";
+import { ensureDefaultTags } from "./tags/tagging.js";
 
 const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
   });
 
   await ensureSingleUser(prisma, config.initialPassword, fileLogger);
+  await ensureDefaultTags(prisma, fileLogger);
   await runCleanup(prisma, paths, fileLogger);
 
   const app = await buildApp({

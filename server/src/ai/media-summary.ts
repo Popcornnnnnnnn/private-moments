@@ -7,9 +7,13 @@ import { promisify } from "node:util";
 
 import type { AISummaryConfig } from "../config/app-config.js";
 
-export const MEDIA_SUMMARY_PROMPT_VERSION = "media-summary-v2";
+export const MEDIA_SUMMARY_PROMPT_VERSION = "media-summary-v3";
 const execFileAsync = promisify(execFile);
 const LOCAL_TRANSCRIPTION_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
+const SHORT_TOPIC_AUDIO_SECONDS = 3 * 60;
+const SHORT_TOPIC_TRANSCRIPT_CHARACTERS = 600;
+const STRONG_ADDITIONAL_TOPIC_CONFIDENCE = 0.78;
+const MAX_DOCUMENT_TITLE_CHARS = 40;
 
 export interface MediaSummarySection {
   heading: string;
@@ -30,12 +34,23 @@ export interface MediaSummaryDocumentBlock {
   items: string[];
 }
 
+export interface MediaSummaryTagSuggestion {
+  name: string;
+  confidence: number;
+}
+
+export interface MediaSummaryTagOutput {
+  primary: MediaSummaryTagSuggestion | null;
+  topics: MediaSummaryTagSuggestion[];
+}
+
 export interface MediaSummaryOutput {
   format: "sentence" | "summary_with_points" | "sectioned" | "document";
   language: "zh" | "en" | "mixed" | "unknown";
   documentTitle: string | null;
   oneLiner: string;
   documentBlocks: MediaSummaryDocumentBlock[];
+  suggestedTags: MediaSummaryTagOutput;
   overview: string;
   keyPoints: string[];
   sections: MediaSummarySection[];
@@ -61,6 +76,11 @@ export interface MediaFileSummaryOutput {
 
 export interface MediaSummaryGenerationHooks {
   onTranscriptReady?: () => Promise<void>;
+}
+
+interface TopicTagContext {
+  transcriptText?: string;
+  durationSeconds: number | null;
 }
 
 export class AISummaryProviderError extends Error {
@@ -180,7 +200,19 @@ export async function generateMediaSummary(
   }
 
   const response = await callChatCompletions(config, input);
-  const output = validateSummaryOutput(response);
+  let output = ensureDocumentTitleForRecognizableSummary(
+    normalizeSummaryTagsForContext(validateSummaryOutput(response), input),
+  );
+  if (isEmptySuggestedTags(output.suggestedTags) && input.transcriptText.trim().length >= 8) {
+    output = normalizeSummaryTagsForContext(
+      {
+        ...output,
+        suggestedTags: await generateTagSuggestions(config, input),
+      },
+      input,
+    );
+  }
+
   if (output.language === "unknown") {
     return {
       ...output,
@@ -228,7 +260,11 @@ async function generateMediaSummaryFromAudioInput(
   config: AISummaryConfig,
   input: MediaFileSummaryInput,
 ): Promise<MediaFileSummaryOutput> {
-  const summary = validateSummaryOutput(await callChatCompletionsWithAudio(config, input));
+  const summary = ensureDocumentTitleForRecognizableSummary(
+    normalizeSummaryTagsForContext(validateSummaryOutput(await callChatCompletionsWithAudio(config, input)), {
+      durationSeconds: input.durationSeconds,
+    }),
+  );
   if (isAudioInputUnusableSummary(summary)) {
     throw new AISummaryProviderError(
       "audio_input_unusable",
@@ -458,6 +494,115 @@ async function callChatCompletions(
   }
 }
 
+async function generateTagSuggestions(
+  config: AISummaryConfig,
+  input: MediaSummaryInput,
+): Promise<MediaSummaryTagOutput> {
+  try {
+    const value = await callTagCompletions(config, input);
+    const suggestedTags = parseSuggestedTags(value);
+    return normalizeSuggestedTagsForContext(
+      {
+        ...suggestedTags,
+        primary: suggestedTags.primary ?? inferPrimaryTagSuggestion(input.transcriptText),
+      },
+      input,
+    );
+  } catch {
+    return {
+      primary: inferPrimaryTagSuggestion(input.transcriptText),
+      topics: [],
+    };
+  }
+}
+
+async function callTagCompletions(
+  config: AISummaryConfig,
+  input: MediaSummaryInput,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+
+  try {
+    const transcript = input.transcriptText.trim();
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: config.model,
+        temperature: 0.1,
+        store: false,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "You classify private spoken notes into organization tags for a personal timeline app.",
+              "Return only the requested JSON object.",
+              "primary must be one of 日记, 想法, 学习整理, 情绪, 碎碎念, 复盘, or null only when the transcript has no meaningful content.",
+              "Use primary 想法 for product ideas, feature requests, app/UI design thoughts, opinions, plans, and design discussions.",
+              "Use primary 学习整理 for learning notes, primary 日记 for day recaps, primary 情绪 for explicit emotional venting, primary 复盘 for after-event reflection, and primary 碎碎念 for pure casual/test notes.",
+              "topics must be concrete reusable subjects from the transcript, at most 3 items. Use Chinese canonical names when natural.",
+              "Be conservative with topic count: one clear subject should produce one topic. Multiple topics are only for clearly separate themes, not details under the same theme.",
+              "For short notes, prefer exactly one topic unless the transcript explicitly covers multiple unrelated subjects with high confidence.",
+              "Return confidence numbers from 0 to 1. For recognizable content, primary confidence should normally be at least 0.6.",
+            ].join("\n"),
+          },
+          {
+            role: "user",
+            content: [
+              `Media duration seconds: ${input.durationSeconds ?? "unknown"}`,
+              `Transcript characters: ${transcript.length}`,
+              `Suggested topic count: ${topicCountHint(input)}`,
+              "",
+              "Transcript:",
+              transcript,
+            ].join("\n"),
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "media_tags",
+            strict: true,
+            schema: tagSuggestionJsonSchema(),
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new AISummaryProviderError(
+        `tag_provider_http_${response.status}`,
+        `AI tag provider returned HTTP ${response.status}`,
+      );
+    }
+
+    const parsed = (await response.json()) as unknown;
+    const content = extractMessageContent(parsed);
+    if (!content) {
+      throw new AISummaryProviderError("tag_empty_response", "AI provider returned no tags");
+    }
+
+    return JSON.parse(content) as unknown;
+  } catch (error) {
+    if (error instanceof AISummaryProviderError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new AISummaryProviderError("tag_provider_timeout", "AI tag request timed out");
+    }
+
+    throw new AISummaryProviderError("tag_provider_failed", "AI tag request failed");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function callChatCompletionsWithAudio(
   config: AISummaryConfig,
   input: MediaFileSummaryInput,
@@ -579,6 +724,12 @@ function systemPrompt(): string {
     "Preserve concrete details that help future recall: events, places, people labels, decisions, lessons, body/rehab instructions, interview reflections, and explicit next actions.",
     "Distinguish facts from feelings when the speaker is reflecting. Do not turn private reflection into public feedback or motivational coaching.",
     "Adapt density to transcript length and substance. Tiny notes should not become fake structured reports; long or multi-topic notes should use heading blocks, short paragraphs, and lists.",
+    "Also suggest private organization tags. Tagging is independent of summary density: even tiny notes should get tags when the transcript has clear content.",
+    "For primary, choose the best expression type for every non-empty note with recognizable words; return null only when the transcript is content-free, unintelligible, or only silence/noise. Use confidence to express uncertainty.",
+    "Primary mapping: 日记 = day recap/life log; 想法 = product idea, feature thought, opinion, plan, or design discussion; 学习整理 = learning notes or concept review; 情绪 = explicit emotion/venting; 碎碎念 = casual low-purpose note or test note; 复盘 = reflection after an event, interview, workout, meeting, or decision.",
+    "Topics should be concrete reusable subjects from the transcript, such as LLM, 面试, 运动康复, 高斯分布, 标签系统, or 颜色设置, with at most 3 items. Do not leave topics empty when clear reusable subjects are present.",
+    "Topic count should be conservative: one clear subject should produce one topic. For short notes under about 3 minutes or 600 transcript characters, return more than one topic only when there are clearly separate themes.",
+    "Returning { primary: null, topics: [] } for a recognizable spoken note is a failure. For a short app/product feature note, use primary 想法 and topic tags like 标签系统 or 颜色设置 when present. For a pure test note, use primary 碎碎念.",
     "Return structured JSON only. Do not return Markdown text; the app renders the JSON as a Markdown-like document.",
   ].join("\n");
 }
@@ -592,6 +743,12 @@ function audioSystemPrompt(): string {
     "You may include lightweight next-step suggestions only in ai_suggested blocks. Keep them clearly framed as suggestions and do not mix them into factual summary blocks.",
     "Follow the audio's dominant language. If it is mostly Chinese, write natural Chinese. If it is mixed, keep the summary naturally mixed.",
     "Adapt density to the length of the note. Tiny notes should not become fake structured reports; long notes should use heading blocks, short paragraphs, and lists.",
+    "Also suggest private organization tags. Tagging is independent of summary density: even tiny notes should get tags when the audio has clear content.",
+    "For primary, choose the best expression type for every non-empty note with recognizable words; return null only when the audio is content-free, unintelligible, or only silence/noise. Use confidence to express uncertainty.",
+    "Primary mapping: 日记 = day recap/life log; 想法 = product idea, feature thought, opinion, plan, or design discussion; 学习整理 = learning notes or concept review; 情绪 = explicit emotion/venting; 碎碎念 = casual low-purpose note or test note; 复盘 = reflection after an event, interview, workout, meeting, or decision.",
+    "Topics should be concrete reusable subjects from the audio, such as LLM, 面试, 运动康复, 高斯分布, 标签系统, or 颜色设置, with at most 3 items. Do not leave topics empty when clear reusable subjects are present.",
+    "Topic count should be conservative: one clear subject should produce one topic. For short notes under about 3 minutes, return more than one topic only when there are clearly separate themes.",
+    "Returning { primary: null, topics: [] } for a recognizable spoken note is a failure. For a short app/product feature note, use primary 想法 and topic tags like 标签系统 or 颜色设置 when present. For a pure test note, use primary 碎碎念.",
     "Return structured JSON only. Do not return Markdown text; the app renders the JSON as a Markdown-like document.",
   ].join("\n");
 }
@@ -602,9 +759,10 @@ function userPrompt(input: MediaSummaryInput): string {
     `Media duration seconds: ${input.durationSeconds ?? "unknown"}`,
     `Transcript characters: ${transcript.length}`,
     `Suggested density: ${densityHint(transcript.length, input.durationSeconds)}`,
+    `Suggested topic count: ${topicCountHint(input)}`,
     "",
     "Organization guidance:",
-    "- Use documentTitle only if a short natural title is useful; otherwise return null.",
+    `- For any recognizable non-empty note, return a concise documentTitle of ${MAX_DOCUMENT_TITLE_CHARS} characters or fewer. Return null only when the transcript is content-free, unintelligible, or only silence/noise.`,
     "- oneLiner is the quick top-level summary.",
     "- Use heading blocks for major themes and level 2 heading blocks for subtopics; do not exceed two heading levels.",
     "- Keep paragraph blocks short. Prefer bullets or numbered_list blocks for dense information.",
@@ -613,6 +771,8 @@ function userPrompt(input: MediaSummaryInput): string {
     "- If this is an interview or meeting reflection, capture what happened, what the speaker learned, concerns, and next steps if explicit.",
     "- If this is rehab, training, or learning notes, preserve instructions, corrections, exercises, cues, warnings, and follow-up actions.",
     "- If this is a casual observation, keep it compact and concrete instead of forcing a lecture-like structure.",
+    "- Suggested tags: choose one primary for any note with recognizable content. Use topics for concrete reusable subjects, not broad expression types. Tag suggestions are still required even when the summary is oneLiner-only. Do not return primary null and empty topics unless the transcript is content-free.",
+    "- Topic tags should be sparse. Prefer one topic for one subject; use multiple only for genuinely separate themes.",
     "",
     "Transcript:",
     transcript,
@@ -623,13 +783,78 @@ function audioUserPrompt(input: MediaFileSummaryInput): string {
   return [
     `Media duration seconds: ${input.durationSeconds ?? "unknown"}`,
     `Suggested density: ${mediaDensityHint(input.durationSeconds)}`,
+    `Suggested topic count: ${topicCountHint({ durationSeconds: input.durationSeconds })}`,
     "",
     "Listen to the attached audio and summarize it for the private timeline.",
     "If this came from a video, summarize only the audible content and do not describe visuals.",
-    "Use documentTitle only if a short natural title is useful; otherwise return null.",
+    `For any recognizable non-empty note, return a concise documentTitle of ${MAX_DOCUMENT_TITLE_CHARS} characters or fewer. Return null only when the audio is content-free, unintelligible, or only silence/noise.`,
     "oneLiner is the quick top-level summary. Use heading blocks for major themes and level 2 heading blocks for subtopics; do not exceed two heading levels.",
     "Use ai_suggested blocks only for AI-inferred lightweight next steps; explicit next actions from the audio belong in normal content blocks.",
+    "Suggested tags: choose one primary for any note with recognizable content. Use topics for concrete reusable subjects, not broad expression types. Tag suggestions are still required even when the summary is oneLiner-only. Do not return primary null and empty topics unless the audio is content-free.",
+    "Topic tags should be sparse. Prefer one topic for one subject; use multiple only for genuinely separate themes.",
   ].join("\n");
+}
+
+function normalizeSummaryTagsForContext(
+  output: MediaSummaryOutput,
+  context: TopicTagContext,
+): MediaSummaryOutput {
+  return {
+    ...output,
+    suggestedTags: normalizeSuggestedTagsForContext(output.suggestedTags, context),
+  };
+}
+
+function normalizeSuggestedTagsForContext(
+  suggestedTags: MediaSummaryTagOutput,
+  context: TopicTagContext,
+): MediaSummaryTagOutput {
+  const topics = [...suggestedTags.topics]
+    .filter((topic) => topic.name.trim().length > 0)
+    .sort((lhs, rhs) => rhs.confidence - lhs.confidence);
+  const limit = topicLimitForContext(topics, context);
+
+  return {
+    ...suggestedTags,
+    topics: topics.slice(0, limit),
+  };
+}
+
+function topicLimitForContext(
+  topics: MediaSummaryTagSuggestion[],
+  context: TopicTagContext,
+): number {
+  if (topics.length <= 1) {
+    return topics.length;
+  }
+
+  if (!isShortTopicContext(context)) {
+    return Math.min(topics.length, 3);
+  }
+
+  const strongAdditionalTopicCount = topics
+    .slice(1)
+    .filter((topic) => topic.confidence >= STRONG_ADDITIONAL_TOPIC_CONFIDENCE).length;
+
+  return Math.min(1 + strongAdditionalTopicCount, topics.length, 3);
+}
+
+function topicCountHint(context: TopicTagContext): string {
+  if (isShortTopicContext(context)) {
+    return "prefer 1 topic; use 2-3 only for clearly separate themes, each with high confidence";
+  }
+
+  return "prefer the minimum useful topic count; use 2-3 only for clearly separate themes";
+}
+
+function isShortTopicContext(context: TopicTagContext): boolean {
+  const transcriptCharacters = context.transcriptText?.trim().length;
+  const isShortByTranscript =
+    typeof transcriptCharacters === "number" && transcriptCharacters < SHORT_TOPIC_TRANSCRIPT_CHARACTERS;
+  const isShortByDuration =
+    context.durationSeconds !== null && context.durationSeconds < SHORT_TOPIC_AUDIO_SECONDS;
+
+  return isShortByTranscript || isShortByDuration;
 }
 
 function mediaDensityHint(durationSeconds: number | null): string {
@@ -672,7 +897,7 @@ function summaryJsonSchema(): Record<string, unknown> {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["format", "language", "documentTitle", "oneLiner", "blocks"],
+    required: ["format", "language", "documentTitle", "oneLiner", "blocks", "suggestedTags"],
     properties: {
       format: {
         type: "string",
@@ -711,6 +936,107 @@ function summaryJsonSchema(): Record<string, unknown> {
               items: {
                 type: "string",
               },
+            },
+          },
+        },
+      },
+      suggestedTags: {
+        type: "object",
+        additionalProperties: false,
+        required: ["primary", "topics"],
+        properties: {
+          primary: {
+            anyOf: [
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["name", "confidence"],
+                properties: {
+                  name: {
+                    type: "string",
+                    enum: ["日记", "想法", "学习整理", "情绪", "碎碎念", "复盘"],
+                  },
+                  confidence: {
+                    type: "number",
+                    minimum: 0,
+                    maximum: 1,
+                  },
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+          topics: {
+            type: "array",
+            maxItems: 3,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["name", "confidence"],
+              properties: {
+                name: {
+                  type: "string",
+                },
+                confidence: {
+                  type: "number",
+                  minimum: 0,
+                  maximum: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function tagSuggestionJsonSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["primary", "topics"],
+    properties: {
+      primary: {
+        anyOf: [
+          {
+            type: "object",
+            additionalProperties: false,
+            required: ["name", "confidence"],
+            properties: {
+              name: {
+                type: "string",
+                enum: ["日记", "想法", "学习整理", "情绪", "碎碎念", "复盘"],
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1,
+              },
+            },
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      topics: {
+        type: "array",
+        maxItems: 3,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name", "confidence"],
+          properties: {
+            name: {
+              type: "string",
+            },
+            confidence: {
+              type: "number",
+              minimum: 0,
+              maximum: 1,
             },
           },
         },
@@ -760,6 +1086,7 @@ function validateSummaryOutput(value: unknown): MediaSummaryOutput {
   const documentBlocks =
     parseDocumentBlocks(value.blocks ?? value.documentBlocks ?? value.content) ??
     documentBlocksFromLegacyValue(value);
+  const suggestedTags = parseSuggestedTags(value.suggestedTags ?? value.tags);
 
   if (!language || !oneLiner) {
     throw new AISummaryProviderError("invalid_output", "AI summary output failed validation");
@@ -777,10 +1104,128 @@ function validateSummaryOutput(value: unknown): MediaSummaryOutput {
     documentTitle,
     oneLiner,
     documentBlocks,
+    suggestedTags,
     overview: oneLiner,
     keyPoints: legacy.keyPoints,
     sections: legacy.sections,
   };
+}
+
+function ensureDocumentTitleForRecognizableSummary(output: MediaSummaryOutput): MediaSummaryOutput {
+  const existingTitle = cleanedDocumentTitle(output.documentTitle);
+  if (existingTitle) {
+    return {
+      ...output,
+      documentTitle: existingTitle,
+    };
+  }
+
+  const fallbackTitle = fallbackDocumentTitle(output.oneLiner);
+  if (!fallbackTitle) {
+    return output;
+  }
+
+  return {
+    ...output,
+    documentTitle: fallbackTitle,
+  };
+}
+
+function cleanedDocumentTitle(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const cleaned = normalizeTitleText(value);
+  return charCount(cleaned) <= MAX_DOCUMENT_TITLE_CHARS ? cleaned : null;
+}
+
+function fallbackDocumentTitle(oneLiner: string): string | null {
+  if (isContentFreeSummaryLine(oneLiner)) {
+    return null;
+  }
+
+  const cleaned = normalizeTitleText(
+    oneLiner
+      .replace(/^(这|這)(是)?(一)?(条|條|段)?(语音|音频|錄音|录音|记录|筆記|笔记|note)\s*(主要)?(是|在|关于|圍繞|围绕)?\s*/i, "")
+      .replace(/^(This|The)\s+(audio|voice note|recording|note)\s+(is|mainly|focuses on|discusses)\s+/i, ""),
+  );
+  if (!cleaned) {
+    return null;
+  }
+
+  const firstSegment = firstUsefulTitleSegment(cleaned) ?? cleaned;
+  return shortenTitle(firstSegment);
+}
+
+function firstUsefulTitleSegment(value: string): string | null {
+  return (
+    value
+      .split(/[。.!?！？；;：:\n]/)
+      .map((segment) => normalizeTitleText(segment))
+      .find((segment) => charCount(segment) >= 2) ?? null
+  );
+}
+
+function shortenTitle(value: string): string | null {
+  const cleaned = normalizeTitleText(value);
+  if (!cleaned) {
+    return null;
+  }
+
+  if (charCount(cleaned) <= MAX_DOCUMENT_TITLE_CHARS) {
+    return cleaned;
+  }
+
+  const shorterClause = cleaned
+    .split(/[，,、]/)
+    .map((segment) => normalizeTitleText(segment))
+    .find((segment) => charCount(segment) >= 2 && charCount(segment) <= MAX_DOCUMENT_TITLE_CHARS);
+  if (shorterClause) {
+    return shorterClause;
+  }
+
+  const truncated = stripTrailingTitlePunctuation(
+    Array.from(cleaned).slice(0, MAX_DOCUMENT_TITLE_CHARS).join(""),
+  );
+  return truncated.length > 0 ? truncated : null;
+}
+
+function normalizeTitleText(value: string): string {
+  return stripTrailingTitlePunctuation(
+    value
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function stripTrailingTitlePunctuation(value: string): string {
+  return value.replace(/[\s,，、:：;；.!?。！？]+$/g, "").trim();
+}
+
+function charCount(value: string): number {
+  return Array.from(value).length;
+}
+
+function isContentFreeSummaryLine(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return [
+    "无法识别",
+    "不可识别",
+    "无法听清",
+    "无法听到",
+    "没有可识别",
+    "只有噪音",
+    "只有静音",
+    "内容为空",
+    "unintelligible",
+    "not intelligible",
+    "no recognizable",
+    "only silence",
+    "only noise",
+    "empty audio",
+  ].some((signal) => normalized.includes(signal));
 }
 
 function isAudioInputUnusableSummary(output: MediaSummaryOutput): boolean {
@@ -918,6 +1363,104 @@ function parseStringArray(value: unknown, maxItems: number, maxLength: number): 
   }
 
   return result;
+}
+
+function parseSuggestedTags(value: unknown): MediaSummaryTagOutput {
+  if (!isRecord(value)) {
+    return {
+      primary: null,
+      topics: [],
+    };
+  }
+
+  return {
+    primary: parseTagSuggestion(value.primary),
+    topics: parseTagSuggestionArray(value.topics, 3),
+  };
+}
+
+function isEmptySuggestedTags(value: MediaSummaryTagOutput): boolean {
+  return value.primary === null && value.topics.length === 0;
+}
+
+function inferPrimaryTagSuggestion(transcriptText: string): MediaSummaryTagSuggestion | null {
+  const text = transcriptText.normalize("NFKC").toLocaleLowerCase("zh-Hans-CN");
+
+  if (!text.trim() || text.trim().length < 4) {
+    return null;
+  }
+
+  if (/(学习|课程|知识|概念|公式|数学|物理|高斯|神经网络|大语言模型|llm|reinforcement|强化学习)/iu.test(text)) {
+    return { name: "学习整理", confidence: 0.74 };
+  }
+
+  if (/(复盘|回顾|反思|面试完|开完会|运动完|康复完)/u.test(text)) {
+    return { name: "复盘", confidence: 0.74 };
+  }
+
+  if (/(想法|应用|功能|设计|系统|界面|产品|需求|插件|标签|tag|颜色|调色盘|优化|改进|方案)/iu.test(text)) {
+    return { name: "想法", confidence: 0.78 };
+  }
+
+  if (/(情绪|心情|开心|高兴|难受|焦虑|生气|压力|烦|沮丧|崩溃)/u.test(text)) {
+    return { name: "情绪", confidence: 0.7 };
+  }
+
+  if (/(日记|今天|早上|中午|晚上|昨晚|一天|周末)/u.test(text)) {
+    return { name: "日记", confidence: 0.66 };
+  }
+
+  if (/(测试|随便|碎碎念|牢骚)/u.test(text)) {
+    return { name: "碎碎念", confidence: 0.64 };
+  }
+
+  return null;
+}
+
+function parseTagSuggestionArray(value: unknown, maxItems: number): MediaSummaryTagSuggestion[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const result: MediaSummaryTagSuggestion[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (result.length >= maxItems) {
+      break;
+    }
+
+    const parsed = parseTagSuggestion(item);
+    if (!parsed) {
+      continue;
+    }
+
+    const key = parsed.name.normalize("NFKC").trim().toLocaleLowerCase("zh-Hans-CN");
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(parsed);
+  }
+
+  return result;
+}
+
+function parseTagSuggestion(value: unknown): MediaSummaryTagSuggestion | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const name = parseNonEmptyString(value.name ?? value.label ?? value.tag, 40);
+  if (!name) {
+    return null;
+  }
+
+  const confidence = typeof value.confidence === "number" ? value.confidence : 0.5;
+  return {
+    name,
+    confidence: Math.max(0, Math.min(1, confidence)),
+  };
 }
 
 function parseDocumentBlocks(value: unknown): MediaSummaryDocumentBlock[] | null {

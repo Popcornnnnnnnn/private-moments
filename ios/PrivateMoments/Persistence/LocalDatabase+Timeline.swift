@@ -10,7 +10,8 @@ extension LocalDatabase {
                 post: post,
                 media: try fetchMedia(postId: post.id),
                 comments: try fetchComments(postId: post.id),
-                aiSummaries: try fetchAISummaries(postId: post.id)
+                aiSummaries: try fetchAISummaries(postId: post.id),
+                tags: try fetchAssignedTags(postId: post.id)
             )
         }
     }
@@ -24,16 +25,36 @@ extension LocalDatabase {
             post: post,
             media: try fetchMedia(postId: post.id),
             comments: try fetchComments(postId: post.id),
-            aiSummaries: try fetchAISummaries(postId: post.id)
+            aiSummaries: try fetchAISummaries(postId: post.id),
+            tags: try fetchAssignedTags(postId: post.id)
         )
     }
 
-    func insertPost(_ post: TimelinePost, media: [TimelineMedia], operation: OutboxOperation) throws {
+    func insertPost(_ post: TimelinePost, media: [TimelineMedia], operation: OutboxOperation, primaryTagId: String? = nil) throws {
         try transaction {
             try insert(post)
 
             for item in media {
                 try insert(item)
+            }
+
+            if let primaryTagId,
+               let tag = try fetchTag(id: primaryTagId) {
+                try upsertAssignedTag(
+                    TimelineAssignedTag(
+                        id: UUID().uuidString,
+                        postId: post.id,
+                        tagId: primaryTagId,
+                        role: "primary",
+                        source: "manual",
+                        confidence: nil,
+                        aiSummaryId: nil,
+                        createdAt: post.localCreatedAt,
+                        updatedAt: post.localCreatedAt,
+                        deletedAt: nil,
+                        tag: tag
+                    )
+                )
             }
 
             try insert(operation)
@@ -140,6 +161,40 @@ extension LocalDatabase {
         }
     }
 
+    func insertAITitle(
+        postId: String,
+        text: String,
+        updatedAt: Date,
+        operation: OutboxOperation
+    ) throws {
+        try transaction {
+            let statement = try prepare(
+                """
+                UPDATE local_posts
+                SET text = ?,
+                    localUpdatedAt = ?,
+                    syncStatus = 'pending'
+                WHERE id = ?
+                  AND deletedAt IS NULL
+                """
+            )
+            defer {
+                sqlite3_finalize(statement)
+            }
+
+            try bind(text, to: 1, in: statement)
+            try bind(updatedAt, to: 2, in: statement)
+            try bind(postId, to: 3, in: statement)
+            try stepDone(statement)
+
+            guard sqlite3_changes(handle) > 0 else {
+                return
+            }
+
+            try insert(operation)
+        }
+    }
+
     func insertComment(_ comment: TimelineComment, operation: OutboxOperation) throws {
         try transaction {
             try insert(comment, syncStatus: "pending")
@@ -199,5 +254,98 @@ extension LocalDatabase {
         try bind(deletedAt, to: 2, in: statement)
         try bind(postId, to: 3, in: statement)
         try stepDone(statement)
+    }
+
+    func setPostTags(
+        postId: String,
+        primaryTagId: String?,
+        topicTagIds: [String],
+        updatedAt: Date,
+        operation: OutboxOperation
+    ) throws {
+        try transaction {
+            let existing = try fetchAssignedTags(postId: postId)
+            let desiredTagIds = Set(([primaryTagId].compactMap { $0 }) + topicTagIds)
+
+            for assignedTag in existing where !desiredTagIds.contains(assignedTag.tagId) {
+                let statement = try prepare(
+                    """
+                    UPDATE local_post_tags
+                    SET deletedAt = ?,
+                        updatedAt = ?
+                    WHERE id = ?
+                    """
+                )
+                defer {
+                    sqlite3_finalize(statement)
+                }
+
+                try bind(updatedAt, to: 1, in: statement)
+                try bind(updatedAt, to: 2, in: statement)
+                try bind(assignedTag.id, to: 3, in: statement)
+                try stepDone(statement)
+            }
+
+            if let primaryTagId,
+               let tag = try fetchTag(id: primaryTagId) {
+                try upsertAssignedTag(
+                    TimelineAssignedTag(
+                        id: existing.first { $0.tagId == primaryTagId }?.id ?? UUID().uuidString,
+                        postId: postId,
+                        tagId: primaryTagId,
+                        role: "primary",
+                        source: "manual",
+                        confidence: nil,
+                        aiSummaryId: nil,
+                        createdAt: existing.first { $0.tagId == primaryTagId }?.createdAt ?? updatedAt,
+                        updatedAt: updatedAt,
+                        deletedAt: nil,
+                        tag: tag
+                    )
+                )
+            }
+
+            for topicTagId in topicTagIds {
+                guard let tag = try fetchTag(id: topicTagId) else {
+                    continue
+                }
+
+                try upsertAssignedTag(
+                    TimelineAssignedTag(
+                        id: existing.first { $0.tagId == topicTagId }?.id ?? UUID().uuidString,
+                        postId: postId,
+                        tagId: topicTagId,
+                        role: "topic",
+                        source: "manual",
+                        confidence: nil,
+                        aiSummaryId: nil,
+                        createdAt: existing.first { $0.tagId == topicTagId }?.createdAt ?? updatedAt,
+                        updatedAt: updatedAt,
+                        deletedAt: nil,
+                        tag: tag
+                    )
+                )
+            }
+
+            let postStatement = try prepare(
+                """
+                UPDATE local_posts
+                SET tagsUserEditedAt = ?,
+                    localUpdatedAt = ?,
+                    syncStatus = 'pending'
+                WHERE id = ?
+                """
+            )
+            defer {
+                sqlite3_finalize(postStatement)
+            }
+
+            try bind(updatedAt, to: 1, in: postStatement)
+            try bind(updatedAt, to: 2, in: postStatement)
+            try bind(postId, to: 3, in: postStatement)
+            try stepDone(postStatement)
+
+            try insert(operation)
+        }
     }
 }

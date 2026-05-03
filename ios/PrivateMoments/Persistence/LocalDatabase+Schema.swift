@@ -14,6 +14,8 @@ extension LocalDatabase {
                 id TEXT PRIMARY KEY,
                 text TEXT NOT NULL,
                 isFavorite INTEGER NOT NULL DEFAULT 0,
+                aiTagProcessedAt TEXT,
+                tagsUserEditedAt TEXT,
                 occurredAt TEXT NOT NULL,
                 localCreatedAt TEXT NOT NULL,
                 localUpdatedAt TEXT NOT NULL,
@@ -97,6 +99,52 @@ extension LocalDatabase {
             CREATE INDEX IF NOT EXISTS idx_local_ai_summaries_mediaId ON local_ai_summaries(mediaId);
             CREATE INDEX IF NOT EXISTS idx_local_ai_summaries_deletedAt ON local_ai_summaries(deletedAt);
 
+            CREATE TABLE IF NOT EXISTS local_tags (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                normalizedName TEXT NOT NULL UNIQUE,
+                colorHex TEXT,
+                isDefault INTEGER NOT NULL DEFAULT 0,
+                isArchived INTEGER NOT NULL DEFAULT 0,
+                aiUsableAsPrimary INTEGER NOT NULL DEFAULT 0,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                archivedAt TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_tags_type ON local_tags(type);
+            CREATE INDEX IF NOT EXISTS idx_local_tags_isArchived ON local_tags(isArchived);
+
+            CREATE TABLE IF NOT EXISTS local_tag_aliases (
+                id TEXT PRIMARY KEY,
+                tagId TEXT NOT NULL REFERENCES local_tags(id) ON DELETE CASCADE,
+                alias TEXT NOT NULL,
+                normalizedAlias TEXT NOT NULL UNIQUE,
+                createdAt TEXT NOT NULL,
+                deletedAt TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_tag_aliases_tagId ON local_tag_aliases(tagId);
+
+            CREATE TABLE IF NOT EXISTS local_post_tags (
+                id TEXT PRIMARY KEY,
+                postId TEXT NOT NULL REFERENCES local_posts(id) ON DELETE CASCADE,
+                tagId TEXT NOT NULL REFERENCES local_tags(id) ON DELETE CASCADE,
+                role TEXT NOT NULL,
+                source TEXT NOT NULL,
+                confidence REAL,
+                aiSummaryId TEXT,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                deletedAt TEXT,
+                UNIQUE(postId, tagId)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_post_tags_postId ON local_post_tags(postId);
+            CREATE INDEX IF NOT EXISTS idx_local_post_tags_tagId ON local_post_tags(tagId);
+            CREATE INDEX IF NOT EXISTS idx_local_post_tags_role ON local_post_tags(role);
+
             CREATE TABLE IF NOT EXISTS outbox_operations (
                 id TEXT PRIMARY KEY,
                 opId TEXT NOT NULL UNIQUE,
@@ -119,6 +167,8 @@ extension LocalDatabase {
 
         try addColumnIfNeeded(table: "local_posts", column: "localEditedAt", definition: "TEXT")
         try addColumnIfNeeded(table: "local_posts", column: "isFavorite", definition: "INTEGER NOT NULL DEFAULT 0")
+        try addColumnIfNeeded(table: "local_posts", column: "aiTagProcessedAt", definition: "TEXT")
+        try addColumnIfNeeded(table: "local_posts", column: "tagsUserEditedAt", definition: "TEXT")
         try addColumnIfNeeded(table: "local_media", column: "kind", definition: "TEXT NOT NULL DEFAULT 'image'")
         try addColumnIfNeeded(table: "local_media", column: "localThumbnailPath", definition: "TEXT")
         try addColumnIfNeeded(table: "local_media", column: "remoteThumbnailPath", definition: "TEXT")
@@ -135,6 +185,47 @@ extension LocalDatabase {
         try addColumnIfNeeded(table: "local_ai_summaries", column: "oneLiner", definition: "TEXT")
         try addColumnIfNeeded(table: "local_ai_summaries", column: "documentBlocksJson", definition: "TEXT NOT NULL DEFAULT '[]'")
         try execute("CREATE INDEX IF NOT EXISTS idx_local_media_deletedAt ON local_media(deletedAt)")
+        try seedDefaultTags()
+    }
+
+    func seedDefaultTags() throws {
+        let now = Date()
+        let tags: [(id: String, name: String, color: String)] = [
+            ("tag-primary-diary", "日记", "#D7E3F4"),
+            ("tag-primary-idea", "想法", "#E3DCF4"),
+            ("tag-primary-learning", "学习整理", "#DDEBD8"),
+            ("tag-primary-emotion", "情绪", "#F4DEE4"),
+            ("tag-primary-casual", "碎碎念", "#E7E2DA"),
+            ("tag-primary-review", "复盘", "#F0E4D4"),
+        ]
+
+        for tag in tags {
+            let statement = try prepare(
+                """
+                INSERT OR IGNORE INTO local_tags
+                    (id, type, name, normalizedName, colorHex, isDefault, isArchived, aiUsableAsPrimary, createdAt, updatedAt, archivedAt)
+                VALUES (?, 'primary', ?, ?, ?, 1, 0, 1, ?, ?, NULL)
+                """
+            )
+            defer {
+                sqlite3_finalize(statement)
+            }
+
+            try bind(tag.id, to: 1, in: statement)
+            try bind(tag.name, to: 2, in: statement)
+            try bind(Self.normalizedTagName(tag.name), to: 3, in: statement)
+            try bind(tag.color, to: 4, in: statement)
+            try bind(now, to: 5, in: statement)
+            try bind(now, to: 6, in: statement)
+            try stepDone(statement)
+        }
+    }
+
+    static func normalizedTagName(_ value: String) -> String {
+        value.precomposedStringWithCompatibilityMapping
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .lowercased()
     }
 
 

@@ -17,7 +17,9 @@ struct ComposerView: View {
     @State private var showingCamera = false
     @State private var isPublishing = false
     @State private var isProcessingVideo = false
+    @State private var isImportingShare = false
     @State private var mediaError: String?
+    @State private var selectedPrimaryTagId: String?
     @StateObject private var audioRecorder = AudioRecorderController()
 
     var body: some View {
@@ -28,6 +30,15 @@ struct ComposerView: View {
                         .frame(minHeight: 140)
 
                     DatePicker("Date", selection: $occurredAt, displayedComponents: [.date, .hourAndMinute])
+
+                    if !store.activePrimaryTags.isEmpty {
+                        Picker("Primary Tag", selection: $selectedPrimaryTagId) {
+                            Text("AI decides").tag(nil as String?)
+                            ForEach(store.activePrimaryTags) { tag in
+                                Text(tag.name).tag(Optional(tag.id))
+                            }
+                        }
+                    }
                 }
 
                 Section {
@@ -85,6 +96,7 @@ struct ComposerView: View {
                 }
             }
             .task {
+                await loadPendingShareImportIfNeeded()
                 await loadRecoverableAudioDraft()
             }
             .alert("Media unavailable", isPresented: mediaErrorBinding) {
@@ -101,6 +113,7 @@ struct ComposerView: View {
             videoDraft != nil ||
             audioDraft != nil) &&
             !isProcessingVideo &&
+            !isImportingShare &&
             !audioRecorder.isRecording
     }
 
@@ -160,6 +173,15 @@ struct ComposerView: View {
             .padding(.vertical, 8)
         }
 
+        if isImportingShare {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Importing shared item")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 8)
+        }
+
         if audioRecorder.isRecording {
             HStack {
                 Label(
@@ -201,6 +223,34 @@ struct ComposerView: View {
                                 .frame(minHeight: 96)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
+                            if imageData.count > 1 {
+                                HStack(spacing: 2) {
+                                    Button {
+                                        moveImage(from: index, to: index - 1)
+                                    } label: {
+                                        Image(systemName: "chevron.left.circle.fill")
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, .black.opacity(0.62))
+                                    }
+                                    .disabled(index == 0)
+                                    .accessibilityLabel("Move image left")
+
+                                    Button {
+                                        moveImage(from: index, to: index + 1)
+                                    } label: {
+                                        Image(systemName: "chevron.right.circle.fill")
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, .black.opacity(0.62))
+                                    }
+                                    .disabled(index == imageData.count - 1)
+                                    .accessibilityLabel("Move image right")
+                                }
+                                .font(.title3)
+                                .buttonStyle(.plain)
+                                .padding(4)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                            }
+
                             Button {
                                 removeImage(at: index)
                             } label: {
@@ -231,7 +281,8 @@ struct ComposerView: View {
                 imageData: imageData,
                 video: videoDraft,
                 audio: audioDraft,
-                occurredAt: occurredAt
+                occurredAt: occurredAt,
+                primaryTagId: selectedPrimaryTagId
             )
             isPublishing = false
 
@@ -263,6 +314,18 @@ struct ComposerView: View {
         try? ComposerDraftStore.saveImages(imageData)
     }
 
+    private func moveImage(from sourceIndex: Int, to destinationIndex: Int) {
+        guard imageData.indices.contains(sourceIndex),
+              imageData.indices.contains(destinationIndex),
+              sourceIndex != destinationIndex else {
+            return
+        }
+
+        let item = imageData.remove(at: sourceIndex)
+        imageData.insert(item, at: destinationIndex)
+        try? ComposerDraftStore.saveImages(imageData)
+    }
+
     private func processVideo(_ item: PhotosPickerItem) async {
         isProcessingVideo = true
         defer {
@@ -280,6 +343,98 @@ struct ComposerView: View {
         } catch {
             mediaError = error.localizedDescription
         }
+    }
+
+    private func loadPendingShareImportIfNeeded() async {
+        let envelope: PendingShareImportEnvelope?
+        do {
+            envelope = try ShareImportInbox.nextPendingImport()
+        } catch ShareImportInboxError.appGroupUnavailable {
+            return
+        } catch {
+            mediaError = error.localizedDescription
+            return
+        }
+
+        guard let envelope else {
+            return
+        }
+
+        isImportingShare = true
+        defer {
+            isImportingShare = false
+        }
+
+        do {
+            applySharedText(envelope.importRecord.text, createdAt: envelope.importRecord.createdAt)
+            try await applySharedAttachments(envelope)
+            ComposerDraftStore.save(text: text, occurredAt: occurredAt)
+            try ShareImportInbox.delete(envelope)
+        } catch {
+            mediaError = "Could not import shared item: \(error.localizedDescription)"
+        }
+    }
+
+    private func applySharedText(_ sharedText: String, createdAt: Date) {
+        let trimmedSharedText = sharedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        occurredAt = createdAt
+        guard !trimmedSharedText.isEmpty else {
+            return
+        }
+
+        let trimmedCurrentText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = trimmedCurrentText.isEmpty
+            ? trimmedSharedText
+            : "\(trimmedCurrentText)\n\n\(trimmedSharedText)"
+    }
+
+    private func applySharedAttachments(_ envelope: PendingShareImportEnvelope) async throws {
+        let attachments = envelope.importRecord.attachments.sorted { $0.sortOrder < $1.sortOrder }
+        guard !attachments.isEmpty else {
+            return
+        }
+
+        if let video = attachments.first(where: { $0.kind == .video }) {
+            isProcessingVideo = true
+            defer {
+                isProcessingVideo = false
+            }
+            videoDraft = try await VideoMediaProcessor.prepareVideo(from: envelope.fileURL(for: video))
+            audioDraft = nil
+            imageData = []
+            selectedItems = []
+            selectedVideoItem = nil
+            audioRecorder.discard()
+            try? ComposerDraftStore.saveImages([])
+            return
+        }
+
+        if let audio = attachments.first(where: { $0.kind == .audio }) {
+            audioDraft = try await AudioMediaInspector.prepareImportedAudio(from: envelope.fileURL(for: audio))
+            videoDraft = nil
+            imageData = []
+            selectedItems = []
+            selectedVideoItem = nil
+            try? ComposerDraftStore.saveImages([])
+            return
+        }
+
+        let importedImages = attachments
+            .filter { $0.kind == .image }
+            .prefix(9)
+            .compactMap { try? Data(contentsOf: envelope.fileURL(for: $0)) }
+
+        guard !importedImages.isEmpty else {
+            return
+        }
+
+        imageData = importedImages
+        videoDraft = nil
+        audioDraft = nil
+        selectedItems = []
+        selectedVideoItem = nil
+        audioRecorder.discard()
+        try ComposerDraftStore.saveImages(imageData)
     }
 
     private func toggleRecording() {

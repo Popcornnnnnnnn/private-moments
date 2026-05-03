@@ -9,6 +9,7 @@ struct TimelineRow: View {
     let relativeTimeNow: Date
     let aiSummaryRequestMediaIDs: Set<String>
     let searchResult: TimelineSearchResult?
+    let showTagsInTimeline: Bool
     let onOpenMedia: ([TimelineMedia], Int) -> Void
     let onOpenDetail: () -> Void
     let onComment: () -> Void
@@ -23,13 +24,18 @@ struct TimelineRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                if showTagsInTimeline, let primaryTag = item.primaryTag {
+                    TimelineTagChip(tag: primaryTag.tag, compact: true)
+                }
                 if item.post.isFavorite {
                     Image(systemName: "star.fill")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.yellow)
                         .accessibilityLabel("Favorite")
                 }
-                SyncBadge(status: item.post.syncStatus)
+                if item.post.syncStatus != "synced" {
+                    SyncBadge(status: item.post.syncStatus)
+                }
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -37,9 +43,7 @@ struct TimelineRow: View {
             }
 
             if !item.post.text.isEmpty {
-                Text(item.post.text)
-                    .font(.body)
-                    .textSelection(.enabled)
+                MomentTextView(text: item.post.text, style: .timeline)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         onOpenDetail()
@@ -158,6 +162,48 @@ struct TimelineRow: View {
 
     private func aiSummary(for media: TimelineMedia) -> TimelineAISummary? {
         item.aiSummaries.first { $0.mediaId == media.id && $0.deletedAt == nil }
+    }
+}
+
+struct TimelineTagChip: View {
+    let tag: TimelineTag
+    var compact = false
+
+    var body: some View {
+        Text(tag.name)
+            .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
+            .lineLimit(1)
+            .foregroundStyle(.primary.opacity(0.78))
+            .padding(.horizontal, compact ? 7 : 9)
+            .frame(height: compact ? 22 : 26)
+            .background(chipColor.opacity(0.34), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(chipColor.opacity(0.48), lineWidth: 0.6)
+            )
+    }
+
+    private var chipColor: Color {
+        Color(hex: tag.colorHex) ?? Color.secondary.opacity(0.22)
+    }
+}
+
+extension Color {
+    init?(hex: String?) {
+        guard let hex else {
+            return nil
+        }
+
+        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard cleaned.count == 6,
+              let value = Int(cleaned, radix: 16) else {
+            return nil
+        }
+
+        let red = Double((value >> 16) & 0xFF) / 255.0
+        let green = Double((value >> 8) & 0xFF) / 255.0
+        let blue = Double(value & 0xFF) / 255.0
+        self.init(red: red, green: green, blue: blue)
     }
 }
 

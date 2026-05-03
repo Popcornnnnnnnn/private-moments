@@ -54,11 +54,40 @@ final class TimelineSearchTests: XCTestCase {
         XCTAssertFalse(TimelineSearch.textMatches("rehab training notes", query: "coffee"))
     }
 
+    func testMatchesTagsAndAliases() {
+        let item = timelineItem(
+            text: "",
+            media: [],
+            comments: [],
+            tags: [
+                assignedTag(name: "大语言模型", tagId: "topic-llm")
+            ]
+        )
+
+        let aliasesByTagId = [
+            "topic-llm": [
+                TimelineTagAlias(
+                    id: "alias-llm",
+                    tagId: "topic-llm",
+                    alias: "LLM",
+                    normalizedAlias: "llm",
+                    createdAt: Date(timeIntervalSince1970: 1_800),
+                    deletedAt: nil
+                )
+            ]
+        ]
+
+        let result = TimelineSearch.result(for: item, query: "LLM", aliasesByTagId: aliasesByTagId)
+        XCTAssertTrue(result.isMatch)
+        XCTAssertTrue(result.includes(.tags))
+    }
+
     private func timelineItem(
         text: String,
         media: [TimelineMedia],
         comments: [TimelineComment],
-        aiSummaries: [TimelineAISummary] = []
+        aiSummaries: [TimelineAISummary] = [],
+        tags: [TimelineAssignedTag] = []
     ) -> TimelineItem {
         let now = Date(timeIntervalSince1970: 1_800)
         return TimelineItem(
@@ -66,6 +95,8 @@ final class TimelineSearchTests: XCTestCase {
                 id: "post",
                 text: text,
                 isFavorite: false,
+                aiTagProcessedAt: nil,
+                tagsUserEditedAt: nil,
                 occurredAt: now,
                 localCreatedAt: now,
                 localUpdatedAt: now,
@@ -76,7 +107,8 @@ final class TimelineSearchTests: XCTestCase {
             ),
             media: media,
             comments: comments,
-            aiSummaries: aiSummaries
+            aiSummaries: aiSummaries,
+            tags: tags
         )
     }
 
@@ -140,12 +172,43 @@ final class TimelineSearchTests: XCTestCase {
             inputDurationSeconds: 12,
             promptVersion: "media-summary-v2",
             provider: "openai",
-            model: "test-model",
+            model: "gpt-5.5",
             errorCode: nil,
             errorMessage: nil,
             createdAt: now,
             updatedAt: now,
             deletedAt: nil
+        )
+    }
+
+    private func assignedTag(name: String, tagId: String) -> TimelineAssignedTag {
+        let now = Date(timeIntervalSince1970: 1_800)
+        let tag = TimelineTag(
+            id: tagId,
+            type: "topic",
+            name: name,
+            normalizedName: name,
+            colorHex: nil,
+            isDefault: false,
+            isArchived: false,
+            aiUsableAsPrimary: false,
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: nil
+        )
+
+        return TimelineAssignedTag(
+            id: "post-\(tagId)",
+            postId: "post",
+            tagId: tagId,
+            role: "topic",
+            source: "manual",
+            confidence: nil,
+            aiSummaryId: nil,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: nil,
+            tag: tag
         )
     }
 }

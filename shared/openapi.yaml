@@ -678,6 +678,134 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Media"
+        aiTagProcessedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Set when the first ready audio AI summary has attempted automatic tag application.
+        tagsUserEditedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Set after the user edits the complete tag set for this post.
+    Tag:
+      type: object
+      required:
+        - id
+        - type
+        - name
+        - normalizedName
+        - isDefault
+        - isArchived
+        - aiUsableAsPrimary
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - primary
+            - topic
+        name:
+          type: string
+        normalizedName:
+          type: string
+        colorHex:
+          type:
+            - string
+            - "null"
+        isDefault:
+          type: boolean
+        isArchived:
+          type: boolean
+        aiUsableAsPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        archivedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    TagAlias:
+      type: object
+      required:
+        - id
+        - tagId
+        - alias
+        - normalizedAlias
+        - createdAt
+      properties:
+        id:
+          type: string
+        tagId:
+          type: string
+        alias:
+          type: string
+        normalizedAlias:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    PostTag:
+      type: object
+      required:
+        - id
+        - postId
+        - tagId
+        - role
+        - source
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        postId:
+          type: string
+        tagId:
+          type: string
+        role:
+          type: string
+          enum:
+            - primary
+            - topic
+        source:
+          type: string
+          enum:
+            - manual
+            - ai
+        confidence:
+          type:
+            - number
+            - "null"
+        aiSummaryId:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
     Media:
       type: object
       required:
@@ -843,12 +971,12 @@ components:
           type:
             - string
             - "null"
-          description: Optional generated display title for v2 document-style summaries.
+          description: Optional generated display title for v3 document-style summaries.
         oneLiner:
           type:
             - string
             - "null"
-          description: Short top-level summary for v2 document-style summaries.
+          description: Short top-level summary for v3 document-style summaries.
         documentBlocks:
           type: array
           description: Native block model rendered by iOS as a Markdown-like summary document. Empty for legacy summaries.
@@ -963,6 +1091,7 @@ components:
         - counts
         - storage
         - aiSummaries
+        - tags
         - sync
       properties:
         serverVersion:
@@ -979,6 +1108,8 @@ components:
           $ref: "#/components/schemas/ServerStorageStats"
         aiSummaries:
           $ref: "#/components/schemas/AdminAISummaryDiagnostics"
+        tags:
+          $ref: "#/components/schemas/AdminTagDiagnostics"
         sync:
           $ref: "#/components/schemas/AdminSyncDiagnostics"
     AdminStatusCounts:
@@ -1033,6 +1164,28 @@ components:
         - latestServerChangeVersion
       properties:
         latestServerChangeVersion:
+          type: integer
+    AdminTagDiagnostics:
+      type: object
+      required:
+        - total
+        - primary
+        - topics
+        - archived
+        - aiAssignments
+        - manualAssignments
+      properties:
+        total:
+          type: integer
+        primary:
+          type: integer
+        topics:
+          type: integer
+        archived:
+          type: integer
+        aiAssignments:
+          type: integer
+        manualAssignments:
           type: integer
     AdminAISummaryDiagnosticItem:
       type: object
@@ -1199,17 +1352,28 @@ components:
             - create_post
             - delete_post
             - update_post
+            - insert_ai_title
             - update_post_favorite
             - create_comment
             - delete_comment
             - update_media_transcription
             - upsert_media
+            - upsert_tag
+            - archive_tag
+            - restore_tag
+            - delete_tag
+            - merge_tag
+            - upsert_tag_alias
+            - delete_tag_alias
+            - set_post_tags
         entityType:
           type: string
           enum:
             - post
             - comment
             - media
+            - tag
+            - tag_alias
         entityId:
           type: string
           format: uuid
@@ -1229,6 +1393,18 @@ components:
             `entityType: media` and payload `{postId, transcriptionText, updatedAt}`;
             server changes include `media_transcription_updated` with
             `{id, postId, transcriptionText, updatedAt}`.
+            Tag vocabulary operations use `upsert_tag`, `archive_tag`,
+            `restore_tag`, `delete_tag`, `merge_tag`, `upsert_tag_alias`, and
+            `delete_tag_alias`. Post assignments use `set_post_tags` with
+            payload `{primaryTagId, topicTagIds, updatedAt}`. Server changes
+            include `tag_updated`, `tag_deleted`, `tag_alias_updated`, `tag_alias_deleted`,
+            `post_tag_updated`, `post_tag_deleted`, and
+            `post_tag_state_updated`.
+            `insert_ai_title` uses `entityType: post` with payload
+            `{summaryId, mediaId, insertedAt}`. The title text is not sent by
+            the client; the server reloads it from a ready audio AI summary and
+            emits `post_updated` with `updateSource: ai_title` when it changes
+            the post text.
           additionalProperties: true
     SyncResponse:
       type: object

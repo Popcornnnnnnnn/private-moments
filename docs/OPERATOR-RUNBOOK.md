@@ -24,8 +24,7 @@
 | `PRIVATE_MOMENTS_SERVER_URL` | `http://127.0.0.1:3210` | Simulator script server URL。 |
 | `PRIVATE_MOMENTS_SIM_NAME` | `Private Moments iPhone 13 Pro` | Simulator display name。 |
 | `PRIVATE_MOMENTS_DEVICE_TYPE` | `com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro` | Simulator device type。 |
-| `PRIVATE_MOMENTS_DEVICE_NAME` | unset | `devicectl` 使用的真实 iPhone 名称。真机安装时必须显式设置。 |
-| `PRIVATE_MOMENTS_BUNDLE_ID` | `dev.privatemoments.app` | iOS app bundle id override。 |
+| `PRIVATE_MOMENTS_DEVICE_NAME` | `Your iPhone` | `devicectl` 使用的真实 iPhone 名称。 |
 | `PRIVATE_MOMENTS_DEVICE_SERVER_URL` | auto-detected | 真实设备 server URL override。 |
 | `PRIVATE_MOMENTS_LAUNCHD_LABEL` | `com.private-moments.server` | launchd label。 |
 | `AI_SUMMARY_PROVIDER` | `openai` | AI summary provider label。当前实现使用 OpenAI-compatible Chat Completions API。 |
@@ -97,7 +96,7 @@ npm run ios:simulator
 真实 iPhone：
 
 ```bash
-PRIVATE_MOMENTS_DEVICE_NAME="Your iPhone" npm run ios:device
+npm run ios:device
 ```
 
 真实设备脚本会：
@@ -113,6 +112,26 @@ PRIVATE_MOMENTS_DEVICE_NAME="Your iPhone" npm run ios:device
 ```text
 Settings > General > VPN & Device Management > Developer App
 ```
+
+### Share Extension
+
+iOS app 内嵌 `Save to Moments` Share Extension。安装到 iPhone 后，可以在 Photos、Files、Voice Memos、Safari 或其他支持系统 Share Sheet 的 App 中选择 `Save to Moments`。
+
+当前 Share Extension 使用 App Group：
+
+```text
+group.dev.privatemoments.app
+```
+
+真实设备签名时，主 App bundle id `dev.privatemoments.app` 和 extension bundle id `dev.privatemoments.app.share` 都需要在 Apple Developer 账号中启用同一个 App Group capability。若设备构建或安装时报 provisioning / entitlement 相关错误，先在 Apple Developer Portal 或 Xcode Signing & Capabilities 中确认 App Group 已注册并分配给这两个 identifiers。
+
+验证路径：
+
+1. 安装 App 到 iPhone。
+2. 打开 Photos，选择 1-9 张图片，点 Share。
+3. 选择 `Save to Moments`，可补一段文字。
+4. 完成后主 App 应打开 New Moment composer，图片和文字进入草稿。
+5. 发布后走原有本地保存、sync/upload 和后续 AI summary 流程。
 
 ## Mac Admin
 
@@ -172,6 +191,15 @@ tailscale ip -4
 curl -fsS http://<tailscale-ip>:3210/api/v1/health
 ```
 
+如果启用了 Tailscale Serve，可以优先使用 HTTPS 入口，避免 iOS App Transport Security 对明文 HTTP 的限制：
+
+```bash
+tailscale serve status
+curl -fsS --resolve <tailscale-host>:443:<tailscale-ip> https://<tailscale-host>/api/v1/health
+```
+
+真实 iPhone 的 Server URL 可以填 `https://<tailscale-host>`；如果继续使用 `http://<tailscale-ip>:3210`，Debug app 的 `NSAppTransportSecurity` 当前通过 `NSAllowsArbitraryLoads` 允许开发期明文 HTTP。
+
 Admin build 和 server typecheck：
 
 ```bash
@@ -198,39 +226,8 @@ xcodebuild -project PrivateMoments.xcodeproj \
   -destination generic/platform=iOS \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO \
-build
+  build
 ```
-
-## Backup / Restore / Export
-
-完整本地备份：
-
-```bash
-npm run backup:local
-```
-
-默认输出到 `backups/private-moments-backup-<timestamp>.tgz`。备份包含本地 runtime data，例如 SQLite 数据库和媒体目录；不包含 `server/.env`。
-
-恢复备份：
-
-```bash
-npm run restore:local -- backups/private-moments-backup-YYYYMMDDTHHMMSSZ.tgz --yes
-```
-
-恢复前，脚本会把现有 `server/data` 或旧 `server/prisma/dev.db` 移到带时间戳的旁路目录/文件，再解压备份。恢复后运行：
-
-```bash
-npm run server:prisma:deploy
-npm run server:dev
-```
-
-导出可读 JSON metadata：
-
-```bash
-npm run export:local
-```
-
-`export:local` 会导出 `posts.json`、`comments.json`、`media.json` 和 `ai_summaries.json`，用于人工检查或迁移规划。它不包含媒体文件；完整恢复请用 `backup:local`。
 
 ## 真实 iPhone 数据验证
 
@@ -318,11 +315,68 @@ LIMIT 10;
 
 排查时只记录 id、状态、document block 数量、provider/model、错误码和 transcript length。不要复制私人 transcript 正文或 AI summary 正文。
 
+Smart Tags 常用检查：
+
+```sql
+SELECT id, type, name, is_default, is_archived, ai_usable_as_primary
+FROM tags
+ORDER BY type, is_default DESC, name;
+
+SELECT tag_id, COUNT(*) AS active_assignments
+FROM post_tags
+WHERE deleted_at IS NULL
+GROUP BY tag_id
+ORDER BY active_assignments DESC;
+
+SELECT source, COUNT(*)
+FROM post_tags
+WHERE deleted_at IS NULL
+GROUP BY source;
+
+SELECT p.id AS post_id, m.id AS media_id, s.status,
+       p.ai_tag_processed_at,
+       COUNT(pt.id) AS active_tags
+FROM posts p
+JOIN media m ON m.post_id = p.id
+LEFT JOIN ai_summaries s ON s.media_id = m.id AND s.deleted_at IS NULL
+LEFT JOIN post_tags pt ON pt.post_id = p.id AND pt.deleted_at IS NULL
+WHERE m.kind = 'audio' AND p.deleted_at IS NULL
+GROUP BY p.id, m.id, s.status, p.ai_tag_processed_at
+ORDER BY p.created_at DESC
+LIMIT 10;
+```
+
+本机 iPhone container 侧：
+
+```sql
+SELECT id, type, name, isDefault, isArchived, aiUsableAsPrimary
+FROM local_tags
+ORDER BY type, isDefault DESC, name;
+
+SELECT tagId, COUNT(*) AS active_assignments
+FROM local_post_tags
+WHERE deletedAt IS NULL
+GROUP BY tagId
+ORDER BY active_assignments DESC;
+
+SELECT COUNT(*) FROM local_tag_aliases WHERE deletedAt IS NULL;
+```
+
+默认主标签应至少有 6 条：`日记`、`想法`、`学习整理`、`情绪`、`碎碎念`、`复盘`。AI 自动标签只应出现在新 audio moment 的首次 ready summary 之后；video/image/text 没有 AI 自动标签。短音频/短 transcript 通常只应有 1 个 topic，只有多主题且高置信度时才保留多个。排查时只记录 tag id/name/type/count/source、AI 建议置信度数组和 skipped reason，不复制 post 正文、comment、transcript 或 summary 正文。server 正常日志里的 `ai.tags_processed` 可用于区分 `no_suggestions`、`low_confidence`、`user_edited`、`already_processed`、`force_regenerate`、`non_audio_media` 和已应用标签等路径。Settings > Tags 的 `Edit` 可批量 Archive/Merge Topic，也可批量 Restore/Delete Archived tags。
+
 ## Troubleshooting
 
 ### Login Fails With App Transport Security
 
-使用 HTTPS Tailscale Serve，或者在本地开发 build 中依赖 `NSAllowsArbitraryLoads` 和 `NSAllowsLocalNetworking`。公开版不内置个人 Tailscale exception；干净的 production build 后续应该收紧 ATS 配置。
+优先检查 Settings 里的 Server URL。如果是 `http://<tailscale-ip>:3210`，ATS 报错通常说明请求在 iOS 侧被拦截，尚未到达 Mac server；此时 server logs 和 `devices.last_seen_at` 通常不会变化。
+
+推荐使用 Tailscale Serve HTTPS：
+
+```bash
+tailscale serve status
+```
+
+然后把 iOS Server URL 改为输出里的 `https://<tailscale-host>`。当前 Debug app 也通过 `NSAllowsArbitraryLoads` 允许开发期 HTTP fallback；不要同时依赖 `NSAllowsLocalNetworking` 来覆盖 Tailscale `100.x` 地址，因为它不一定被 ATS 判定为 local networking。
 
 ### Duplicate Devices
 
@@ -338,7 +392,14 @@ LIMIT 10;
 
 ### Uploads Stay Pending
 
-iOS 会逐个上传 media，并在上传前压缩图片。如果大文件上传失败或 Tailscale 连接中断，item 会留在本地 queue，并由 sync retry 调度器按 backoff 延迟重试。先看 Settings > Storage & Diagnostics > Sync Health 里的 pending 或 failed counts，再检查 server logs 里的 `media.upload` 和 sync errors。
+iOS 会逐个上传 media，并在上传前压缩图片。如果大文件上传失败或 Tailscale 连接中断，item 会留在本地 queue，并由 sync retry 调度器按 backoff 延迟重试。先看 Settings > Storage & Diagnostics > Sync Health 里的 pending 或 failed counts，再检查 server logs 里的分阶段上传日志：
+
+- `media.upload_started`: server 已收到 multipart request，并记录 `mediaId`、`postId`、`kind`、`variant` 和预期 body size。
+- `media.upload_received`: server 已完整写入临时文件，并完成 size/checksum 统计。
+- `media.upload_completed`: server 已把临时文件原子 rename 到最终 media path，并写入 SQLite media record。
+- `media.upload_failed`: 上传中断或超时。常见 `errorCode` 是 `client_premature_close` 或 `upload_timeout`。
+
+Server 会先写入同目录隐藏 `.tmp` 文件，只有完整收完后才原子 rename 成最终 media 文件；失败时只删除 `.tmp`，不把半截文件当成已上传内容。如果日志里反复出现 `client_premature_close`，通常是 iPhone/Tailscale 连接中断或旧 server 进程卡着上传流。可以重启 Mac server，打开 iPhone app 或 Settings > Sync > Sync Now，让本地 queue 重新上传。
 
 ### Comments Do Not Appear After Sync
 
@@ -370,6 +431,8 @@ python3 -m venv .venv
 
 AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示 `Summary ready`；底部 sheet 只显示 ready AI summary。没有 ready summary、处理中、失败或 provider 未配置时，主时间线保持静默，不显示 transcript、`Needs transcript`、`No speech detected` 或 `Summary failed`。
 
+新 audio moment 还有一个可选的标题写回：Settings > Feature Modules > `AI Title Auto-Insert` 默认打开。若首次 ready summary 有有效 `documentTitle`，且该 audio/post 是开启功能之后新建、当前正文没有行首 `# ` 或 `## ` 标题，iOS 会把 `## <title>` 插入正文顶部，并通过 `insert_ai_title` 同步到 Mac。这个过程只写标题，不写 summary 正文；如果没有出现标题，优先检查该开关、summary 是否 ready、音频是否是旧内容、`document_title` 是否为空/超过 40 字符、正文是否已有标题，以及 outbox 是否存在失败的 `insert_ai_title`。`media-summary-v3` 会要求可识别非空音频有短标题，并在 server 侧从 `one_liner` 做 fallback；如果 `document_title` 仍为空，通常表示该音频被判定为内容为空、无法识别、静音或噪音。
+
 先确认目标 audio/video media 的完整文件已经在 Mac server 上可读。新流程不依赖 `media.transcription_text`；server 会先在 Mac 本地转写媒体文件，并把内部 transcript 继续交给 summary provider。ready 记录通常应该有非空 `input_transcript_length`。
 
 如果是 provider 配置问题，检查 Mac server 的 `AI_SUMMARY_API_KEY`、`AI_SUMMARY_BASE_URL`、`AI_SUMMARY_MODEL` 和本地转写相关 env，修改后重启 server。可以用 `POST /api/v1/ai/media-summary` 对已上传的 audio/video media 重新生成；真机新发布媒体会在上传完成后自动排队生成。
@@ -378,13 +441,13 @@ AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示
 
 删除 summary 只会软删除 generated metadata，不会删除 post、media、legacy transcript metadata 或 comments。重新生成会覆盖同一个 media 当前 summary record。
 
-新生成的 `media-summary-v2` ready 记录应有 `document_title` / `one_liner` 或非空 `document_blocks_json`。如果旧 summary 没有这些字段但仍有 `overview` / `key_points_json` / `sections_json`，iOS 会走 legacy 渲染；只有重新生成后才会变成 v2 document blocks。
+新生成的 `media-summary-v3` ready 记录应有 `document_title` / `one_liner` 或非空 `document_blocks_json`。如果旧 summary 没有这些字段但仍有 `overview` / `key_points_json` / `sections_json`，iOS 会走 legacy 渲染；只有重新生成后才会变成 v3 document blocks。
 
 ### Storage Mac Server Section Is Missing
 
 Settings > Storage & Diagnostics 总是显示本机 iPhone usage。只有在 app 已登录且 `/api/v1/admin/status` 成功时，Mac Server section 才会出现。如果 Mac section 被隐藏，检查 server URL、token state 和 Tailscale reachability。
 
-AI Summaries subsection 也来自 `/api/v1/admin/status.aiSummaries`。如果 Mac Server section 出现但 AI Summaries 不出现，先确认已安装包含 Storage & Diagnostics 更新的 iOS build，再用 curl 检查 admin status 响应是否包含 `aiSummaries`。
+AI Summaries subsection 来自 `/api/v1/admin/status.aiSummaries`，Tags subsection 来自 `/api/v1/admin/status.tags`。如果 Mac Server section 出现但这些 subsection 不出现，先确认已安装包含 Storage & Diagnostics 更新的 iOS build，再用 curl 检查 admin status 响应是否包含对应字段。
 
 ### Build Fails With Signing/Profile Errors
 

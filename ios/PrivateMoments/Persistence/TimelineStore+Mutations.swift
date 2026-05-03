@@ -6,7 +6,8 @@ extension TimelineStore {
         imageData: [Data],
         video: PreparedMomentMedia? = nil,
         audio: PreparedMomentMedia? = nil,
-        occurredAt: Date
+        occurredAt: Date,
+        primaryTagId: String? = nil
     ) async -> Bool {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty || !imageData.isEmpty || video != nil || audio != nil else {
@@ -27,12 +28,14 @@ extension TimelineStore {
                 audio: audio,
                 createdAt: now
             )
-            let payload = try makeCreatePostPayload(text: trimmedText, occurredAt: occurredAt)
+            let payload = try makeCreatePostPayload(text: trimmedText, occurredAt: occurredAt, primaryTagId: primaryTagId)
 
             let post = TimelinePost(
                 id: postId,
                 text: trimmedText,
                 isFavorite: false,
+                aiTagProcessedAt: nil,
+                tagsUserEditedAt: nil,
                 occurredAt: occurredAt,
                 localCreatedAt: now,
                 localUpdatedAt: now,
@@ -56,7 +59,7 @@ extension TimelineStore {
                 sentAt: nil
             )
 
-            try database.insertPost(post, media: media, operation: operation)
+            try database.insertPost(post, media: media, operation: operation, primaryTagId: primaryTagId)
             try await reload()
             try refreshPendingCounts()
 
@@ -320,4 +323,459 @@ extension TimelineStore {
             errorMessage = error.localizedDescription
         }
     }
+
+    func updateTags(item: TimelineItem, primaryTagId: String?, topicTagIds: [String]) async -> Bool {
+        guard canEdit(item) else {
+            errorMessage = "Wait until this moment finishes syncing before editing tags."
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let payload = try makeSetPostTagsPayload(
+                primaryTagId: primaryTagId,
+                topicTagIds: topicTagIds,
+                updatedAt: now
+            )
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "set_post_tags",
+                entityType: "post",
+                entityId: item.post.id,
+                payloadJson: payload,
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.setPostTags(
+                postId: item.post.id,
+                primaryTagId: primaryTagId,
+                topicTagIds: topicTagIds,
+                updatedAt: now,
+                operation: operation
+            )
+            try await reload()
+            try refreshPendingCounts()
+
+            if isAuthenticated {
+                Task {
+                    await syncNow()
+                }
+            }
+
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func createTag(type: String, name: String, colorHex: String? = nil) async -> TimelineTag? {
+        let cleanedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedName.isEmpty, cleanedName.count <= 40 else {
+            errorMessage = "Tags can be up to 40 characters."
+            return nil
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let normalizedName = LocalDatabase.normalizedTagName(cleanedName)
+            if let existingTag = try database.fetchTag(normalizedName: normalizedName) {
+                errorMessage = duplicateTagMessage(existingTag, requestedType: type)
+                return nil
+            }
+
+            let tag = TimelineTag(
+                id: UUID().uuidString,
+                type: type,
+                name: cleanedName,
+                normalizedName: normalizedName,
+                colorHex: colorHex,
+                isDefault: false,
+                isArchived: false,
+                aiUsableAsPrimary: false,
+                createdAt: now,
+                updatedAt: now,
+                archivedAt: nil
+            )
+            let payload = try makeUpsertTagPayload(
+                type: type,
+                name: cleanedName,
+                colorHex: colorHex,
+                aiUsableAsPrimary: false,
+                updatedAt: now
+            )
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "upsert_tag",
+                entityType: "tag",
+                entityId: tag.id,
+                payloadJson: payload,
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.saveTag(tag, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+
+            if isAuthenticated {
+                Task {
+                    await syncNow()
+                }
+            }
+
+            return tag
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func updateTag(_ tag: TimelineTag, name: String, colorHex: String? = nil) async -> Bool {
+        let cleanedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedName.isEmpty, cleanedName.count <= 40 else {
+            errorMessage = "Tags can be up to 40 characters."
+            return false
+        }
+
+        if tag.isDefault && cleanedName != tag.name {
+            errorMessage = "Default primary tags cannot be renamed."
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let normalizedName = LocalDatabase.normalizedTagName(cleanedName)
+            if let existingTag = try database.fetchTag(normalizedName: normalizedName),
+               existingTag.id != tag.id {
+                errorMessage = duplicateTagMessage(existingTag, requestedType: tag.type)
+                return false
+            }
+
+            var updatedTag = tag
+            updatedTag.name = cleanedName
+            updatedTag.normalizedName = normalizedName
+            updatedTag.colorHex = updatedTag.type == "primary" ? colorHex : nil
+            updatedTag.updatedAt = now
+
+            let payload = try makeUpsertTagPayload(
+                type: updatedTag.type,
+                name: updatedTag.name,
+                colorHex: updatedTag.colorHex,
+                aiUsableAsPrimary: updatedTag.aiUsableAsPrimary,
+                updatedAt: now
+            )
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "upsert_tag",
+                entityType: "tag",
+                entityId: updatedTag.id,
+                payloadJson: payload,
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.saveTag(updatedTag, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func archiveTag(_ tag: TimelineTag) async -> Bool {
+        if tag.isDefault {
+            errorMessage = "Default primary tags cannot be archived."
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "archive_tag",
+                entityType: "tag",
+                entityId: tag.id,
+                payloadJson: try makeArchiveTagPayload(archivedAt: now),
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.archiveTag(tag, archivedAt: now, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func restoreTag(_ tag: TimelineTag) async -> Bool {
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "restore_tag",
+                entityType: "tag",
+                entityId: tag.id,
+                payloadJson: try makeRestoreTagPayload(restoredAt: now),
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.restoreTag(tag, restoredAt: now, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteTag(_ tag: TimelineTag) async -> Bool {
+        guard tag.isArchived else {
+            errorMessage = "Archive tags before deleting them permanently."
+            return false
+        }
+
+        if tag.isDefault {
+            errorMessage = "Default primary tags cannot be deleted."
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "delete_tag",
+                entityType: "tag",
+                entityId: tag.id,
+                payloadJson: try makeDeleteTagPayload(deletedAt: now),
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.deleteArchivedTag(tag, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func createTagAlias(tag: TimelineTag, alias: String) async -> Bool {
+        let cleanedAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedAlias.isEmpty, cleanedAlias.count <= 40 else {
+            errorMessage = "Aliases can be up to 40 characters."
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let tagAlias = TimelineTagAlias(
+                id: UUID().uuidString,
+                tagId: tag.id,
+                alias: cleanedAlias,
+                normalizedAlias: LocalDatabase.normalizedTagName(cleanedAlias),
+                createdAt: now,
+                deletedAt: nil
+            )
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "upsert_tag_alias",
+                entityType: "tag_alias",
+                entityId: tagAlias.id,
+                payloadJson: try makeUpsertTagAliasPayload(tagId: tag.id, alias: cleanedAlias),
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.saveTagAlias(tagAlias, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteTagAlias(_ alias: TimelineTagAlias) async -> Bool {
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "delete_tag_alias",
+                entityType: "tag_alias",
+                entityId: alias.id,
+                payloadJson: try makeDeleteTagAliasPayload(deletedAt: now),
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.softDeleteTagAlias(alias, deletedAt: now, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func mergeTopicTag(_ sourceTag: TimelineTag, into targetTag: TimelineTag) async -> Bool {
+        guard sourceTag.type == "topic", targetTag.type == "topic", sourceTag.id != targetTag.id else {
+            errorMessage = "Choose two different topic tags to merge."
+            return false
+        }
+
+        guard !targetTag.isArchived else {
+            errorMessage = "Merge into an active topic tag."
+            return false
+        }
+
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let aliasId = UUID().uuidString
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "merge_tag",
+                entityType: "tag",
+                entityId: sourceTag.id,
+                payloadJson: try makeMergeTagPayload(targetTagId: targetTag.id, alias: sourceTag.name, mergedAt: now),
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.mergeTopicTag(
+                sourceTag: sourceTag,
+                targetTag: targetTag,
+                aliasName: sourceTag.name,
+                aliasId: aliasId,
+                mergedAt: now,
+                operation: operation
+            )
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func syncSoonIfAuthenticated() {
+        if isAuthenticated {
+            Task {
+                await syncNow()
+            }
+        }
+    }
+}
+
+private func duplicateTagMessage(_ tag: TimelineTag, requestedType: String) -> String {
+    let existingType = tag.type == "primary" ? "Primary Tag" : "Topic Tag"
+    let requestedTypeTitle = requestedType == "primary" ? "Primary Tag" : "Topic Tag"
+    let archivedPrefix = tag.isArchived ? "archived " : ""
+
+    if tag.type == requestedType {
+        return "A \(archivedPrefix)\(existingType.lowercased()) named \"\(tag.name)\" already exists."
+    }
+
+    return "A \(archivedPrefix)\(existingType.lowercased()) named \"\(tag.name)\" already exists. Tag names are shared across \(requestedTypeTitle)s and \(existingType)s."
 }

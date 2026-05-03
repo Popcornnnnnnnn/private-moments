@@ -81,6 +81,9 @@ struct StorageDetailsView: View {
                 if let aiSummaries = serverStatus.aiSummaries {
                     aiSummarySection(aiSummaries)
                 }
+                if let tags = serverStatus.tags {
+                    tagSection(tags)
+                }
             }
         }
         .navigationTitle("Storage & Diagnostics")
@@ -202,6 +205,19 @@ struct StorageDetailsView: View {
                         .lineLimit(3)
                 }
                 .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func tagSection(_ diagnostics: AdminTagDiagnostics) -> some View {
+        Section("Tags") {
+            LabeledContent("Primary", value: "\(diagnostics.primary)")
+            LabeledContent("Topics", value: "\(diagnostics.topics)")
+            LabeledContent("AI assignments", value: "\(diagnostics.aiAssignments)")
+            LabeledContent("Manual assignments", value: "\(diagnostics.manualAssignments)")
+
+            if diagnostics.archived > 0 {
+                LabeledContent("Archived", value: "\(diagnostics.archived)")
             }
         }
     }

@@ -18,6 +18,8 @@ struct TimelineView: View {
     @State private var isNeedsSyncOnly = false
     @State private var selectedMonthFilter: TimelineMonthFilter?
     @State private var selectedMatchSourceFilter: TimelineMatchSourceFilter = .all
+    @State private var selectedPrimaryTagId: String?
+    @State private var selectedTopicTagIds = Set<String>()
     @State private var dateJumpRequest: TimelineDateJumpRequest?
     @State private var floatingMonthTitle: String?
     @State private var isFloatingMonthVisible = false
@@ -79,7 +81,8 @@ struct TimelineView: View {
                                                             searchQuery: searchText,
                                                             relativeTimeNow: relativeTimeNow,
                                                             aiSummaryRequestMediaIDs: store.aiSummaryRequestsInFlight,
-                                                            searchResult: searchResult(for: item)
+                                                            searchResult: searchResult(for: item),
+                                                            showTagsInTimeline: store.showTagsInTimeline
                                                         ) { media, index in
                                                             openMedia(media, index: index)
                                                         } onOpenDetail: {
@@ -192,6 +195,40 @@ struct TimelineView: View {
                                 isNeedsSyncOnly.toggle()
                             } label: {
                                 Label("Needs Sync", systemImage: isNeedsSyncOnly ? "checkmark" : "arrow.triangle.2.circlepath")
+                            }
+                        }
+
+                        if !store.activePrimaryTags.isEmpty || !store.activeTopicTags.isEmpty {
+                            Section("Tags") {
+                                if !store.activePrimaryTags.isEmpty {
+                                    Menu("Primary") {
+                                        Button {
+                                            selectedPrimaryTagId = nil
+                                        } label: {
+                                            Label("Any", systemImage: selectedPrimaryTagId == nil ? "checkmark" : "tag")
+                                        }
+
+                                        ForEach(store.activePrimaryTags) { tag in
+                                            Button {
+                                                selectedPrimaryTagId = tag.id
+                                            } label: {
+                                                Label(tag.name, systemImage: selectedPrimaryTagId == tag.id ? "checkmark" : "tag")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if !store.activeTopicTags.isEmpty {
+                                    Menu("Topics") {
+                                        ForEach(store.activeTopicTags) { tag in
+                                            Button {
+                                                toggleTopicFilter(tag.id)
+                                            } label: {
+                                                Label(tag.name, systemImage: selectedTopicTagIds.contains(tag.id) ? "checkmark" : "tag")
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -410,11 +447,27 @@ struct TimelineView: View {
                 return false
             }
 
+            if let selectedPrimaryTagId,
+               item.primaryTag?.tagId != selectedPrimaryTagId {
+                return false
+            }
+
+            if !selectedTopicTagIds.isEmpty {
+                let itemTopicTagIds = Set(item.topicTags.map(\.tagId))
+                if !selectedTopicTagIds.isSubset(of: itemTopicTagIds) {
+                    return false
+                }
+            }
+
             guard hasSearchQuery else {
                 return true
             }
 
-            let result = TimelineSearch.result(for: item, query: trimmedSearchText)
+            let result = TimelineSearch.result(
+                for: item,
+                query: trimmedSearchText,
+                aliasesByTagId: store.aliasesByTagId
+            )
             return result.isMatch && selectedMatchSourceFilter.includes(result)
         }
     }
@@ -425,6 +478,8 @@ struct TimelineView: View {
             || isCommentedOnly
             || isNeedsSyncOnly
             || selectedMonthFilter != nil
+            || selectedPrimaryTagId != nil
+            || !selectedTopicTagIds.isEmpty
             || (hasSearchQuery && selectedMatchSourceFilter != .all)
     }
 
@@ -475,6 +530,27 @@ struct TimelineView: View {
             )
         }
 
+        if let selectedPrimaryTagId,
+           let tag = store.tags.first(where: { $0.id == selectedPrimaryTagId }) {
+            chips.append(
+                TimelineFilterChip(id: "primary-\(tag.id)", title: tag.name, systemImage: "tag") {
+                    self.selectedPrimaryTagId = nil
+                }
+            )
+        }
+
+        for tagId in selectedTopicTagIds.sorted() {
+            guard let tag = store.tags.first(where: { $0.id == tagId }) else {
+                continue
+            }
+
+            chips.append(
+                TimelineFilterChip(id: "topic-\(tag.id)", title: tag.name, systemImage: "tag") {
+                    selectedTopicTagIds.remove(tag.id)
+                }
+            )
+        }
+
         if hasSearchQuery && selectedMatchSourceFilter != .all {
             chips.append(
                 TimelineFilterChip(
@@ -497,6 +573,16 @@ struct TimelineView: View {
         isNeedsSyncOnly = false
         selectedMonthFilter = nil
         selectedMatchSourceFilter = .all
+        selectedPrimaryTagId = nil
+        selectedTopicTagIds.removeAll()
+    }
+
+    private func toggleTopicFilter(_ tagId: String) {
+        if selectedTopicTagIds.contains(tagId) {
+            selectedTopicTagIds.remove(tagId)
+        } else {
+            selectedTopicTagIds.insert(tagId)
+        }
     }
 
     private func searchResult(for item: TimelineItem) -> TimelineSearchResult? {
@@ -504,7 +590,11 @@ struct TimelineView: View {
             return nil
         }
 
-        return TimelineSearch.result(for: item, query: trimmedSearchText)
+        return TimelineSearch.result(
+            for: item,
+            query: trimmedSearchText,
+            aliasesByTagId: store.aliasesByTagId
+        )
     }
 
     private func itemNeedsSync(_ item: TimelineItem) -> Bool {

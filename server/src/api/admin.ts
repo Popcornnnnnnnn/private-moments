@@ -284,6 +284,7 @@ export async function registerAdminRoutes(
       media,
       storage,
       aiSummaries,
+      tags,
       serverChangeVersion,
     ] =
       await Promise.all([
@@ -314,6 +315,7 @@ export async function registerAdminRoutes(
         context.prisma.media.count(),
         collectServerStorageStats(context.paths),
         collectAISummaryDiagnostics(context.prisma),
+        collectTagDiagnostics(context.prisma),
         latestServerChangeVersion(context.prisma),
       ]);
 
@@ -331,6 +333,7 @@ export async function registerAdminRoutes(
       },
       storage,
       aiSummaries,
+      tags,
       sync: {
         latestServerChangeVersion: serverChangeVersion,
       },
@@ -353,6 +356,26 @@ export async function registerAdminRoutes(
       logs: await readRecentLogs(context.paths.logsDir, limit),
     });
   });
+}
+
+async function collectTagDiagnostics(prisma: PrismaClient): Promise<Record<string, unknown>> {
+  const [total, primary, topics, archived, aiAssignments, manualAssignments] = await Promise.all([
+    prisma.tag.count(),
+    prisma.tag.count({ where: { type: "primary", isArchived: false } }),
+    prisma.tag.count({ where: { type: "topic", isArchived: false } }),
+    prisma.tag.count({ where: { isArchived: true } }),
+    prisma.postTag.count({ where: { source: "ai", deletedAt: null } }),
+    prisma.postTag.count({ where: { source: "manual", deletedAt: null } }),
+  ]);
+
+  return {
+    total,
+    primary,
+    topics,
+    archived,
+    aiAssignments,
+    manualAssignments,
+  };
 }
 
 async function collectAISummaryDiagnostics(prisma: PrismaClient): Promise<Record<string, unknown>> {

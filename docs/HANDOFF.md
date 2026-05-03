@@ -1,6 +1,6 @@
 # Private Moments 公开版交接说明
 
-Last reconciled: 2026-05-02
+Last reconciled: 2026-05-03
 
 ## 当前状态
 
@@ -9,6 +9,7 @@ Last reconciled: 2026-05-02
 - 公开版目录：`private-moments-open-source/`
 - 私有开发目录：`private-moments/`
 - 当前公开版目标：v1.0-public 收口准备。
+- 2026-05-03 已吸收最新私有开发快照中的 Share Extension、Smart Tags、AI summary v3、AI title auto-insert、moment text Markdown-like rendering、feature toggles 和 appearance 设置。
 
 ## 已完成的公开版清理
 
@@ -38,7 +39,7 @@ PRIVATE_MOMENTS_DEVICE_NAME="Your iPhone" npm run ios:device
 
 ## 下一步
 
-1. 补最小 backup/restore/export 脚本。
-2. 跑公开目录的敏感信息扫描。
-3. 初始化公开目录自己的 Git history。
-4. 生成第一版 release notes。
+1. 在第二台干净 Mac 上完整跑一遍 `npm run setup:local`。
+2. 针对 Share Extension 的 App Group signing 写更详细的新用户配置说明。
+3. 补 GitHub Actions，至少覆盖 server typecheck/build、admin build 和 iOS generic build。
+4. 做一次完整 backup/restore/export 恢复演练。

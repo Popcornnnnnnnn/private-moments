@@ -48,6 +48,8 @@ model Post {
   id                String    @id
   text              String
   isFavorite        Boolean   @default(false) @map("is_favorite")
+  aiTagProcessedAt  DateTime? @map("ai_tag_processed_at")
+  tagsUserEditedAt  DateTime? @map("tags_user_edited_at")
   occurredAt        DateTime  @map("occurred_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -63,11 +65,69 @@ model Post {
   media           Media[]
   comments        Comment[]
   aiSummaries     AiSummary[]
+  tags            PostTag[]
 
   @@index([occurredAt])
   @@index([deletedAt])
   @@index([serverVersion])
   @@map("posts")
+}
+
+model Tag {
+  id                String    @id
+  type              String
+  name              String
+  normalizedName    String    @unique @map("normalized_name")
+  colorHex          String?   @map("color_hex")
+  isDefault         Boolean   @default(false) @map("is_default")
+  isArchived        Boolean   @default(false) @map("is_archived")
+  aiUsableAsPrimary Boolean   @default(false) @map("ai_usable_as_primary")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  archivedAt        DateTime? @map("archived_at")
+
+  aliases  TagAlias[]
+  postTags PostTag[]
+
+  @@index([type])
+  @@index([isArchived])
+  @@map("tags")
+}
+
+model TagAlias {
+  id              String    @id
+  tagId           String    @map("tag_id")
+  alias           String
+  normalizedAlias String    @unique @map("normalized_alias")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([tagId])
+  @@map("tag_aliases")
+}
+
+model PostTag {
+  id          String    @id
+  postId      String    @map("post_id")
+  tagId       String    @map("tag_id")
+  role        String
+  source      String
+  confidence  Float?
+  aiSummaryId String?   @map("ai_summary_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, tagId])
+  @@index([postId])
+  @@index([tagId])
+  @@index([role])
+  @@map("post_tags")
 }
 
 model Media {

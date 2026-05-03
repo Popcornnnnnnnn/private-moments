@@ -37,6 +37,22 @@ The screenshots below use demo data and show the core iOS experience.
   </tr>
 </table>
 
+## Latest Update: Faster Capture, Smarter Recall
+
+This public snapshot now includes the latest product iteration. The goal is still a quiet timeline; the new work mainly reduces friction around capture and later organization:
+
+- **Save to Moments Share Extension**
+  Send photos, videos, audio files, text, or links from the iOS Share Sheet into Moments. The main app opens the existing Composer so you can edit, reorder, add text, and publish normally.
+
+- **Smart Tags**
+  Moments can have a small set of primary tags plus dynamic topic tags, aliases, archive/restore/delete, and batch management. New audio moments can receive conservative AI-suggested tags after the first ready AI summary. Image, video, and plain-text moments are not auto-tagged by AI.
+
+- **AI Summary v3 and AI Titles**
+  New media summaries use a structured document-block model. For new audio moments without a handwritten title, the generated short title can be inserted at the top of the moment text. Only the title is inserted; the summary body stays generated metadata.
+
+- **Quieter Feature Toggles**
+  Settings now includes feature toggles for timeline tags and AI title insertion, plus System / Light / Dark appearance control. The main timeline remains intentionally low-noise.
+
 ## Why This Exists
 
 Most personal-memory tools push you toward one of two uncomfortable shapes:
@@ -61,6 +77,9 @@ The guiding idea is simple: **capture like posting, keep like archiving**.
 - **Private comments**
   Add lightweight comments directly under a moment, similar to the rhythm of a private Moments-style feed, without introducing other users, likes, replies, or notifications.
 
+- **System Share Sheet capture**
+  Use `Save to Moments` from other iOS apps to bring external material directly into the Moments Composer.
+
 - **Offline-first capture**
   Posts appear locally immediately. Sync work is queued and retried when the Mac server becomes reachable again.
 
@@ -71,10 +90,13 @@ The guiding idea is simple: **capture like posting, keep like archiving**.
   Images are compressed for practical storage, videos get poster thumbnails and muted timeline playback, and audio records as local voice notes.
 
 - **AI summaries for long media**
-  Uploaded audio and video can be transcribed on the Mac and summarized through an external OpenAI-compatible API. The iPhone never stores the provider API key.
+  Uploaded audio and video can be transcribed on the Mac and summarized through an external OpenAI-compatible API. New audio can also receive an AI-generated short title in the moment body. The iPhone never stores the provider API key.
+
+- **Smart Tags**
+  Add manual primary tags and topic tags, or let new audio moments receive conservative AI tag suggestions after a ready summary. Tags can stay hidden from the timeline, and Settings includes color, alias, archive, merge, and delete tools.
 
 - **Search and organization**
-  Timeline search supports lightweight fuzzy matching, media-type filters, month filters, favorites, comments, pending sync state, and match-source filters.
+  Timeline search supports lightweight fuzzy matching, media-type filters, month filters, favorites, comments, tags, pending sync state, and match-source filters.
 
 - **Diagnostics and recovery**
   Storage, sync, upload, and AI-summary health can be inspected from the app and admin tools. Local backup, restore, and metadata export commands are included.
@@ -104,8 +126,9 @@ Included today:
 - local media storage;
 - React/Vite admin UI;
 - sync API and OpenAPI contract;
-- text, images, audio, video, comments, favorites, filters, and search;
-- AI media summaries with Mac-local transcription plus external summary provider;
+- text, images, audio, video, Share Sheet imports, comments, favorites, filters, and search;
+- Smart Tags, tag management, and tag-aware search;
+- AI media summaries with Mac-local transcription plus external summary provider, AI tag suggestions, and AI title auto-insert;
 - backup, restore, export, diagnostics, and launchd service scripts.
 
 ## Architecture
@@ -127,6 +150,8 @@ flowchart LR
 The iPhone is the capture and browsing surface. The Mac is the archive, sync peer, media store, diagnostics surface, and optional AI worker.
 
 The intended network boundary is a private network such as Tailscale or another VPN. Do not expose the server directly to the public internet without adding your own production hardening.
+
+The Share Extension uses an iOS App Group to hand temporary imports from the extension to the main app. The public defaults are `dev.privatemoments.app` and `group.dev.privatemoments.app`; for real-device signing, configure the matching capability in your Apple Developer account or replace the identifiers with your own.
 
 ## Quick Start
 
@@ -204,6 +229,8 @@ AI summaries are optional. The flow is intentionally server-side:
 
 This keeps provider credentials off the iPhone and makes summary failures diagnosable on the Mac side.
 
+New summaries try to produce a short title, a one-line takeaway, and structured blocks. For new audio moments without a handwritten title, the app can insert that short title as a top `##` heading in the moment text. This can be disabled in Settings.
+
 Configure the provider through local environment variables. Do not commit real API keys.
 
 ## Backup, Restore, And Export
@@ -263,7 +290,6 @@ Those boundaries are intentional. The project is optimized for one person who wa
 
 Likely next steps before a broader public release:
 
-- add screenshots or a short demo video;
 - test the setup flow on a clean second Mac;
 - add GitHub Actions for server/admin verification;
 - improve first-run iOS onboarding for self-hosted setup;

@@ -5,6 +5,7 @@ enum TimelineSearchMatchSource: String, CaseIterable, Identifiable, Hashable {
     case comments
     case summary
     case transcript
+    case tags
 
     var id: String {
         rawValue
@@ -20,6 +21,8 @@ enum TimelineSearchMatchSource: String, CaseIterable, Identifiable, Hashable {
             return "Summary"
         case .transcript:
             return "Transcript"
+        case .tags:
+            return "Tags"
         }
     }
 
@@ -33,6 +36,8 @@ enum TimelineSearchMatchSource: String, CaseIterable, Identifiable, Hashable {
             return "Matched summary"
         case .transcript:
             return "Matched transcript"
+        case .tags:
+            return "Matched tag"
         }
     }
 
@@ -46,6 +51,8 @@ enum TimelineSearchMatchSource: String, CaseIterable, Identifiable, Hashable {
             return "sparkles"
         case .transcript:
             return "waveform"
+        case .tags:
+            return "tag"
         }
     }
 }
@@ -63,14 +70,18 @@ struct TimelineSearchResult: Equatable {
 }
 
 enum TimelineSearch {
-    static func result(for item: TimelineItem, query: String) -> TimelineSearchResult {
+    static func result(
+        for item: TimelineItem,
+        query: String,
+        aliasesByTagId: [String: [TimelineTagAlias]] = [:]
+    ) -> TimelineSearchResult {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
             return TimelineSearchResult(sources: [])
         }
 
         var sources = Set<TimelineSearchMatchSource>()
-        if textMatches(item.post.text, query: trimmedQuery) {
+        if textMatches(MomentTextMarkdown.searchableText(item.post.text), query: trimmedQuery) {
             sources.insert(.text)
         }
 
@@ -90,6 +101,15 @@ enum TimelineSearch {
             return textMatches(transcriptionText, query: trimmedQuery)
         }) {
             sources.insert(.transcript)
+        }
+
+        if item.tags.contains(where: { assignedTag in
+            textMatches(assignedTag.tag.name, query: trimmedQuery)
+                || (aliasesByTagId[assignedTag.tagId] ?? []).contains(where: { alias in
+                    alias.deletedAt == nil && textMatches(alias.alias, query: trimmedQuery)
+                })
+        }) {
+            sources.insert(.tags)
         }
 
         return TimelineSearchResult(sources: sources)
