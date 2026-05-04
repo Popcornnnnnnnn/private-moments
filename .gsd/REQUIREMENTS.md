@@ -28,35 +28,265 @@ This file is the explicit capability and coverage contract for the project.
 - Source: workflow alignment discussion 2026-04-30
 - Validation: Completion summaries name the verification class used and include the command or inspection evidence.
 
-### R008 — A user can add and delete private plain-text comments on an existing moment from the iOS moment detail view, with comments displayed under that moment without changing the main timeline feed density.
+### R008 — The iOS main timeline supports single-user Comments directly in the feed: a comment action row, bottom input bar, latest-two preview, in-place expand/collapse, and long-press delete confirmation.
 - Class: functional
 - Status: active
-- Description: A user can add and delete private plain-text comments on an existing moment from the iOS moment detail view, with comments displayed under that moment without changing the main timeline feed density.
-- Why it matters: The user wants lightweight follow-up thoughts attached to a moment while preserving the main timeline as a quiet feed.
-- Source: M002 planning discussion 2026-04-30
-- Primary owning slice: M002/S02
-- Supporting slices: M002/S01,M002/S03
-- Validation: A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered.
+- Description: The iOS main timeline supports single-user Comments directly in the feed: a comment action row, bottom input bar, latest-two preview, in-place expand/collapse, and long-press delete confirmation.
+- Why it matters: The requested interaction should feel like WeChat Moments from the main feed, not like a hidden detail-only note feature.
+- Source: M003 comments discussion 2026-04-30
+- Primary owning slice: M003/S03
+- Supporting slices: M003/S01,M003/S02,M003/S04
+- Validation: Real iPhone UAT creates a comment from the timeline, keeps the input target clear, shows the new comment immediately, expands/collapses comments in place, and deletes a comment by long-pressing it and confirming `Delete comment?`.
+
+### R009 — Comments sync as independent local-first data through the Mac server with idempotent create/delete operations, parent constraints, soft delete, cursor-safe recovery, and no per-comment sync badges.
+- Class: functional
+- Status: active
+- Description: Comments sync as independent local-first data through the Mac server with idempotent create/delete operations, parent constraints, soft delete, cursor-safe recovery, and no per-comment sync badges.
+- Why it matters: Comments are user content; they must survive sync/recovery without becoming orphan data or cluttering the feed with technical state.
+- Source: M003 comments discussion 2026-04-30
+- Primary owning slice: M003/S02
+- Supporting slices: M003/S01,M003/S03,M003/S04
+- Validation: Server/iOS sync checks prove `create_comment` and `delete_comment` idempotency, missing/deleted parent rejection, local unsynced create/delete short-circuit, parent delete cascade, and strict no-cursor-advance behavior when a comment change cannot be applied.
+
+### R010 — Comments remain plain multiline text with a 500-character limit and no media, Markdown rendering, rich text, replies, likes, mentions, visible author identity, editing, or copy/selection in the first version.
+- Class: constraint
+- Status: active
+- Description: Comments remain plain multiline text with a 500-character limit and no media, Markdown rendering, rich text, replies, likes, mentions, visible author identity, editing, or copy/selection in the first version.
+- Why it matters: The feature should add lightweight follow-up expression without turning Moments into a social network, thread system, or second writing editor.
+- Source: M003 comments discussion 2026-04-30
+- Primary owning slice: M003/S03
+- Supporting slices: M003/S01,M003/S02,M003/S04
+- Validation: UI/tests verify multiline literal text display, Markdown-like text stays plain, over-500-character input disables `Send`, long press opens delete confirmation rather than edit/copy/reply, and no comment media/reply/edit operation exists.
+
+### R011 — Timeline search matches comment text after existing filters are applied, and search results make comment hits visible without changing true comment counts.
+- Class: functional
+- Status: active
+- Description: Timeline search matches comment text after existing filters are applied, and search results make comment hits visible without changing true comment counts.
+- Why it matters: If comments are part of timeline memory, search should find them, but it must not bypass active filters or produce unexplained results.
+- Source: M003 comments discussion 2026-04-30
+- Primary owning slice: M003/S03
+- Supporting slices: M003/S01,M003/S04
+- Validation: Search applies current filters first, returns a moment when either moment text or comment text matches, prioritizes up to two matching comments in preview, lightly emphasizes matching comment rows, and keeps comment counts as the full undeleted count.
+
+### R012 — Comment implementation must include migration, recovery, diagnostics, and real-device evidence appropriate to schema/sync/timeline-keyboard risk.
+- Class: operational
+- Status: active
+- Description: Comment implementation must include migration, recovery, diagnostics, and real-device evidence appropriate to schema/sync/timeline-keyboard risk.
+- Why it matters: The riskiest failures are not just compile errors: comment loss after migration/recovery, cursor loss, private body leakage in diagnostics, and real-device keyboard/gesture regressions.
+- Source: M003 comments discussion 2026-04-30
+- Primary owning slice: M003/S04
+- Supporting slices: M003/S01,M003/S02,M003/S03
+- Validation: Completion evidence includes server migration/build, iOS schema/build, sync smoke checks, SQLite aggregate inspection or equivalent recovery proof, Advanced Sync/outbox operation counts without comment bodies, and real iPhone UAT when feasible.
+
+### R013 — Audio/video publishing does not rely on iOS on-device speech transcription; transcript handling is server-side/internal when used for AI.
+- Class: functional
+- Status: active
+- Description: New iOS clients must not run local Speech transcription, request speech recognition permission, upload `transcriptionText`, or show transcript fallback/status in the timeline. Historical transcript sync remains accepted only for old-client compatibility.
+- Why it matters: The local recognizer produced incomplete transcripts; visible/transferred transcript artifacts made AI summaries unreliable and cluttered the product.
+- Source: server-side media summary follow-up 2026-05-01
+- Primary owning slice: M004
+- Supporting slices: none
+- Validation: iOS build no longer links Speech framework or contains local transcription services; creating audio/video moments uploads media without `transcriptionText`; timeline shows no transcript fallback/status when no ready AI summary exists.
+
+### R014 — Audio/video media support Mac-server AI summaries generated from uploaded media files through local Mac transcription and external summary APIs.
+- Class: functional
+- Status: active
+- Description: After complete audio/video upload, the Mac server starts a background summary job that transcribes the stored media file locally with `mlx-whisper`, summarizes the internal transcript through the configured external summary provider, and syncs only generated summary metadata back to iOS.
+- Why it matters: The first AI layer should help the user quietly organize long voice/video notes while avoiding poor local transcription quality and keeping provider credentials server-only.
+- Source: M005 AI media summaries discussion 2026-04-30; server-side media summary follow-up 2026-05-01
+- Primary owning slice: M005/S02
+- Supporting slices: M005/S01,M005/S03,M005/S04
+- Validation: On a real iPhone, create one audio and one video moment, confirm media upload triggers local Mac transcription plus server-side summary, ready summary records include provider/model/prompt metadata and transcript length/hash only, and the result syncs back to iOS without changing the original post, media, or comments.
+
+### R015 — AI summary UI keeps the main timeline quiet: only button/status appears inline, while full adaptive document summaries are shown in a bottom sheet.
+- Class: functional
+- Status: active
+- Description: AI summary UI keeps the main timeline quiet: only lightweight summary states appear inline, while full adaptive `media-summary-v3` document summaries are shown in a bottom sheet.
+- Why it matters: AI should be available as a useful organizing tool without crowding the feed or breaking the product's no-audience feel.
+- Source: M005 AI media summaries discussion 2026-04-30
+- Primary owning slice: M005/S03
+- Supporting slices: M005/S01,M005/S04
+- Validation: Timeline rows show no Summary placeholder or transcript fallback before any result exists. After a summary exists, the inline control may show `Summary ready`, `Regenerating`, or `Summary failed`; full summary text and transcript text must not appear directly in the timeline row. Tapping the control opens a bottom sheet rendered from `documentTitle`, `oneLiner`, and `documentBlocks` with default-collapsed details and labeled `AI suggested` callouts. Regenerate shows immediate in-sheet progress feedback, prevents repeated taps, keeps showing `Regenerating` after sheet dismissal, preserves the previous readable summary until replacement succeeds, and exposes failure reason plus retry without clearing the old summary.
+
+### R016 — AI summary implementation must preserve privacy, sync safety, and failure isolation.
+- Class: operational
+- Status: active
+- Description: AI summary implementation must preserve privacy, sync safety, and failure isolation.
+- Why it matters: External AI calls touch private transcript content and new generated metadata, so failures must not leak content, poison sync, or block normal media usage.
+- Source: M005 AI media summaries discussion 2026-04-30
+- Primary owning slice: M005/S04
+- Supporting slices: M005/S01,M005/S02,M005/S03
+- Validation: API keys are server-only; transcript and summary bodies are absent from normal logs/Admin diagnostics; missing media file, empty transcript, provider failure, invalid model output, delete summary, regenerate, and device recovery paths are verified; provider failures leave post/media/comment sync functional.
+
+### R018 — Timeline search and organization must support lightweight local fuzzy retrieval and composable filters without crowding the feed.
+- Class: functional
+- Status: active
+- Description: iPhone Timeline search must cover post text, comments, synced AI summary generated metadata, and historical transcript metadata using lightweight local fuzzy matching; filters must compose across content type, favorite, commented, needs-sync, tags, and match source when a query exists. Calendar day selection may add a temporary clearable day filter.
+- Why it matters: As audio/video summaries and comments grow, the user needs practical retrieval without turning the main timeline into a database UI or depending on server-side search for everyday browsing.
+- Source: search and AI hardening follow-up 2026-05-01
+- Primary owning slice: maintenance
+- Supporting slices: M003/S03,M005/S03
+- Validation: iOS build proves the Timeline search model and filter UI compile; manual UAT should verify multi-keyword search, Chinese substring, light English typo tolerance, summary hits, source badges, active chips, clear filters, Calendar day filter handoff, and non-persistent filter state.
+
+### R019 — v0.1 close-out and open-source preparation must keep setup simple while blocking private data and secret exposure.
+- Class: operational
+- Status: active
+- Description: The project must provide a simple local setup path, release checklist, open-source readiness assessment, and privacy/security notes before any public release. Public release remains blocked until license, Git history secret scan, and backup/restore/export closure are complete.
+- Why it matters: A private local-first app can work well for the owner while still being unsafe or confusing to publish. Open-source readiness must cover setup reproducibility, private data boundaries, external AI privacy, and recoverability.
+- Source: v0.1 close-out discussion 2026-05-02
+- Primary owning slice: maintenance
+- Supporting slices: none
+- Validation: `npm run setup:local` exists and is non-destructive; README and runbook point to it; release/open-source/security docs list current gates; verification includes setup help output, server/admin build checks, health check, ignore-boundary checks, and a sensitive-string scan summary.
+
+### R020 — iOS must support system Share Sheet capture through a thin `Save to Moments` extension that stages content for the main app composer.
+- Class: functional
+- Status: active
+- Description: Photos, Files, Voice Memos, Safari, and other iOS apps may hand off supported content through a Share Extension named `Save to Moments`; the extension writes a pending import into the App Group inbox, then opens Moments so the existing composer can edit text/media before publishing.
+- Why it matters: Opening Moments first and then choosing media is too slow for everyday capture. The extension gives a system-native entry point while keeping publish, compression, SQLite, sync, and media preparation inside the main app.
+- Source: Share Extension capture-entry discussion 2026-05-03
+- Primary owning slice: maintenance
+- Supporting slices: R003,R013,R014
+- Validation: XcodeGen project generation, iOS unit tests, and generic iOS build must prove the app and extension compile together; real iPhone UAT should verify Photos/Safari/Files/Voice Memos share flows, composer launch, publish, and import queue cleanup when the phone is available.
+
+### R021 — Media upload must be atomic, retryable, and diagnosable under iPhone/Tailscale disconnects.
+- Class: operational
+- Status: active
+- Description: Server media upload must write multipart streams to hidden temp files, commit by atomic rename only after complete receipt, remove only temp files on failure, and log safe staged upload metadata/error codes without media bodies.
+- Why it matters: Real-device uploads can disconnect mid-stream. A created post with missing media should remain retryable from the iPhone local queue instead of producing committed partial files or opaque failures.
+- Source: media upload failure investigation 2026-05-03
+- Primary owning slice: maintenance
+- Supporting slices: R003,R014,R020
+- Validation: Server typecheck/build pass; restarting the Mac server leaves no stale media write fds; media directory has no leftover `.tmp` files; logs expose `media.upload_started`, `media.upload_received`, `media.upload_completed`, and `media.upload_failed` with `client_premature_close` or `upload_timeout` when applicable.
+
+### R022 — Smart Tags must use a small stable primary-tag taxonomy plus dynamic canonical topic tags.
+- Class: functional
+- Status: active
+- Description: Tags must distinguish primary expression-type tags from topic tags. Default primary tags are `日记`, `想法`, `学习整理`, `情绪`, `碎碎念`, and `复盘`; topic tags are dynamic, flat, canonicalized, alias-aware, and default to Chinese canonical names when possible.
+- Why it matters: The user wants lightweight retrieval, not a taxonomy wall. Stable primary tags keep the organizing spine small, while topic tags capture concrete concepts such as `大语言模型`, `强化学习`, or `高斯概率分布`.
+- Source: M006 Smart Tags discussion 2026-05-03
+- Primary owning slice: M006/S01
+- Supporting slices: M006/S02,M006/S04,M006/S06
+- Validation: Schema/seed checks prove default primary tags exist, names are globally unique, aliases match case-insensitively, topic tags are flat, default primary tags cannot be renamed/hidden, and custom primary/topic lifecycle rules behave as documented.
+
+### R023 — Manual tagging must work for all moment types while keeping Composer and Timeline low-noise.
+- Class: functional
+- Status: active
+- Description: Text, image, video, and audio moments must support manual tags. Composer offers an optional primary-tag picker only; the single-moment tag editor can edit primary and topic tags; Detail shows full tags only when `Show tags in Timeline` is enabled; Timeline and Day Review show at most a primary tag under the same switch. When the switch is off, Moment Detail must not show the Tags section or offer tag editing.
+- Why it matters: Tags should reduce future retrieval cost without making publishing feel like filing paperwork or cluttering the feed.
+- Source: M006 Smart Tags discussion 2026-05-03
+- Primary owning slice: M006/S02
+- Supporting slices: M006/S01,M006/S06
+- Validation: iOS UAT verifies publishing with and without a primary tag, editing primary/topic tags later when tag display is enabled, hiding Timeline/Day Review/Detail tag display without disabling tag data, and keeping abnormal sync status/favorite visibility stable in the metadata row.
+
+### R024 — AI automatic tags must be audio-only, sparse for short audio, and reuse the ready summary pipeline.
+- Class: functional
+- Status: active
+- Description: New audio moments may receive AI tags once when their first server-side audio summary becomes ready. Short audio/transcripts should prefer one topic tag and keep multiple topics only when the content clearly has separate high-confidence themes. Video, image, text-only moments, historical audio backfill, old-summary open events, and `Regenerate tags` are out of scope. Summary regeneration must not regenerate or overwrite tags.
+- Why it matters: The useful first AI tagging path is voice-note organization. Keeping it tied to first ready audio summary avoids extra background jobs, weird confirmation popups, and unintended tag churn.
+- Source: M006 Smart Tags discussion 2026-05-03
+- Primary owning slice: M006/S05
+- Supporting slices: M005/S02,M005/S03,M006/S01,M006/S06
+- Validation: Real iPhone UAT publishes clear-speech short and multi-topic audio moments and confirms summary ready applies sparse topic tags; video/image/text moments do not receive AI tags; summary regeneration leaves existing tags unchanged; summary failure leaves AI tags absent without extra timeline state.
+
+### R025 — Tags must participate in iPhone local search/filter and be manageable in iPhone Settings.
+- Class: functional
+- Status: active
+- Description: Timeline search must match primary tags, topic tags, and aliases with `tag` as a match source. Filter must separate primary tags and topic tags, use AND semantics, and show popular/recent topics plus search. Settings must support tag usage counts, topic rename/merge/archive/restore, Topic batch archive/merge, Archived batch restore/delete, alias preservation, custom primary lifecycle, and primary color customization including batch primary color edits.
+- Why it matters: Tags are only valuable if they can be used to find moments and cleaned up when AI or manual vocabulary drifts.
+- Source: M006 Smart Tags discussion 2026-05-03
+- Primary owning slice: M006/S03
+- Supporting slices: M006/S04,M006/S06
+- Validation: Focused tests and UAT prove search by canonical name and alias, tag match source display, primary/topic filter sections, AND filtering, archived tags hidden from ordinary search/filter, Settings single-item plus batch merge/archive/restore/delete behavior with usage counts, and batch primary color edits that change only selected primary tag colors.
+
+### R026 — Tags must sync as first-class recoverable metadata with deterministic conflict behavior.
+- Class: functional
+- Status: active
+- Description: Tag vocabulary, aliases, archive/delete state, primary colors, post tag assignments, assignment source/confidence, `aiTagProcessedAt`, and `tagsUserEditedAt` must persist on iOS and Mac server and sync across devices. Topic assignments merge independently; conflicting primary assignments use last-write-wins. Archived non-default tags can be permanently deleted to free an accidental normalized name.
+- Why it matters: Tags are long-lived organization work. Losing or corrupting them on reinstall, sync recovery, or multi-device edits would undermine their purpose.
+- Source: M006 Smart Tags discussion 2026-05-03
+- Primary owning slice: M006/S01
+- Supporting slices: M006/S05,M006/S06
+- Validation: Sync/recovery checks prove tag vocabulary and assignments pull after reinstall-equivalent refresh, topic assignments from different devices can coexist, primary conflicts resolve by updatedAt, user-edited moments block future AI auto-application, and cursor advancement remains safe.
+
+### R027 — Smart Tags implementation must preserve privacy, docs/contracts, diagnostics, and real-device proof.
+- Class: operational
+- Status: active
+- Description: Smart Tags must update `.gsd`, shared OpenAPI/sync protocol, and affected human-facing docs; logs/diagnostics must avoid transcript, summary, post, and comment bodies; Settings diagnostics may show safe tag/AI status counts and error codes; completion requires real iPhone UAT.
+- Why it matters: The feature crosses AI, private content, schema, sync, and UI. It needs the same verification discipline as comments and AI summaries.
+- Source: M006 Smart Tags discussion 2026-05-03
+- Primary owning slice: M006/S06
+- Supporting slices: M006/S01,M006/S02,M006/S03,M006/S04,M006/S05
+- Validation: Completion evidence includes server/iOS/admin builds as applicable, migration/sync/search/filter tests, no-private-body log inspection, Settings diagnostics shape checks, OpenAPI/sync-protocol updates, and real iPhone UAT for new audio AI tags plus manual tag search/filter/edit flows.
+
+### R028 — New audio AI summaries may insert only a generated title into moment text, without turning Moments into a Markdown editor.
+- Class: functional
+- Status: active
+- Description: For new audio moments, the first ready server-side AI summary may insert a valid `documentTitle` as `## <title>` at the top of `post.text` when the current text has no leading `# ` or `## ` title. New summary generation should produce a short title for recognizable non-empty audio/transcript notes, falling back from `oneLiner` if the provider returns no usable title. The insert is controlled by Settings > Feature Modules > `AI Title Auto-Insert`, defaults on, does not run for historical audio, video, image, text-only moments, invalid/overlong titles, or summary regeneration overwrite, and syncs through `insert_ai_title` without setting user `Edited` metadata.
+- Why it matters: Voice notes often need a visible title in the timeline, but AI should only provide a small scannable affordance rather than rewriting the user's note or exposing full summaries as timeline prose.
+- Source: AI title auto-insert follow-up 2026-05-03
+- Primary owning slice: maintenance
+- Supporting slices: R014,R015,R016,R018,R024
+- Validation: iOS build/tests verify `# ` and `## ` display-only rendering in Timeline/Detail, plain Composer/Edit storage, heading-marker-stripped search, `AI Title Auto-Insert` toggle default on, and `insert_ai_title` sync preserving `localEditedAt`; server build verifies v3 title generation/fallback and that the sync operation accepts only server-owned ready audio summary titles and emits `post_updated` with `updateSource: ai_title`.
+
+### R029 — iOS App Language must be a local immediate preference for English and Simplified Chinese UI.
+- Class: functional
+- Status: active
+- Description: Settings must offer App Language as `System`, `English`, and `简体中文`. New installs default to System; existing private installs default to English when previous app state exists and no language preference has been set. The preference applies immediately, is stored in local `UserDefaults`, is not synced, and covers iOS user-visible Timeline, Calendar, Composer, Detail/Edit, Settings, Tags, Summary, Search/Filter, alerts, comments, and time/date labels.
+- Why it matters: The app should be usable by English-preferring and Chinese-preferring users without creating separate product flows or syncing device-context UI preferences through the Mac server.
+- Source: M007 iOS localization discussion 2026-05-03
+- Primary owning slice: M007
+- Supporting slices: R003,R018,R023,R025,R028
+- Validation: iOS build verifies the localization layer compiles; dictionary coverage check proves every `L10n.t(...)` key has a Simplified Chinese value; real-device UAT should switch Settings > App Language and inspect the main timeline, composer, filters, tags, summary sheet, detail/edit, and alerts.
+
+### R030 — Default primary tags must display localized names while preserving one synced identity and bilingual search.
+- Class: functional
+- Status: active
+- Description: Default primary tags keep their synced tag IDs and stored canonical names, but display as `Diary`, `Thoughts`, `Study`, `Mood`, `Random`, and `Review` in English mode and as `日记`, `想法`, `学习整理`, `情绪`, `碎碎念`, and `复盘` in Chinese mode. Custom primary tags, topic tags, and aliases are not translated. Local search/filter should match default primary tags by both Chinese and English display names.
+- Why it matters: Language switching should change labels, not split tag usage counts, AI assignments, sync behavior, or historical retrieval.
+- Source: M007 iOS localization discussion 2026-05-03
+- Primary owning slice: M007
+- Supporting slices: R022,R023,R025,R026
+- Validation: iOS build verifies localized tag display/search helpers compile; UAT should confirm one default tag keeps the same usage count while changing App Language and that both `study` and `学习` can find/filter the default study primary tag.
+
+### R031 — AI summary/title language must be configurable independently from App Language.
+- Class: functional
+- Status: active
+- Description: Settings must offer AI Language as `Auto`, `Chinese`, and `English`, defaulting to Auto. iOS passes this preference to the Mac summary pipeline for upload-triggered and manual regenerated summaries. Auto follows the dominant input language; Chinese and English force generated summary/title output where reasonable. App UI language must not force generated content language.
+- Why it matters: AI summaries and titles are derived content, not interface chrome. Chinese voice notes with English technical terms should still summarize naturally in Chinese unless the user explicitly forces English.
+- Source: M007 iOS localization discussion 2026-05-03
+- Primary owning slice: M007
+- Supporting slices: R014,R015,R016,R024,R028
+- Validation: Server typecheck/build verifies the new `aiLanguage` request path and prompt handling; UAT should create or regenerate audio summaries with Auto/Chinese/English and confirm generated output language changes without changing App Language.
+
+### R032 — Calendar Review must provide local month-grid time review without becoming a second editor or sync surface.
+- Class: functional
+- Status: active
+- Description: iOS must expose a bottom `Calendar` / `日历` tab beside Timeline. Calendar defaults to a local-derived month grid, supports continuous month navigation by arrows and horizontal swipe, uses quiet heatmap density from local moment counts, shows at most two media hints per day, supports Calendar-owned media/favorite filters, fades future dates, highlights today subtly, and has no Compose entry. Tapping a populated date opens Day Review first, and Day Review should remember its per-day scroll position.
+- Why it matters: As the timeline grows, the user needs stronger回看 ability than scrolling or toolbar menus, but the main reading surface should remain Timeline and Calendar must not become a management dashboard.
+- Source: M008 Calendar Review discussion 2026-05-03
+- Primary owning slice: M008
+- Supporting slices: R003,R018,R029
+- Validation: CalendarReviewModelsTests cover continuous 42-cell months, empty months, locale first weekday, today/future states, density buckets, max-two media hints, and media/favorite filters. iOS UAT should verify arrows, horizontal swipe, Today, day tap to Day Review, Day Review item detail push/back, top-right Timeline day filter handoff, per-day scroll memory, light/dark, and English/Chinese labels.
 
 ## Validated
 
-### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-only jump navigation from a low-frequency toolbar menu entry.
+### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
 - Class: functional
 - Status: validated
-- Description: The timeline must keep feed browsing as the primary experience while offering lightweight month-only jump navigation from a low-frequency toolbar menu entry.
+- Description: The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
 - Why it matters: As content grows, the user needs to return to a period of life without turning Moments into a database or management tool.
 - Source: M001 discussion
 - Primary owning slice: M001/S01
-- Validation: Refined after user review: the toolbar calendar menu is month-only to avoid long nested day lists; exact date retrieval is deferred to future enhanced search. TimelineDateJumpModelsTests validate month grouping, month menu labels, filtered-item inputs, and count-free labels.
+- Validation: S01 completed: root-level and iOS XcodeGen specs generate successfully; generic iOS build passed; TimelineDateJumpModelsTests passed 5/5 on iPhone 17 simulator. This M001 toolbar menu path was later superseded by R032 Calendar Review.
 
-### R005 — Date navigation must only show existing months with moments, use life-feeling month labels, and avoid daily counts, daily submenus, or database-style date browsing.
+### R005 — Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
 - Class: constraint
 - Status: validated
-- Description: Date navigation must only show existing months with moments, use life-feeling month labels, and avoid daily counts, daily submenus, or database-style date browsing.
+- Description: Date navigation must only show existing months and dates with moments, use life-feeling labels such as month names and weekday context, and avoid daily counts or database-style primary date strings.
 - Why it matters: The feature should support returning to lived time, not statistical archive management.
 - Source: M001 discussion
 - Primary owning slice: M001/S01
-- Validation: Refined after user review: TimelineDateJumpBuilder no longer generates day groups for the calendar menu. Tests validate month-only groups, abbreviated menu labels, caller-filtered inputs, newest item month anchors, and count/statistics-free labels.
+- Validation: S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove the old toolbar jump groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. Calendar Review later intentionally allows continuous empty months while still avoiding visible daily counts.
 
 ### R006 — Composer and edit text input may support plain-text list continuation for `- `, `• `, and numbered list prefixes, including numbered auto-increment and empty-item exit.
 - Class: functional
@@ -76,25 +306,15 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M001/S02
 - Validation: Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled.
 
-### R009 — Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
+### R017 — Server-originated AI summary changes must be pullable and diagnosable even when the iPhone has no local pending work.
 - Class: functional
 - Status: validated
-- Description: Private comments sync through the Mac server using idempotent operation-log semantics so comments survive app reinstall and can converge across authorized devices.
-- Why it matters: Comments are user data; keeping them local-only would create avoidable loss and future migration risk.
-- Source: M002 planning discussion 2026-04-30
-- Primary owning slice: M002/S01
-- Supporting slices: M002/S02,M002/S03
-- Validation: S01 validated the private comment sync contract: T02 added server Prisma schema/migration plus idempotent `create_comment` and `delete_comment` operations emitting `comment_created`/`comment_deleted`; T03 added iOS `local_comments`, payload builders, outbox plumbing, and strict server-change apply before cursor advancement. Verification: `npm run server:prisma:generate && npm run server:build`, scripted server comment sync smoke test, `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`, and iOS XCTest payload coverage passed.
-
-### R010 — Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
-- Class: constraint
-- Status: validated
-- Description: Private comments remain plain text and single-level: no replies, likes, mentions, Markdown rendering, public author identity, or social feedback features.
-- Why it matters: Moments should stay a private expression space rather than becoming a social comment system or structured writing tool.
-- Source: M002 planning discussion 2026-04-30
-- Primary owning slice: M002/S02
-- Supporting slices: M002/S01,M002/S03
-- Validation: Validated by implementation boundaries, tests, and durable docs in M002/S03/T02: comments remain plain strings with no replies/likes/mentions/Markdown rendering/public author identity; iOS XCTest coverage passed for Markdown-like literal text and no-rich-text/no-reply policy; PRD, TECH-DESIGN, OPERATOR-RUNBOOK, INTEGRATION-GUIDE, and sync protocol now describe Private Comments as private single-level plain-text notes rather than social comments.
+- Description: iOS must pull `ai_summary_updated` / `ai_summary_deleted` server changes after Mac-side processing completes, even if the local outbox, uploads, and media downloads are empty. Diagnostics must make it clear whether a missing summary is a server job failure or a client cursor/pull staleness issue.
+- Why it matters: Mac can generate ready summaries after the original upload has already synced. If iOS only syncs when local work exists, the timeline can keep showing no `Summary ready` or old failed summary state even though server data is correct.
+- Source: real-device AI summary diagnostics 2026-05-01
+- Primary owning slice: M005/S04
+- Supporting slices: M005/S02,M005/S03
+- Validation: Validated on 2026-05-01 after implementing remote-only pull on app foreground, Storage & Diagnostics refresh, and manual Sync Now. Server admin status returned `sync.latestServerChangeVersion=196` and `aiSummaries ready=10 failed=0`; a paired iPhone container copied after install/launch showed `lastSyncCursor=196`, `local_ai_summaries ready=10 failed=0`, and outbox pending/failed `0`.
 
 ## Traceability
 
@@ -103,17 +323,39 @@ This file is the explicit capability and coverage contract for the project.
 | R001 | operational | active | none | none | A completed non-trivial change includes fresh verification output and either updated docs/fact sources or an explicit note that none were affected. |
 | R002 | operational | active | none | none | High-risk changes have a milestone or slice context/plan before code changes and include success criteria plus verification evidence. |
 | R003 | operational | active | none | none | Completion summaries name the verification class used and include the command or inspection evidence. |
-| R004 | functional | validated | M001/S01 | none | Refined after user review: the toolbar calendar menu is month-only to avoid long nested day lists; exact date retrieval is deferred to future enhanced search. TimelineDateJumpModelsTests validate month grouping, month menu labels, filtered-item inputs, and count-free labels. |
-| R005 | constraint | validated | M001/S01 | none | Refined after user review: TimelineDateJumpBuilder no longer generates day groups for the calendar menu. Tests validate month-only groups, abbreviated menu labels, caller-filtered inputs, newest item month anchors, and count/statistics-free labels. |
+| R004 | functional | validated | M001/S01 | none | S01 completed with TimelineDateJumpModelsTests/build evidence; this old toolbar-menu date navigation path was later superseded by R032 Calendar Review. |
+| R005 | constraint | validated | M001/S01 | none | S01 completed: TimelineDateJumpBuilder tests passed 5/5 and prove groups are derived only from caller-provided visible items, omit empty dates, select first visible day targets, and enforce count/statistics-free labels. TimelineView passes filteredItems into the builder. |
 | R006 | functional | validated | M001/S02 | none | Validated by `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMomentsListContinuationTests -destination 'platform=iOS Simulator,name=iPhone 16' test` after creating an available iPhone 16 simulator: 14 XCTest cases passed, covering dash, bullet, numbered increment, empty-item exit, normal paragraph fallback, non-list fallback, invalid range fallback, max-int fallback, and emoji/Unicode UTF-16 safety. App integration also built with `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`. Manual UAT script is recorded in S02-UAT for tactile cursor/save verification. |
 | R007 | constraint | validated | M001/S02 | none | Validated by implementation boundaries and build evidence for S02: list continuation is implemented as plain string editing via `PlainTextListContinuation` and `PlainTextListEditor`; New Moment/Edit Moment bindings still pass plain `String` values into existing draft/save flows; no Markdown/rich-text rendering, schema, server, sync, storage, telemetry, or logging changes were introduced. `PrivateMomentsListContinuationTests` passed on iPhone 16 simulator and the app target built for generic iOS with code signing disabled. |
-| R008 | functional | active | M002/S02 | M002/S01,M002/S03 | A real-device UAT creates a comment, sees it in moment detail, deletes it, and confirms the main timeline row remains uncluttered. |
-| R009 | functional | validated | M002/S01 | M002/S02,M002/S03 | S01 validated the private comment sync contract: T02 added server Prisma schema/migration plus idempotent `create_comment` and `delete_comment` operations emitting `comment_created`/`comment_deleted`; T03 added iOS `local_comments`, payload builders, outbox plumbing, and strict server-change apply before cursor advancement. Verification: `npm run server:prisma:generate && npm run server:build`, scripted server comment sync smoke test, `cd ios && xcodegen generate && xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build`, and iOS XCTest payload coverage passed. |
-| R010 | constraint | validated | M002/S02 | M002/S01,M002/S03 | Validated by implementation boundaries, tests, and durable docs in M002/S03/T02: comments remain plain strings with no replies/likes/mentions/Markdown rendering/public author identity; iOS XCTest coverage passed for Markdown-like literal text and no-rich-text/no-reply policy; PRD, TECH-DESIGN, OPERATOR-RUNBOOK, INTEGRATION-GUIDE, and sync protocol now describe Private Comments as private single-level plain-text notes rather than social comments. |
+| R008 | functional | active | M003/S03 | M003/S01,M003/S02,M003/S04 | Real iPhone UAT creates a comment from the timeline, keeps the input target clear, shows the new comment immediately, expands/collapses comments in place, and deletes a comment by long-pressing it and confirming `Delete comment?`. |
+| R009 | functional | active | M003/S02 | M003/S01,M003/S03,M003/S04 | Server/iOS sync checks prove `create_comment` and `delete_comment` idempotency, missing/deleted parent rejection, local unsynced create/delete short-circuit, parent delete cascade, and strict no-cursor-advance behavior when a comment change cannot be applied. |
+| R010 | constraint | active | M003/S03 | M003/S01,M003/S02,M003/S04 | UI/tests verify multiline literal text display, Markdown-like text stays plain, over-500-character input disables `Send`, long press opens delete confirmation rather than edit/copy/reply, and no comment media/reply/edit operation exists. |
+| R011 | functional | active | M003/S03 | M003/S01,M003/S04 | Search applies current filters first, returns a moment when either moment text or comment text matches, prioritizes up to two matching comments in preview, lightly emphasizes matching comment rows, and keeps comment counts as the full undeleted count. |
+| R012 | operational | active | M003/S04 | M003/S01,M003/S02,M003/S03 | Completion evidence includes server migration/build, iOS schema/build, sync smoke checks, SQLite aggregate inspection or equivalent recovery proof, Advanced Sync/outbox operation counts without comment bodies, and real iPhone UAT when feasible. |
+| R013 | functional | active | M004 | none | iOS build no longer links Speech framework or contains local transcription services; creating audio/video moments uploads media without `transcriptionText`; timeline shows no transcript fallback/status when no ready AI summary exists. |
+| R014 | functional | active | M005/S02 | M005/S01,M005/S03,M005/S04 | Real iPhone UAT confirms uploaded audio/video triggers Mac-local transcription plus external summary generation and syncs ready summary records back to iOS; only the narrow R028 audio title insert may mutate `post.text`. |
+| R015 | functional | active | M005/S03 | M005/S01,M005/S04 | Timeline rows expose only `Summary ready`; bottom sheet renders ready v3 document summaries with copy/regenerate/delete controls and no transcript fallback. |
+| R016 | operational | active | M005/S04 | M005/S01,M005/S02,M005/S03 | Verification proves server-only API keys, no private body logging, failure isolation, summary delete/regenerate behavior, and sync recovery for generated AI metadata. |
+| R017 | functional | validated | M005/S04 | M005/S02,M005/S03 | 2026-05-01 paired iPhone container advanced to `lastSyncCursor=196` with `local_ai_summaries ready=10 failed=0` after server-only summary changes; admin status exposes `sync.latestServerChangeVersion=196` for diagnosis. |
+| R018 | functional | active | maintenance | M003/S03,M005/S03 | iPhone Timeline search covers text, comments, AI summary metadata, and historical transcript metadata with lightweight fuzzy matching plus composable local filters and active chips. |
+| R019 | operational | active | maintenance | none | `npm run setup:local` plus release/open-source/security docs provide the current setup and publication gate; public release still requires license, Git history secret scan, and backup/restore/export closure. |
+| R020 | functional | active | maintenance | R003,R013,R014 | `Save to Moments` stages supported Share Sheet content into an App Group inbox and opens the main app composer for final editing and publish; real-device UAT remains required when the paired phone is available. |
+| R021 | operational | active | maintenance | R003,R014,R020 | Media upload uses temp-file atomic finalization and staged logs; verification checks server build, health, no stale write fds, no leftover temp files, and real-device retry behavior when feasible. |
+| R022 | functional | active | M006/S01 | M006/S02,M006/S04,M006/S06 | Default primary tags, topic canonicalization, aliases, uniqueness, archive behavior, and custom-primary constraints are verified by schema/seed checks and Settings/Edit UAT. |
+| R023 | functional | active | M006/S02 | M006/S01,M006/S06 | Composer optional primary tag, single-moment tag editing, Detail read-only tags, optional Timeline/Day Review/Detail tag visibility, and metadata-row priority are verified on iOS. |
+| R024 | functional | active | M006/S05 | M005/S02,M005/S03,M006/S01,M006/S06 | New short audio prefers one first-ready summary AI topic tag unless high-confidence separate themes justify more; non-audio moment types do not receive AI tags, summary regenerate does not change tags, and summary failure leaves no AI tags. |
+| R025 | functional | active | M006/S03 | M006/S04,M006/S06 | iPhone local search/filter matches tag names and aliases, distinguishes tag match source, separates primary/topic filters, uses AND semantics, and Settings can clean up vocabulary including batch Topic/Archived operations plus batch primary color edits. |
+| R026 | functional | active | M006/S01 | M006/S05,M006/S06 | Tag vocabulary and assignments sync/recover, archived custom tags can be permanently deleted, topic assignments merge, primary conflicts use last-write-wins, and user-edited moments block later AI auto-application. |
+| R027 | operational | active | M006/S06 | M006/S01,M006/S02,M006/S03,M006/S04,M006/S05 | Smart Tags closure includes builds/tests, real iPhone UAT, no private-body logs, Settings diagnostics, OpenAPI/sync protocol updates, and docs/fact-source updates. |
+| R028 | functional | active | maintenance | R014,R015,R016,R018,R024 | New audio AI summary title can sync into `post.text` as `## <title>` once, render as a restrained heading in Timeline/Detail, remain plain in Composer/Edit, avoid `Edited`, and be disabled for future inserts in Feature Modules. |
+| R029 | functional | active | M007 | R003,R018,R023,R025,R028 | iOS App Language is a local immediate preference for System/English/简体中文 and covers the main iOS visible surfaces with Chinese dictionary coverage. |
+| R030 | functional | active | M007 | R022,R023,R025,R026 | Default primary tags display localized names without changing synced identity, and local search/filter matches both Chinese and English default names. |
+| R031 | functional | active | M007 | R014,R015,R016,R024,R028 | AI Language is local and independent from App Language; iOS passes `auto`/`zh`/`en` to upload-triggered and regenerated summary generation. |
+| R032 | functional | active | M008 | R003,R018,R029 | Calendar Review provides a local bottom-tab month grid, Day Review first navigation, Timeline handoff, and per-day scroll memory; CalendarReviewModelsTests and iOS build/test evidence passed, while real-device UAT remains pending. |
 
 ## Coverage Summary
 
-- Active requirements: 4
-- Mapped to slices: 4
-- Validated: 6 (R004, R005, R006, R007, R009, R010)
-- Unmapped active requirements: 0
+- Active requirements: 27
+- Mapped to slices: 24 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032)
+- Validated: 5 (R004, R005, R006, R007, R017)
+- Unmapped active requirements: 3 global operational requirements (R001, R002, R003)

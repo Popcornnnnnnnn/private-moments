@@ -6,6 +6,7 @@ import {
   HardDrive,
   Image as ImageIcon,
   LogOut,
+  Mic,
   RefreshCw,
   Search,
   Server,
@@ -13,6 +14,7 @@ import {
   Smartphone,
   Star,
   Trash2,
+  Video,
   X,
 } from "lucide-react";
 
@@ -66,6 +68,9 @@ interface AdminMedia {
   originalPreserved: boolean;
   width: number | null;
   height: number | null;
+  mimeType: string | null;
+  durationSeconds: number | null;
+  transcriptionText: string | null;
   compressedSizeBytes: number | null;
   originalSizeBytes: number | null;
   checksum: string | null;
@@ -703,7 +708,7 @@ function PostsManager({
                 <div>
                   <strong>{post.text.trim() || "Image-only moment"}</strong>
                   <span>
-                    {formatDate(post.occurredAt)} · {post.mediaCount} images
+                    {formatDate(post.occurredAt)} · {mediaSummary(post.media)}
                   </span>
                   <span>
                     {post.createdByDevice?.name ?? "Unknown device"} · v{post.serverVersion}
@@ -772,7 +777,12 @@ function PostDetailDrawer({
     );
   }
 
-  const visibleMedia = post.media.filter((media) => !media.deletedAt && media.compressedUrl);
+  const visibleMedia = post.media.filter(
+    (media) =>
+      !media.deletedAt &&
+      (media.kind === "image" || media.kind === "video") &&
+      (media.thumbnailUrl || media.compressedUrl),
+  );
 
   return (
     <aside className="panel post-detail">
@@ -793,18 +803,38 @@ function PostDetailDrawer({
           {visibleMedia.map((media) => (
             <button
               className="admin-media-thumb"
+              disabled={media.kind !== "image"}
               key={media.id}
               onClick={() => onOpenImage(media)}
               type="button"
             >
               <AuthenticatedImage
-                alt="Post media"
+                alt={`${media.kind} media`}
                 className="admin-media-image"
                 src={media.thumbnailUrl ?? media.compressedUrl}
                 token={token}
               />
+              {media.kind === "video" ? (
+                <span className="admin-media-badge">
+                  <Video size={14} />
+                  {formatDuration(media.durationSeconds)}
+                </span>
+              ) : null}
             </button>
           ))}
+        </div>
+      ) : null}
+
+      {post.media.some((media) => media.transcriptionText) ? (
+        <div className="transcript-list">
+          {post.media
+            .filter((media) => media.transcriptionText)
+            .map((media) => (
+              <div className="transcript-block" key={`${media.id}-transcript`}>
+                <span>{media.kind} transcript</span>
+                <p>{media.transcriptionText}</p>
+              </div>
+            ))}
         </div>
       ) : null}
 
@@ -858,10 +888,12 @@ function PostDetailDrawer({
                 </span>
                 <span>
                   {formatBytes(media.compressedSizeBytes ?? 0)}
+                  {media.mimeType ? ` · ${media.mimeType}` : ""}
+                  {media.durationSeconds ? ` · ${formatDuration(media.durationSeconds)}` : ""}
                   {media.checksum ? ` · ${media.checksum.slice(0, 12)}` : ""}
                 </span>
               </div>
-              <ImageIcon size={18} />
+              {mediaIcon(media.kind)}
             </div>
           ))
         ) : (
@@ -1091,7 +1123,12 @@ function formatBytes(value: number): string {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function formatDuration(seconds: number): string {
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) {
+    return "-";
+  }
+
+  seconds = Math.round(seconds);
   if (seconds < 60) {
     return `${seconds}s`;
   }
@@ -1102,6 +1139,32 @@ function formatDuration(seconds: number): string {
   }
 
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function mediaSummary(media: AdminMedia[]): string {
+  const active = media.filter((item) => !item.deletedAt);
+  const images = active.filter((item) => item.kind === "image").length;
+  const videos = active.filter((item) => item.kind === "video").length;
+  const audio = active.filter((item) => item.kind === "audio").length;
+  const parts = [
+    images ? `${images} image${images === 1 ? "" : "s"}` : "",
+    videos ? `${videos} video${videos === 1 ? "" : "s"}` : "",
+    audio ? `${audio} audio` : "",
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(", ") : "no media";
+}
+
+function mediaIcon(kind: string) {
+  if (kind === "video") {
+    return <Video size={18} />;
+  }
+
+  if (kind === "audio") {
+    return <Mic size={18} />;
+  }
+
+  return <ImageIcon size={18} />;
 }
 
 function formatDate(value: string | null | undefined): string {

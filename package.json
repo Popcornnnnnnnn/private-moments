@@ -8,6 +8,7 @@
     "admin"
   ],
   "scripts": {
+    "setup:local": "scripts/setup-local.sh",
     "admin:dev": "npm run dev -w admin",
     "admin:build": "npm run build -w admin",
     "admin:preview": "npm run preview -w admin",
@@ -17,6 +18,8 @@
     "server:typecheck": "npm run typecheck -w server",
     "server:prisma:generate": "npm run prisma:generate -w server",
     "server:prisma:migrate": "npm run prisma:migrate -w server",
+    "server:prisma:deploy": "npm run prisma:deploy -w server",
+    "verify:server": "npm run server:typecheck && npm run server:build && npm run admin:build",
     "ios:simulator": "scripts/run-ios-simulator.sh",
     "ios:device": "scripts/run-ios-device.sh"
   },

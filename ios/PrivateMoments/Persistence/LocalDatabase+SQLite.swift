@@ -86,6 +86,20 @@ extension LocalDatabase {
         }
     }
 
+    func bind(_ value: Double?, to index: Int32, in statement: OpaquePointer) throws {
+        let status: Int32
+
+        if let value {
+            status = sqlite3_bind_double(statement, index, value)
+        } else {
+            status = sqlite3_bind_null(statement, index)
+        }
+
+        guard status == SQLITE_OK else {
+            throw LocalDatabaseError.sqlite(errorMessage)
+        }
+    }
+
     func bind(_ value: Date?, to index: Int32, in statement: OpaquePointer) throws {
         try bind(value.map(Self.encodeDate), to: index, in: statement)
     }
@@ -113,6 +127,14 @@ extension LocalDatabase {
         }
 
         return Int(sqlite3_column_int64(statement, index))
+    }
+
+    func optionalDouble(_ statement: OpaquePointer, _ index: Int32) -> Double? {
+        guard sqlite3_column_type(statement, index) != SQLITE_NULL else {
+            return nil
+        }
+
+        return sqlite3_column_double(statement, index)
     }
 
     func date(_ statement: OpaquePointer, _ index: Int32) throws -> Date {

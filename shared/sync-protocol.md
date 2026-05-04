@@ -27,10 +27,12 @@ This document defines the business rules for syncing iOS local changes with the 
 3. When the Mac server is reachable, iOS sends pending metadata operations to `POST /api/v1/sync`.
 4. The server applies accepted operations transactionally.
 5. iOS uploads media files for posts that now exist on the server.
-6. iOS calls `POST /api/v1/sync` again with no local changes to pull media upload changes.
+6. iOS calls `POST /api/v1/sync` again to pull media upload changes and any generated metadata, such as AI summary status.
 7. The server returns new server changes after the client's `syncCursor`.
 8. iOS applies server changes locally and advances `lastSyncCursor`.
 9. iOS downloads missing remote media thumbnails through `POST /api/v1/media/batch-download`.
+
+Server-originated metadata can appear after the original local work is already synced. AI summaries are the current important example: the Mac may emit `ai_summary_updated` minutes after upload, so iOS performs foreground/manual diagnostic pull syncs even when there are no local outbox operations or pending uploads.
 
 ## MVP Operations
 
@@ -38,16 +40,34 @@ The MVP server currently supports these operation types:
 
 - `create_post`: create a text post with `occurredAt`.
 - `update_post`: replace post text, `occurredAt`, media order, and removed media set.
+- `insert_ai_title`: insert one ready audio AI summary title as a top `##` heading without marking the post as a user edit.
 - `update_post_favorite`: update only a post's favorite state.
 - `delete_post`: soft delete an existing post.
-- `create_comment`: create a private plain-text comment attached to a post.
+- `create_comment`: create a private single-user plain-text comment attached to a post.
 - `delete_comment`: soft delete a private comment.
+- `update_media_transcription`: legacy operation for older clients to attach iOS-generated audio/video transcript text to an uploaded media item.
 - `media_uploaded`: server-originated change emitted after `/api/v1/media/upload`.
+- `media_transcription_updated`: server-originated change emitted after a transcript metadata update.
 - `media_deleted`: server-originated change emitted when a media item is removed from a post.
+- `ai_summary_updated`: server-originated change emitted after AI summary status/content changes.
+- `ai_summary_deleted`: server-originated change emitted after a generated AI summary is soft-deleted.
+- `upsert_tag`: create or update one primary/topic tag vocabulary entry.
+- `archive_tag`: hide one non-default tag from normal timeline/detail/filter/search surfaces without deleting history.
+- `restore_tag`: make an archived tag active again.
+- `delete_tag`: permanently remove an archived non-default tag and free its normalized name for reuse.
+- `merge_tag`: move one topic tag's active assignments into another topic tag, preserve the source name as an alias, and archive the source tag.
+- `upsert_tag_alias`: create or update one searchable alias for a tag.
+- `delete_tag_alias`: soft-delete one alias.
+- `set_post_tags`: replace one post's primary tag and topic tag set, marking the moment as user-edited.
+- `tag_updated`: server-originated vocabulary change.
+- `tag_deleted`: server-originated permanent tag deletion.
+- `tag_alias_updated` / `tag_alias_deleted`: server-originated alias changes.
+- `post_tag_updated` / `post_tag_deleted`: server-originated assignment changes.
+- `post_tag_state_updated`: server-originated post-level tag state change.
 
 Future operation types:
 
-- `update_comment` if editing private comments becomes necessary.
+- `upsert_media`
 - media status reconciliation
 
 ## Idempotency
@@ -72,20 +92,92 @@ Deletes are soft deletes.
 
 - iOS sets `deletedAt` locally and appends `delete_post`.
 - The server sets `deletedAt` on the post and related media.
-- Comment deletes set `deletedAt` on the comment without deleting the parent post.
+- The server also soft-deletes comments under a deleted post, but emits only the `post_deleted` server change; clients cascade local comments when applying `post_deleted`.
+- Direct comment deletes use `delete_comment` and emit `comment_deleted`.
 - The server permanently deletes records and files after 30 days.
 
 ## Partial Media Sync
 
 Post metadata and media files may sync separately.
 
-- A post can be accepted before every image upload succeeds.
-- Failed image uploads remain retryable.
-- The iOS UI can show the local image while remote upload is pending.
+- A post can be accepted before every media upload succeeds.
+- Failed image, audio, or video uploads remain retryable.
+- The iOS UI can show/play the local media while remote upload is pending.
 - Sync status may be `pending`, `partial`, `synced`, or `failed`.
-- iOS uploads media one file at a time and compresses images before upload so large original photos do not keep breaking the request.
+- iOS uploads media one file at a time. Images are compressed before upload; video is prepared as 720p H.264 MP4 with a poster thumbnail; audio is AAC/M4A.
 - Failed sync or upload work schedules delayed retry with backoff: 5s, 20s, 60s, 120s, then 300s.
-- Remote media cache recovery uses thumbnail batch download first; single binary media download remains available for direct preview and diagnostics.
+- Remote media cache recovery uses thumbnail batch download first for images and video posters. Full audio/video files download on demand when played and are cached locally.
+- Audio/video transcription is no longer generated by new iOS clients. `update_media_transcription` remains accepted for older clients and historical metadata recovery.
+
+## Smart Tags
+
+Smart Tags are first-class sync metadata. Tag vocabulary is separate from post assignments so the user can maintain a stable organization layer while individual moments stay lightweight.
+
+Vocabulary records:
+
+- `tags`: primary/topic tag entries with stable IDs, canonical names, normalized names, optional primary color, default/archive flags, and `aiUsableAsPrimary`.
+- `tag_aliases`: alternate searchable names for tags, soft-deleted with `deletedAt`.
+- default primary tags are seeded by server and iOS: `日记`, `想法`, `学习整理`, `情绪`, `碎碎念`, `复盘`.
+
+Post assignment records:
+
+- `post_tags`: references post ID and tag ID.
+- `role`: `primary` or `topic`.
+- `source`: `manual` or `ai`.
+- optional AI provenance: confidence and `aiSummaryId`.
+- soft-deleted assignments keep history recoverable.
+
+Manual operations:
+
+`create_post` may include a `primaryTagId`. This creates a manual primary assignment without marking the whole tag set as user-edited; AI may still add topic tags later.
+
+`set_post_tags` uses `entityType: "post"`, `entityId: <post id>`, and payload:
+
+```json
+{
+  "primaryTagId": "tag-primary-learning",
+  "topicTagIds": ["topic-neural-network", "topic-llm"],
+  "updatedAt": "2026-05-03T12:00:00Z"
+}
+```
+
+Server behavior:
+
+- Validates that the primary tag is an active primary tag.
+- Validates that topic IDs reference active topic tags.
+- Replaces the post's active tag set.
+- Marks all retained/new assignments as `manual`.
+- Sets `Post.tagsUserEditedAt`, blocking future automatic AI tag application for that moment.
+- Emits `post_tag_updated` and `post_tag_deleted` changes for assignment changes, then `post_tag_state_updated`.
+
+Vocabulary operations:
+
+- `upsert_tag` uses `entityType: "tag"` and payload `{type, name, colorHex, isDefault, aiUsableAsPrimary, updatedAt}`.
+- `archive_tag` uses payload `{archivedAt}` and hides the tag from normal timeline/detail/filter/search.
+- `restore_tag` reactivates an archived tag.
+- `delete_tag` uses payload `{deletedAt}` and permanently deletes an archived non-default tag. The server emits `post_tag_deleted` for active assignments, `tag_alias_deleted` for active aliases, then `tag_deleted`.
+- `upsert_tag_alias` uses `entityType: "tag_alias"` and payload `{tagId, alias}`.
+- `delete_tag_alias` uses payload `{deletedAt}`.
+- `merge_tag` uses `entityType: "tag"`, `entityId` as the source topic tag, and payload `{targetTagId, alias, mergedAt}`.
+
+`merge_tag` server behavior:
+
+- Requires source and target to be different topic tags.
+- Requires target to be active.
+- Moves active source assignments to the target tag.
+- If a post already has the target tag, the source assignment is soft-deleted.
+- Preserves the source name as an alias on the target when it does not conflict.
+- Archives the source tag.
+- Emits assignment, alias, and tag server changes in version order.
+
+iOS behavior:
+
+- Stores vocabulary in `local_tags` and `local_tag_aliases`.
+- Stores assignments in `local_post_tags`.
+- Timeline may show only the primary tag and only when `Show Tags in Timeline` is enabled.
+- Timeline does not show the `synced` success badge; only abnormal sync states remain visible.
+- Search can match tag names and aliases. Filters separate primary tags and topic tags.
+- Settings > Tags manages the local vocabulary and queues sync operations like other local-first edits.
 
 ## Remote Media Cache Recovery
 
@@ -98,7 +190,7 @@ Post metadata and media files may sync separately.
 }
 ```
 
-The response returns base64 JSON payloads keyed by media id. iOS writes each payload to the local media cache and updates `local_media.localCompressedPath`.
+The response returns base64 JSON payloads keyed by media id. iOS writes image thumbnails to `local_media.localCompressedPath` and video posters to `local_media.localThumbnailPath`.
 
 Server behavior:
 
@@ -129,6 +221,18 @@ The server updates the post, soft-deletes removed media, updates `sortOrder` for
 
 If two devices edit the same post offline, the last operation applied by the server wins.
 
+`insert_ai_title` payload:
+
+```json
+{
+  "summaryId": "ready-ai-summary-id",
+  "mediaId": "audio-media-id",
+  "insertedAt": "2026-05-03T12:05:00Z"
+}
+```
+
+The client does not send the generated title body in this operation. The server reloads `documentTitle` from its own ready `ai_summaries` row, verifies that the summary belongs to the target post and audio media, skips safely if the post already has a leading `# ` or `## ` title, and emits `post_updated` with `updateSource: "ai_title"` when it changes text. Clients should not treat that server change as a user edit marker.
+
 ## Favorites
 
 Favorite state is synced as metadata on the post, but it uses a separate lightweight operation so starring a moment does not require entering the edit flow.
@@ -144,40 +248,120 @@ Favorite state is synced as metadata on the post, but it uses a separate lightwe
 
 The server updates `Post.isFavorite`, emits `post_favorite_updated`, and assigns a new `serverVersion`. Clients should keep the time line visually quiet: favorites are a small marker and filter target, not a prominent content block.
 
-## Private Comments
+## Comments
 
-Private comments are single-level, plain-text notes attached to a post. They are synced as independent entities so updating post text or media cannot overwrite comments.
+Comments are single-user, private, plain-text follow-up entries attached to a post. They are independent entities so comment create/delete operations do not rewrite the post payload.
+
+Comments are intentionally not a public social system:
+
+- no visible author identity
+- no replies or nested threads
+- no likes, mentions, reactions, or public feedback features
+- no media attachments
+- no Markdown or rich-text rendering
+- no comment editing in the first version
 
 `create_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload:
 
 ```json
 {
   "postId": "post-id",
-  "text": "follow-up thought",
-  "createdAt": "2026-04-29T12:07:00Z"
+  "text": "plain text comment",
+  "createdAt": "2026-04-30T12:07:00Z"
 }
 ```
 
 Server behavior:
 
-- Rejects empty or whitespace-only comment text.
+- Rejects empty or whitespace-only text.
+- Rejects text over 500 characters.
 - Rejects comments for missing or deleted posts.
 - Emits `comment_created` with `{ id, postId, text, createdAt, updatedAt, deletedAt: null }`.
 
-`delete_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload. Clients may include `postId` so local sync-status refresh can map the comment operation back to the parent post; the server derives the authoritative `postId` from the existing comment row when emitting deletion changes.
+`delete_comment` uses `entityType: "comment"`, `entityId: <comment id>`, and payload:
 
 ```json
 {
   "postId": "post-id",
-  "deletedAt": "2026-04-29T12:08:00Z"
+  "deletedAt": "2026-04-30T12:08:00Z"
 }
 ```
 
 Server behavior:
 
-- Soft-deletes the comment.
-- Emits `comment_deleted` with `{ id, postId, deletedAt }`.
-- Does not expose replies, likes, mentions, Markdown rendering, rich text, or public author identity.
+- Soft-deletes the comment if it exists and is not already deleted.
+- Emits `comment_deleted` with `{ id, postId, deletedAt }` for direct comment deletes.
+- Accepts a delete for an already-deleted comment as a no-op under the same operation log semantics.
+
+iOS behavior:
+
+- Comments are stored in `local_comments`.
+- Comment rows do not show per-comment sync state.
+- Pending/failed comment operations are visible through global sync/outbox diagnostics.
+- If a newly created local comment is deleted before its `create_comment` operation is sent, iOS can cancel the local create operation instead of syncing create-then-delete.
+- If iOS receives a recognized comment server change but the parent post is missing, it must fail applying that change and must not advance `lastSyncCursor`.
+
+## Legacy Audio/Video Transcription
+
+New iOS clients do not generate local speech transcripts. This section remains only for older clients and historical metadata compatibility.
+
+`update_media_transcription` uses `entityType: "media"`, `entityId: <media id>`, and payload:
+
+```json
+{
+  "postId": "post-id",
+  "transcriptionText": "plain transcript text",
+  "updatedAt": "2026-04-30T12:10:00Z"
+}
+```
+
+Server behavior:
+
+- Rejects empty or whitespace-only transcript text.
+- Rejects transcript text over 100,000 characters.
+- Rejects updates for missing, deleted, or wrong-parent media.
+- Emits `media_transcription_updated` with `{ id, postId, transcriptionText, updatedAt }`.
+
+New iOS behavior:
+
+- Does not link Speech framework, request speech recognition permission, or create `update_media_transcription`.
+- Does not upload `transcriptionText` in media multipart metadata.
+- Does not show transcript snippets, transcript fallback, or transcript failure states in the timeline.
+
+## AI Media Summaries
+
+AI summaries are generated metadata attached to one audio/video media item. They are not comments, transcript edits, or visible transcript fallback. The only post text exception is optional new-audio title insertion through `insert_ai_title`; summary bodies remain generated metadata.
+
+Generation is server-owned:
+
+1. iOS uploads complete audio/video media to `/api/v1/media/upload`.
+2. The Mac server starts a background AI summary job for uploaded audio/video media.
+3. The job transcribes the stored media file locally on the Mac with `mlx-whisper`, then sends the internal transcript to the configured external summary API.
+4. The Mac server records `transcribing`, then `summarizing`, then validates structured output and stores either `ready` or `failed`.
+5. The server emits `ai_summary_updated` for status/content changes and `ai_summary_deleted` when the user deletes generated summary metadata.
+6. iOS applies these changes to `local_ai_summaries` and advances `lastSyncCursor` only after all changes in the response are applied.
+7. iOS may call `POST /api/v1/ai/media-summary` with `{ postId, mediaId, forceRegenerate }` to regenerate an existing summary.
+
+The summary payload includes:
+
+- `id`, `postId`, `mediaId`
+- `status`: `transcribing`, `summarizing`, `ready`, `failed`, or `deleted`
+- generated content fields: `format`, `language`, `documentTitle`, `oneLiner`, `documentBlocks`, and `summaryText`
+- structured tag suggestions under `suggestedTags`, with one optional default primary tag and up to three topic suggestions
+- legacy compatibility fields: `overview`, `keyPoints`, and `sections`
+- provenance fields: `promptVersion`, `provider`, `model`, nullable input transcript length/hash, optional media duration
+- lightweight failure fields: `errorCode`, `errorMessage`
+- timestamps and optional `deletedAt`
+
+Privacy and failure rules:
+
+- The iPhone never stores or sends provider credentials.
+- The Mac server reads only the selected media file for local transcription and sends only the resulting transcript to the configured summary provider.
+- iOS never receives the transcript body from the new AI path.
+- Normal logs must record IDs, provider/model, status, error code, and input length only; they must not include transcript text or summary bodies.
+- Missing media files, transcription failures, empty transcripts, provider failures, or invalid output should not block media upload, comments, or normal post sync.
+- Provider failures are isolated to the `ai_summaries` row and can be retried/regenerated later.
+- AI summary generated metadata participates in iPhone local search, but server-side search remains narrower unless explicitly extended.
 
 ## Cursor Rules
 

@@ -8,8 +8,14 @@ extension TimelineStore {
             if mediaDownloadsInFlight.contains(item.id) {
                 return false
             }
-            if !item.localCompressedPath.isEmpty,
+            if item.isImage,
+               !item.localCompressedPath.isEmpty,
                FileManager.default.fileExists(atPath: item.localCompressedPath) {
+                return false
+            }
+            if item.isVideo,
+               let thumbnailPath = item.localThumbnailPath,
+               FileManager.default.fileExists(atPath: thumbnailPath) {
                 return false
             }
             return true
@@ -30,7 +36,7 @@ extension TimelineStore {
             }
         }
 
-        let payloads = try await client.downloadMediaBatch(mediaIds: queuedMedia.map(\.id))
+        let payloads = try await client.downloadMediaBatch(mediaIds: queuedMedia.map(\.id), variant: "thumbnail")
         var payloadById: [String: DownloadedMediaPayload] = [:]
         for payload in payloads {
             payloadById[payload.id] = payload
@@ -43,12 +49,12 @@ extension TimelineStore {
                 continue
             }
 
-            let localURL = try localURLForDownloadedMedia(item)
+            let localURL = try localURLForDownloadedMedia(item, variant: "thumbnail")
             if FileManager.default.fileExists(atPath: localURL.path) {
                 try FileManager.default.removeItem(at: localURL)
             }
             try data.write(to: localURL, options: [.atomic])
-            try database.markMediaDownloaded(mediaId: item.id, localPath: localURL.path)
+            try database.markMediaDownloaded(mediaId: item.id, localPath: localURL.path, isThumbnail: item.isVideo)
             savedCount += 1
         }
 
@@ -70,7 +76,7 @@ extension TimelineStore {
             let downloadedURL = try await withMediaDownloadTimeout(seconds: 60) {
                 try await client.downloadMediaFile(mediaId: item.id, variant: "thumbnail")
             }
-            let localURL = try localURLForDownloadedMedia(item)
+            let localURL = try localURLForDownloadedMedia(item, variant: "thumbnail")
             let fileSize = try FileManager.default.attributesOfItem(atPath: downloadedURL.path)[.size] as? Int ?? 0
             AppSettings.lastMediaDownloadError = "Saving \(item.id) (\(fileSize) bytes)"
 
@@ -78,7 +84,7 @@ extension TimelineStore {
                 try FileManager.default.removeItem(at: localURL)
             }
             try FileManager.default.moveItem(at: downloadedURL, to: localURL)
-            try database.markMediaDownloaded(mediaId: item.id, localPath: localURL.path)
+            try database.markMediaDownloaded(mediaId: item.id, localPath: localURL.path, isThumbnail: item.isVideo)
             try await reload()
 
             if mediaDownloadsInFlight.count <= 1 {
@@ -89,14 +95,17 @@ extension TimelineStore {
         }
     }
 
-    func localURLForDownloadedMedia(_ media: TimelineMedia) throws -> URL {
+    func localURLForDownloadedMedia(_ media: TimelineMedia, variant: String = "compressed") throws -> URL {
         let directory = try AppDirectories.mediaDirectory()
-        let remoteExtension = media.remoteCompressedPath.flatMap {
+        let remotePath = variant == "thumbnail" ? media.remoteThumbnailPath : media.remoteCompressedPath
+        let remoteExtension = remotePath.flatMap {
             URL(fileURLWithPath: $0).pathExtension.isEmpty ? nil : URL(fileURLWithPath: $0).pathExtension
         }
-        let fileExtension = remoteExtension ?? "jpg"
+        let fallbackExtension = variant == "thumbnail" ? "jpg" : media.preferredFileExtension
+        let fileExtension = remoteExtension ?? fallbackExtension
 
-        return directory.appending(path: "\(media.id).\(fileExtension)")
+        let suffix = variant == "thumbnail" ? "-thumb" : ""
+        return directory.appending(path: "\(media.id)\(suffix).\(fileExtension)")
     }
 
     func persistImages(postId: String, imageData: [Data], createdAt: Date) throws -> [TimelineMedia] {
@@ -109,6 +118,38 @@ extension TimelineStore {
                 createdAt: createdAt
             )
         }
+    }
+
+    func persistPreparedMedia(
+        postId: String,
+        imageData: [Data],
+        video: PreparedMomentMedia?,
+        audio: PreparedMomentMedia?,
+        createdAt: Date
+    ) throws -> [TimelineMedia] {
+        if let video {
+            return [
+                try Self.persistFileMedia(
+                    postId: postId,
+                    draft: video,
+                    sortOrder: 0,
+                    createdAt: createdAt
+                )
+            ]
+        }
+
+        if let audio {
+            return [
+                try Self.persistFileMedia(
+                    postId: postId,
+                    draft: audio,
+                    sortOrder: 0,
+                    createdAt: createdAt
+                )
+            ]
+        }
+
+        return try persistImages(postId: postId, imageData: imageData, createdAt: createdAt)
     }
 
     nonisolated static func materializeEditedMedia(
@@ -155,17 +196,115 @@ extension TimelineStore {
         return TimelineMedia(
             id: mediaId,
             postId: postId,
+            kind: "image",
             localCompressedPath: fileURL.path,
             localOriginalStagingPath: nil,
+            localThumbnailPath: nil,
             remoteCompressedPath: nil,
             remoteOriginalPath: nil,
+            remoteThumbnailPath: nil,
             originalPreserved: false,
             uploadStatus: "pending",
+            mimeType: "image/jpeg",
+            durationSeconds: nil,
+            transcriptionText: nil,
+            transcriptionStatus: "not_applicable",
+            transcriptionError: nil,
+            transcriptionUpdatedAt: nil,
             sortOrder: sortOrder,
             checksum: nil,
             createdAt: createdAt,
             updatedAt: createdAt
         )
+    }
+
+    nonisolated static func persistFileMedia(
+        postId: String,
+        draft: PreparedMomentMedia,
+        sortOrder: Int,
+        createdAt: Date
+    ) throws -> TimelineMedia {
+        let directory = try AppDirectories.mediaDirectory()
+        let mediaId = draft.id
+        let fileExtension = draft.kind == "audio" ? "m4a" : "mp4"
+        let fileURL = directory.appending(path: "\(mediaId).\(fileExtension)")
+        let thumbnailURL = draft.thumbnailURL.map { _ in directory.appending(path: "\(mediaId)-thumb.jpg") }
+
+        try replaceFile(at: draft.fileURL, withCopyAt: fileURL)
+        if let sourceThumbnail = draft.thumbnailURL, let thumbnailURL {
+            try replaceFile(at: sourceThumbnail, withCopyAt: thumbnailURL)
+        }
+
+        return TimelineMedia(
+            id: mediaId,
+            postId: postId,
+            kind: draft.kind,
+            localCompressedPath: fileURL.path,
+            localOriginalStagingPath: nil,
+            localThumbnailPath: thumbnailURL?.path,
+            remoteCompressedPath: nil,
+            remoteOriginalPath: nil,
+            remoteThumbnailPath: nil,
+            originalPreserved: false,
+            uploadStatus: "pending",
+            mimeType: draft.mimeType,
+            durationSeconds: draft.durationSeconds,
+            transcriptionText: nil,
+            transcriptionStatus: "pending",
+            transcriptionError: nil,
+            transcriptionUpdatedAt: nil,
+            sortOrder: sortOrder,
+            checksum: nil,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+    }
+
+    nonisolated private static func replaceFile(at sourceURL: URL, withCopyAt destinationURL: URL) throws {
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+    }
+
+    func localPlayableURL(for media: TimelineMedia) async throws -> URL {
+        if media.hasLocalPlayableFile {
+            return URL(fileURLWithPath: media.localCompressedPath)
+        }
+
+        guard let database,
+              let token = try KeychainStore.deviceToken() else {
+            throw StoreError.notReady
+        }
+
+        let client = APIClient(baseURL: try normalizeServerURL(AppSettings.serverURLString), token: token)
+        let downloadedURL = try await withMediaDownloadTimeout(seconds: media.isVideo ? 180 : 120) {
+            try await client.downloadMediaFile(mediaId: media.id, variant: "compressed")
+        }
+        let localURL = try localURLForDownloadedMedia(media, variant: "compressed")
+
+        if FileManager.default.fileExists(atPath: localURL.path) {
+            try FileManager.default.removeItem(at: localURL)
+        }
+        try FileManager.default.moveItem(at: downloadedURL, to: localURL)
+        try database.markMediaDownloaded(mediaId: media.id, localPath: localURL.path)
+        try await reload()
+
+        return localURL
+    }
+}
+
+extension TimelineMedia {
+    var preferredFileExtension: String {
+        if isAudio {
+            return "m4a"
+        }
+
+        if isVideo {
+            return "mp4"
+        }
+
+        return "jpg"
     }
 }
 

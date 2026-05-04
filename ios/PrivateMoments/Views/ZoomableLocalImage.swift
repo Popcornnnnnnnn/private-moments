@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct ZoomableLocalImage: View {
+    @Environment(\.appLanguage) private var appLanguage
+
     let path: String
     let resetToken: Int
     let onSingleTap: () -> Void
@@ -18,7 +20,7 @@ struct ZoomableLocalImage: View {
             VStack(spacing: 10) {
                 Image(systemName: "photo")
                     .font(.largeTitle)
-                Text("Image unavailable")
+                Text(L10n.t("Image unavailable", appLanguage))
                     .font(.subheadline)
             }
             .foregroundStyle(.white.opacity(0.7))

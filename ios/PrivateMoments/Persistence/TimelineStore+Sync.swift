@@ -1,7 +1,7 @@
 import Foundation
 
 extension TimelineStore {
-    func syncNow(showErrors: Bool = true) async {
+    func syncNow(showErrors: Bool = true, scheduleRetryOnFailure: Bool = true) async {
         if isSyncing {
             needsFollowUpSync = true
             return
@@ -45,7 +45,9 @@ extension TimelineStore {
             }
         } catch {
             handleSyncError(error, showErrors: showErrors)
-            scheduleSyncRetryIfNeeded()
+            if scheduleRetryOnFailure {
+                scheduleSyncRetryIfNeeded()
+            }
         }
     }
 
@@ -98,6 +100,8 @@ extension TimelineStore {
                 await syncNow(showErrors: showErrors)
             } else if missingMediaDownloadCount > 0 {
                 await downloadMissingRemoteMediaIfNeeded(showErrors: showErrors)
+            } else {
+                await syncNow(showErrors: showErrors, scheduleRetryOnFailure: false)
             }
         } catch {
             if showErrors {
@@ -163,6 +167,10 @@ extension TimelineStore {
 
         AppSettings.lastSyncCursor = response.nextSyncCursor
         lastSyncCursor = response.nextSyncCursor
+
+        if response.serverChanges.count >= 500 {
+            needsFollowUpSync = true
+        }
     }
 
     func runSyncPass(database: LocalDatabase, client: APIClient, deviceId: String) async throws {
@@ -178,30 +186,69 @@ extension TimelineStore {
         try apply(sync: firstSync, database: database)
 
         let pendingMedia = try database.fetchPendingMediaReadyForUpload()
+        var didUploadSummarizableMedia = false
         for media in pendingMedia {
             do {
-                let uploaded = try await client.uploadMedia(media)
+                let uploaded = try await client.uploadMedia(media, variant: "compressed")
                 try database.markMediaUploaded(
                     mediaId: media.id,
+                    variant: uploaded.variant,
                     remotePath: uploaded.path,
                     checksum: uploaded.checksum
                 )
+                if uploaded.variant == "compressed" && (media.isAudio || media.isVideo) {
+                    didUploadSummarizableMedia = true
+                }
+
+                if media.isVideo, media.localThumbnailPath != nil {
+                    let uploadedThumbnail = try await client.uploadMedia(media, variant: "thumbnail")
+                    try database.markMediaUploaded(
+                        mediaId: media.id,
+                        variant: uploadedThumbnail.variant,
+                        remotePath: uploadedThumbnail.path,
+                        checksum: uploadedThumbnail.checksum
+                    )
+                }
             } catch {
                 try database.markMediaUploadFailed(mediaId: media.id, error: error.localizedDescription)
             }
         }
 
         if !pendingMedia.isEmpty {
+            let followUpOperations = try database.fetchPendingOperations()
             let secondSync = try await client.sync(
                 SyncRequestBody(
                     deviceId: deviceId,
                     lastSyncCursor: AppSettings.lastSyncCursor,
-                    localChanges: []
+                    localChanges: try followUpOperations.map { try $0.syncLocalChange() }
                 )
             )
             try apply(sync: secondSync, database: database)
         }
 
+        if didUploadSummarizableMedia {
+            scheduleAISummaryFollowUpSync()
+        }
+
         try await reload()
+    }
+
+    func scheduleAISummaryFollowUpSync() {
+        aiSummaryFollowUpSyncTask?.cancel()
+        aiSummaryFollowUpSyncTask = Task { [weak self] in
+            for seconds in [8.0, 20.0, 45.0, 90.0] {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                } catch {
+                    return
+                }
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await self?.syncNow(showErrors: false)
+            }
+        }
     }
 }

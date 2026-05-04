@@ -31,10 +31,10 @@ struct APIClient: Sendable {
         return try await send(request)
     }
 
-    func uploadMedia(_ media: TimelineMedia) async throws -> UploadedMedia {
+    func uploadMedia(_ media: TimelineMedia, variant: String = "compressed") async throws -> UploadedMedia {
         var request = try authorizedRequest(url: endpoint("api/v1/media/upload"))
         let boundary = "Boundary-\(UUID().uuidString)"
-        let body = try multipartBody(for: media, boundary: boundary)
+        let body = try multipartBody(for: media, variant: variant, boundary: boundary)
         request.httpMethod = "POST"
         request.timeoutInterval = 180
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -104,6 +104,38 @@ struct APIClient: Sendable {
         return try await send(request)
     }
 
+    func requestMediaSummary(
+        postId: String,
+        mediaId: String,
+        forceRegenerate: Bool,
+        aiLanguage: AILanguageMode
+    ) async throws -> AISummaryPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/ai/media-summary"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 90
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(
+            MediaSummaryRequest(
+                postId: postId,
+                mediaId: mediaId,
+                forceRegenerate: forceRegenerate,
+                aiLanguage: aiLanguage.requestValue
+            )
+        )
+
+        let response: MediaSummaryResponse = try await send(request)
+        return response.summary
+    }
+
+    func deleteMediaSummary(summaryId: String) async throws -> AISummaryPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/ai/media-summary/\(summaryId)"))
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 30
+
+        let response: MediaSummaryResponse = try await send(request)
+        return response.summary
+    }
+
     private func endpoint(_ path: String) -> URL {
         baseURL.appending(path: path)
     }
@@ -141,20 +173,26 @@ struct APIClient: Sendable {
         }
     }
 
-    private func multipartBody(for media: TimelineMedia, boundary: String) throws -> Data {
-        let fileURL = URL(fileURLWithPath: media.localCompressedPath)
-        let fileData = try uploadFileData(from: fileURL)
+    private func multipartBody(for media: TimelineMedia, variant: String, boundary: String) throws -> Data {
+        let upload = try uploadFile(for: media, variant: variant)
+        let fileData = try uploadData(from: upload.url, media: media, variant: variant)
         var body = Data()
 
         body.appendMultipartField("mediaId", value: media.id, boundary: boundary)
         body.appendMultipartField("postId", value: media.postId, boundary: boundary)
-        body.appendMultipartField("variant", value: "compressed", boundary: boundary)
+        body.appendMultipartField("variant", value: variant, boundary: boundary)
+        body.appendMultipartField("kind", value: media.kind, boundary: boundary)
+        body.appendMultipartField("mimeType", value: upload.mimeType, boundary: boundary)
+        if let durationSeconds = media.durationSeconds {
+            body.appendMultipartField("durationSeconds", value: "\(durationSeconds)", boundary: boundary)
+        }
+        body.appendMultipartField("aiLanguage", value: AppSettings.aiLanguageMode.requestValue, boundary: boundary)
         body.appendMultipartField("originalPreserved", value: media.originalPreserved ? "true" : "false", boundary: boundary)
         body.appendMultipartField("sortOrder", value: "\(media.sortOrder)", boundary: boundary)
         body.appendMultipartFile(
             "file",
-            filename: "\(media.id).jpg",
-            mimeType: "image/jpeg",
+            filename: upload.filename,
+            mimeType: upload.mimeType,
             data: fileData,
             boundary: boundary
         )
@@ -162,14 +200,52 @@ struct APIClient: Sendable {
         return body
     }
 
-    private func uploadFileData(from fileURL: URL) throws -> Data {
+    private func uploadFile(for media: TimelineMedia, variant: String) throws -> (url: URL, filename: String, mimeType: String) {
+        if variant == "thumbnail" {
+            guard let thumbnailPath = media.localThumbnailPath, !thumbnailPath.isEmpty else {
+                throw APIError.missingUploadFile
+            }
+
+            return (URL(fileURLWithPath: thumbnailPath), "\(media.id)-thumb.jpg", "image/jpeg")
+        }
+
+        guard !media.localCompressedPath.isEmpty else {
+            throw APIError.missingUploadFile
+        }
+
+        let fileExtension = URL(fileURLWithPath: media.localCompressedPath).pathExtension
+        let ext = fileExtension.isEmpty ? media.preferredFileExtension : fileExtension
+        return (
+            URL(fileURLWithPath: media.localCompressedPath),
+            "\(media.id).\(ext)",
+            media.mimeType ?? defaultMimeType(for: media)
+        )
+    }
+
+    private func uploadData(from fileURL: URL, media: TimelineMedia, variant: String) throws -> Data {
         let fileData = try Data(contentsOf: fileURL)
+        guard media.isImage && variant == "compressed" else {
+            return fileData
+        }
+
         guard let image = UIImage(data: fileData),
               let compressedData = ImageCompression.uploadJPEGData(from: image) else {
             return fileData
         }
 
         return compressedData
+    }
+
+    private func defaultMimeType(for media: TimelineMedia) -> String {
+        if media.isVideo {
+            return "video/mp4"
+        }
+
+        if media.isAudio {
+            return "audio/mp4"
+        }
+
+        return "image/jpeg"
     }
 
     private var encoder: JSONEncoder {
@@ -187,6 +263,7 @@ enum APIError: LocalizedError {
     case invalidURL
     case invalidResponse
     case missingToken
+    case missingUploadFile
     case httpStatus(Int, String)
 
     var errorDescription: String? {
@@ -197,6 +274,8 @@ enum APIError: LocalizedError {
             return "Invalid server response"
         case .missingToken:
             return "Missing device token"
+        case .missingUploadFile:
+            return "Missing media file"
         case .httpStatus(let status, let body):
             return "HTTP \(status): \(body)"
         }

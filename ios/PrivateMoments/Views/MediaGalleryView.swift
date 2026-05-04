@@ -4,6 +4,7 @@ import UIKit
 
 struct MediaGalleryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var appLanguage
 
     let media: [TimelineMedia]
     @State private var selection: Int
@@ -77,7 +78,7 @@ struct MediaGalleryView: View {
                         .frame(width: 44, height: 44)
                         .background(.black.opacity(0.45), in: Circle())
                 }
-                .accessibilityLabel("Close")
+                .accessibilityLabel(L10n.t("Close", appLanguage))
             }
             .padding(.horizontal, 18)
             .padding(.top, 18)
@@ -90,11 +91,11 @@ struct MediaGalleryView: View {
                 HStack(spacing: 12) {
                     if let currentFileURL {
                         ShareLink(item: currentFileURL) {
-                            galleryActionLabel("Share", systemImage: "square.and.arrow.up")
+                            galleryActionLabel(L10n.t("Share", appLanguage), systemImage: "square.and.arrow.up")
                         }
-                        .accessibilityLabel("Share image")
+                        .accessibilityLabel(L10n.t("Share image", appLanguage))
                     } else {
-                        galleryActionLabel("Share", systemImage: "square.and.arrow.up")
+                        galleryActionLabel(L10n.t("Share", appLanguage), systemImage: "square.and.arrow.up")
                             .opacity(0.45)
                     }
 
@@ -107,11 +108,11 @@ struct MediaGalleryView: View {
                                 .frame(width: 88, height: 44)
                                 .background(.black.opacity(0.45), in: Capsule())
                         } else {
-                            galleryActionLabel("Save", systemImage: "square.and.arrow.down")
+                            galleryActionLabel(L10n.t("Save", appLanguage), systemImage: "square.and.arrow.down")
                         }
                     }
                     .disabled(isSaving || currentFileURL == nil)
-                    .accessibilityLabel("Save image to Photos")
+                    .accessibilityLabel(L10n.t("Save image to Photos", appLanguage))
                 }
             }
             .padding(.horizontal, 18)
@@ -137,7 +138,7 @@ struct MediaGalleryView: View {
     }
 
     private var counterText: String {
-        media.count > 1 ? "\(selection + 1) of \(media.count)" : "1 image"
+        media.count > 1 ? "\(selection + 1) \(L10n.t("of", appLanguage)) \(media.count)" : "1 \(L10n.t("image", appLanguage))"
     }
 
     private func galleryActionLabel(_ title: String, systemImage: String) -> some View {
@@ -158,7 +159,7 @@ struct MediaGalleryView: View {
     private func saveCurrentImage() {
         guard let currentMedia,
               let image = UIImage(contentsOfFile: currentMedia.localCompressedPath) else {
-            showSaveMessage("Image unavailable")
+            showSaveMessage(L10n.t("Image unavailable", appLanguage))
             return
         }
 
@@ -167,7 +168,7 @@ struct MediaGalleryView: View {
             guard status == .authorized || status == .limited else {
                 Task { @MainActor in
                     isSaving = false
-                    showSaveMessage("Photo access denied")
+                    showSaveMessage(L10n.t("Photo access denied", appLanguage))
                 }
                 return
             }
@@ -177,7 +178,7 @@ struct MediaGalleryView: View {
             } completionHandler: { success, error in
                 Task { @MainActor in
                     isSaving = false
-                    showSaveMessage(success ? "Saved to Photos" : error?.localizedDescription ?? "Save failed")
+                    showSaveMessage(success ? L10n.t("Saved to Photos", appLanguage) : error?.localizedDescription ?? L10n.t("Save failed", appLanguage))
                 }
             }
         }

@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import multipart from "@fastify/multipart";
 
 import { registerAdminRoutes } from "./api/admin.js";
+import { registerAIRoutes } from "./api/ai.js";
 import { registerAuthRoutes } from "./api/auth.js";
 import { registerDeviceRoutes } from "./api/devices.js";
 import { registerHealthRoutes } from "./api/health.js";
@@ -47,8 +48,8 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   await app.register(multipart, {
     limits: {
       files: 1,
-      fields: 6,
-      parts: 8,
+      fields: 12,
+      parts: 14,
       fileSize: 50 * 1024 * 1024,
     },
   });
@@ -74,8 +75,15 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
     prisma: context.prisma,
   });
   await registerMediaRoutes(app, {
+    config: context.config,
     prisma: context.prisma,
     paths: context.paths,
+    fileLogger: context.fileLogger,
+  });
+  await registerAIRoutes(app, {
+    config: context.config,
+    paths: context.paths,
+    prisma: context.prisma,
     fileLogger: context.fileLogger,
   });
   await registerSyncRoutes(app, {

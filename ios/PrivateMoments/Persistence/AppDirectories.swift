@@ -26,6 +26,14 @@ enum AppDirectories {
         return url
     }
 
+    static func draftMediaDirectory() throws -> URL {
+        let url = try applicationSupportDirectory()
+            .appending(path: "draft-media", directoryHint: .isDirectory)
+
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     static func localFilePath(fromStoredPath storedPath: String) throws -> String {
         guard !storedPath.isEmpty else {
             return ""

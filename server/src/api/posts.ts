@@ -140,9 +140,33 @@ export async function registerPostRoutes(
     const posts = await context.prisma.post.findMany({
       where: {
         deletedAt: null,
-        text: {
-          contains: q,
-        },
+        OR: [
+          {
+            text: {
+              contains: q,
+            },
+          },
+          {
+            media: {
+              some: {
+                deletedAt: null,
+                transcriptionText: {
+                  contains: q,
+                },
+              },
+            },
+          },
+          {
+            comments: {
+              some: {
+                deletedAt: null,
+                text: {
+                  contains: q,
+                },
+              },
+            },
+          },
+        ],
       },
       orderBy: [
         {
@@ -189,6 +213,9 @@ function serializePost(post: PostWithMedia): Record<string, unknown> {
       originalPreserved: media.originalPreserved,
       width: media.width,
       height: media.height,
+      mimeType: media.mimeType,
+      durationSeconds: media.durationSeconds,
+      transcriptionText: media.transcriptionText,
       compressedSizeBytes: media.compressedSizeBytes,
       originalSizeBytes: media.originalSizeBytes,
       checksum: media.checksum,

@@ -53,6 +53,9 @@ Keep docs single-purpose:
 - `docs/HANDOFF.md`: current working state, recent important fixes, known risks, and next sensible work.
 - `docs/DESIGN-PRINCIPLES.md`: UI and product design principles.
 - `docs/WORKFLOW.md`: how work is planned, verified, closed, and documented.
+- `docs/RELEASE-CHECKLIST.md`: v0.1 candidate and public-release gates.
+- `docs/OPEN-SOURCE-READINESS.md`: current open-source blockers, privacy review, and release risk assessment.
+- `SECURITY.md`: public-facing security, privacy, AI provider, and secret-handling boundaries.
 
 ## Commands
 
@@ -93,7 +96,7 @@ The paired phone is commonly named `wwz 的 iphone`; the real-device script can 
 - Development server port: `3210`.
 - Bundle id: `com.popcornnnnnn.privatemoments`.
 - App display name: `Moments`.
-- Current schema version: `3`.
+- Current schema version: `9`.
 - Read the development password from `server/.env`; do not hard-code it into reusable docs or code.
 - Get the current Mac Tailscale IP with `tailscale ip -4`.
 - iOS Settings server URL may be `http://<mac-tailscale-ip>:3210` or a Tailscale Serve HTTPS URL.
@@ -103,25 +106,41 @@ Do not hard-code personal Tailscale values into reusable code unless the user as
 ## Sync And Media Notes
 
 - Sync endpoint: `POST /api/v1/sync`.
-- Client operation types currently used: `create_post`, `update_post`, `update_post_favorite`, `delete_post`.
+- Client operation types currently used: `create_post`, `update_post`, `insert_ai_title`, `update_post_favorite`, `delete_post`, `create_comment`, `delete_comment`, `update_media_transcription` for legacy clients, `upsert_tag`, `archive_tag`, `restore_tag`, `delete_tag`, `merge_tag`, `upsert_tag_alias`, `delete_tag_alias`, and `set_post_tags`.
 - `opId` is idempotent per device.
 - `lastSyncCursor` must only advance after all returned server changes are applied.
 - iOS has recovery logic via `didApplySyncRecoveryV1`; if local posts are empty, it requests cursor `0`.
 - iOS must parse ISO8601 with fractional seconds; failing to parse and still advancing cursor caused data loss symptoms on 2026-04-29.
-- Media upload is multipart via `POST /api/v1/media/upload`.
+- Comments are independent local-first entities via `create_comment` / `delete_comment`; comment rows do not show per-comment sync badges.
+- Media upload is multipart via `POST /api/v1/media/upload`; media `kind` supports `image`, `video`, and `audio`, with `thumbnail` used for video posters.
 - iOS compresses display/upload images with max edge `1600px` and JPEG quality `0.72`; upload-time compression also covers old pending files.
+- iOS prepares videos as 720p H.264 MP4 with poster thumbnails, records audio as AAC/M4A, and stores audio/video duration metadata.
+- New iOS clients do not run Speech framework transcription, request speech permission, upload `transcriptionText`, or show transcript fallback/status in the timeline. `update_media_transcription` remains only for old-client compatibility and historical metadata.
+- AI media summaries are generated metadata for uploaded audio/video media. The Mac server runs local `mlx-whisper` transcription first, then sends the transcript to the configured external summary API. iOS calls the Mac server only; external AI provider credentials live in server env vars. Summary changes sync through `ai_summary_updated` and `ai_summary_deleted` server changes, not through client outbox operations.
+- New AI summaries use prompt version `media-summary-v3` and a native document block model (`documentTitle`, `oneLiner`, `documentBlocks`) rendered by iOS as Markdown-like headings, paragraphs, lists, and `AI suggested` callouts. For recognizable non-empty audio/transcript notes, v3 should produce a title of at most 40 characters; the server can fall back from `oneLiner` if the provider returns a blank or overlong title. Legacy `overview`/`keyPoints`/`sections` remain for compatibility; old summaries are not batch-regenerated.
+- New audio moments may auto-insert the first ready summary title into `post.text` as a top `##` heading through `insert_ai_title`, if `AI Title Auto-Insert` is enabled and the user has not already written a leading `# ` or `## ` title. This operation must not set user edited metadata and must not write summary bodies into post text.
+- Moment body Markdown is deliberately limited. `post.text` remains Markdown source `String`; Composer/Edit render only line-leading H1/H2 with an H1/H2-only keyboard accessory and no Done/list buttons. Plain `- `, `• `, and numbered list continuation remains string-only assistance, not Markdown bullet rendering. Timeline, Detail, and Day Review render only H1/H2.
+- Smart Tags are first-class synced metadata. Tags use primary/topic roles, Settings > Tags manages vocabulary, aliases, archive/restore/delete, topic merge, primary colors with muted/high-saturation presets plus HEX input, and batch primary color edits. Timeline optionally shows only the primary tag, and new audio moments may receive AI suggested tags from the first ready summary. Video/image/text moments do not run AI auto-tagging in the current version.
+- The `Save to Moments` Share Extension is intentionally thin: it writes supported shared items into the App Group import inbox and opens the main app composer, which owns editing, media preparation, draft handling, database writes, upload, and sync.
+- AI summary processing statuses are `transcribing`, `summarizing`, `ready`, `failed`, and `deleted`. Timeline only shows `Summary ready` for ready summaries; progress/failure diagnostics belong in Settings > Storage & Diagnostics.
+- Normal AI summary logs must not contain private transcript or summary bodies; record IDs, provider/model, status, error codes, and input lengths only.
 - Failed sync or media upload work schedules delayed automatic retry: 5s, 20s, 60s, 120s, then 300s.
-- Remote media cache recovery uses `POST /api/v1/media/batch-download`, defaulting to `thumbnail` variant as base64 JSON.
+- Remote media cache recovery uses `POST /api/v1/media/batch-download`, defaulting to `thumbnail` variant as base64 JSON for image thumbnails and video posters. Full audio/video files download on play.
 - Server thumbnails are generated with `sips`, max edge `800px`, with oversized thumbnails regenerated.
-- `GET /api/v1/admin/status` returns admin counts plus storage diagnostics used by Settings > Storage. iOS hides the Mac Server section if this request fails.
+- `GET /api/v1/admin/status` returns admin counts plus storage, `sync.latestServerChangeVersion`, and `aiSummaries` diagnostics used by Settings > Storage & Diagnostics. iOS hides the Mac Server section if this request fails.
+- Server-originated AI summary changes can be ready on Mac while a quiet iPhone has an older `lastSyncCursor`. If summaries look stale, compare iPhone `lastSyncCursor` with server `MAX(server_changes.version)` or admin status `sync.latestServerChangeVersion`; app foreground, Storage & Diagnostics refresh, and Settings > Sync > Sync Now should pull remote-only changes.
 
 ## Code Organization
 
 The project has already started splitting large files:
 
-- `TimelineStore` is split across `TimelineStore+Session`, `+Mutations`, `+Sync`, `+SyncRetry`, `+ServerChanges`, `+Media`, and `+Payloads`.
+- `TimelineStore` is split across `TimelineStore+Session`, `+Mutations`, `+Sync`, `+SyncRetry`, `+ServerChanges`, `+Media`, legacy `+Transcription`, and `+Payloads`.
 - `LocalDatabase` is split across `+Schema`, `+Records`, `+Timeline`, `+Sync`, `+StorageStats`, and `+SQLite`.
-- `TimelineView` is split into `TimelineView`, `TimelineRow`, `MomentDateFormatter`, `MediaGalleryView`, and `ZoomableLocalImage`.
+- `TimelineView` is split into `TimelineView`, `TimelineRow`, `TimelineCommentsSection`, `TimelineCommentInputBar`, `MomentDateFormatter`, `MediaGalleryView`, and `ZoomableLocalImage`.
+- Audio/video support lives in `PreparedMomentMedia`, `MediaPreparation`, `AudioRecorderController`, and `MediaPlaybackCenter`. Server-side AI summary support lives under `server/src/ai/` plus `server/scripts/local-transcribe.py`.
+- Share Extension support lives under `ios/ShareExtension/` and shared import helpers under `ios/Shared/`.
+- Moment body Markdown rendering/editing lives in `MomentTextMarkdown`, `MomentTextView`, `MarkdownTextEditor`, and `PlainTextListContinuation`.
+- Smart Tags support lives in `server/src/tags/`, `ios/PrivateMoments/Persistence/LocalDatabase+Tags.swift`, `TagManagementView`, and tag-related sync code.
 - Storage diagnostics live in `ios/PrivateMoments/Models/StorageStats.swift`, `ios/PrivateMoments/Views/StorageSettingsView.swift`, and `server/src/storage/stats.ts`.
 
 Before expanding large areas, prefer continuing these splits:
@@ -153,6 +172,8 @@ For real-device data verification, copy the app Library container with `xcrun de
 SELECT COUNT(*) FROM local_posts;
 SELECT COUNT(*) FROM local_posts WHERE deletedAt IS NULL;
 SELECT COUNT(*) FROM local_media WHERE localCompressedPath <> '';
+SELECT COUNT(*) FROM local_comments WHERE deletedAt IS NULL;
+SELECT kind, transcriptionStatus, COUNT(*) FROM local_media WHERE kind IN ('audio', 'video') GROUP BY kind, transcriptionStatus;
 ```
 
 For image recovery, `missing_visible_media` should be `0`; see `docs/OPERATOR-RUNBOOK.md` for the full query.

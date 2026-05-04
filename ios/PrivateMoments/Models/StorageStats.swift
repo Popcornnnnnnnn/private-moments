@@ -4,6 +4,7 @@ struct LocalStorageStats: Equatable {
     let totalBytes: Int64
     let databaseBytes: Int64
     let mediaBytes: Int64
+    let audioVideoCacheBytes: Int64
     let pendingChanges: Int
     let pendingUploads: Int
     let failedUploads: Int
@@ -28,6 +29,7 @@ enum LocalStorageStatsLoader {
             totalBytes: databaseBytes + mediaBytes,
             databaseBytes: databaseBytes,
             mediaBytes: mediaBytes,
+            audioVideoCacheBytes: try database?.downloadedAudioVideoCacheBytes() ?? 0,
             pendingChanges: try database?.pendingOperationCount() ?? 0,
             pendingUploads: try database?.uploadCount(status: "pending") ?? 0,
             failedUploads: try database?.uploadCount(status: "failed") ?? 0

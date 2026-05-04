@@ -4,17 +4,17 @@ import UIKit
 
 struct MomentDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var appLanguage
     @EnvironmentObject private var store: TimelineStore
+    @EnvironmentObject private var playbackCenter: MediaPlaybackCenter
 
     let postId: String
 
     @State private var isEditing = false
     @State private var confirmDelete = false
     @State private var gallery: DetailMediaGallery?
-    @State private var commentDraft = ""
-    @State private var isSubmittingComment = false
-    @State private var commentPendingDeletion: TimelineComment?
-    @State private var deletingCommentID: String?
+    @State private var videoPlayer: VideoPlayerRoute?
+    @State private var isTagEditorPresented = false
 
     var body: some View {
         Group {
@@ -22,31 +22,19 @@ struct MomentDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         header(item)
+                        tagsSection(item)
 
                         if !item.post.text.isEmpty {
-                            Text(item.post.text)
-                                .font(.body)
-                                .textSelection(.enabled)
+                            MomentTextView(text: item.post.text, style: .detail)
                         }
 
                         if !item.media.isEmpty {
                             mediaGrid(item.media)
                         }
-
-                        MomentCommentsSection(
-                            comments: item.comments,
-                            draftText: $commentDraft,
-                            isSubmitting: isSubmittingComment,
-                            deletingCommentID: deletingCommentID
-                        ) { text in
-                            await createComment(postId: item.post.id, text: text)
-                        } onDeleteRequest: { comment in
-                            requestCommentDelete(comment)
-                        }
                     }
                     .padding()
                 }
-                .navigationTitle("Moment")
+                .navigationTitle(L10n.t("Moment", appLanguage))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
@@ -58,54 +46,55 @@ struct MomentDetailView: View {
                             Image(systemName: item.post.isFavorite ? "star.fill" : "star")
                                 .foregroundStyle(item.post.isFavorite ? Color.yellow : Color.primary)
                         }
-                        .accessibilityLabel(item.post.isFavorite ? "Remove favorite" : "Favorite moment")
+                        .accessibilityLabel(L10n.t(item.post.isFavorite ? "Remove favorite" : "Favorite moment", appLanguage))
 
                         Button {
+                            playbackCenter.pause()
                             isEditing = true
                         } label: {
                             Image(systemName: "square.and.pencil")
                         }
                         .disabled(!store.canEdit(item))
-                        .accessibilityLabel("Edit moment")
+                        .accessibilityLabel(L10n.t("Edit moment", appLanguage))
 
                         Button(role: .destructive) {
                             confirmDelete = true
                         } label: {
                             Image(systemName: "trash")
                         }
-                        .accessibilityLabel("Delete moment")
+                        .accessibilityLabel(L10n.t("Delete moment", appLanguage))
                     }
                 }
                 .sheet(isPresented: $isEditing) {
                     EditMomentView(postId: postId)
                 }
+                .sheet(isPresented: $isTagEditorPresented) {
+                    if store.showTagsInTimeline {
+                        EditTagsView(postId: postId)
+                    }
+                }
                 .fullScreenCover(item: $gallery) { gallery in
                     MediaGalleryView(media: gallery.media, initialIndex: gallery.startIndex)
                 }
-                .confirmationDialog("Delete this moment?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                    Button("Delete", role: .destructive) {
+                .fullScreenCover(item: $videoPlayer) { route in
+                    VideoMomentPlayerView(media: route.media)
+                }
+                .confirmationDialog(L10n.t("Delete this moment?", appLanguage), isPresented: $confirmDelete, titleVisibility: .visible) {
+                    Button(L10n.t("Delete", appLanguage), role: .destructive) {
                         Task {
                             await store.deletePost(item)
                             dismiss()
                         }
                     }
-                    Button("Cancel", role: .cancel) {}
+                    Button(L10n.t("Cancel", appLanguage), role: .cancel) {}
                 } message: {
-                    Text("This removes the moment from your timeline and syncs the deletion to your Mac.")
+                    Text(L10n.t("This removes the moment from your timeline and syncs the deletion to your Mac.", appLanguage))
                 }
-                .alert("Delete this private comment?", isPresented: commentDeleteConfirmationBinding) {
-                    Button("Cancel", role: .cancel) {
-                        commentPendingDeletion = nil
-                    }
-                    Button("Delete", role: .destructive) {
-                        confirmCommentDelete()
-                    }
-                    .disabled(deletingCommentID != nil)
-                } message: {
-                    Text("This removes the comment from this moment and syncs the deletion to your Mac.")
+                .onDisappear {
+                    playbackCenter.pauseForInterfaceChange()
                 }
             } else {
-                ContentUnavailableView("Moment unavailable", systemImage: "rectangle.stack.badge.minus")
+                ContentUnavailableView(L10n.t("Moment unavailable", appLanguage), systemImage: "rectangle.stack.badge.minus")
             }
         }
     }
@@ -123,89 +112,295 @@ struct MomentDetailView: View {
             }
 
             if let editedAt = item.post.localEditedAt {
-                Text("Edited \(editedAt.formatted(date: .abbreviated, time: .shortened))")
+                Text("\(L10n.t("Edited", appLanguage)) \(editedAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if !store.canEdit(item) {
-                Text("Editing is available after this moment finishes syncing.")
+                Text(L10n.t("Editing is available after this moment finishes syncing.", appLanguage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func createComment(postId: String, text: String) async -> Bool {
-        guard !isSubmittingComment else {
-            return false
-        }
+    @ViewBuilder
+    private func tagsSection(_ item: TimelineItem) -> some View {
+        if store.showTagsInTimeline && (!item.tags.isEmpty || !store.activePrimaryTags.isEmpty || !store.activeTopicTags.isEmpty) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(L10n.t("Tags", appLanguage))
+                        .font(.headline)
+                    Spacer()
+                    Button {
+                        playbackCenter.pause()
+                        isTagEditorPresented = true
+                    } label: {
+                        Image(systemName: "tag")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("Edit tags", appLanguage))
+                }
 
-        await MainActor.run {
-            isSubmittingComment = true
-        }
-
-        let didCreate = await store.createComment(postId: postId, text: text)
-
-        await MainActor.run {
-            isSubmittingComment = false
-        }
-
-        return didCreate
-    }
-
-    private var commentDeleteConfirmationBinding: Binding<Bool> {
-        Binding(
-            get: { commentPendingDeletion != nil },
-            set: { isPresented in
-                if !isPresented {
-                    commentPendingDeletion = nil
+                if item.tags.isEmpty {
+                    Text(L10n.t("No tags", appLanguage))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    FlowLayout(spacing: 8, rowSpacing: 8) {
+                        ForEach(item.tags) { assignedTag in
+                            HStack(spacing: 5) {
+                                TimelineTagChip(tag: assignedTag.tag)
+                                Text(assignedTag.source == "ai" ? "AI" : "Manual")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
-    private func requestCommentDelete(_ comment: TimelineComment) {
-        guard deletingCommentID == nil else {
+    @ViewBuilder
+    private func mediaGrid(_ media: [TimelineMedia]) -> some View {
+        if let audio = media.first, audio.isAudio {
+            TimelineAudioCard(media: audio, style: .detail)
+        } else if let video = media.first, video.isVideo {
+            Button {
+                playbackCenter.pause()
+                videoPlayer = VideoPlayerRoute(media: video)
+            } label: {
+                TimelineVideoCard(media: video)
+            }
+            .buttonStyle(.plain)
+        } else {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: media.count == 1 ? 1 : 3), spacing: 6) {
+                ForEach(Array(media.enumerated()), id: \.element.id) { index, item in
+                    Button {
+                        playbackCenter.pause()
+                        gallery = DetailMediaGallery(media: media, startIndex: index)
+                    } label: {
+                        TimelineImage(media: item, style: media.count == 1 ? .single : .grid)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+private struct EditTagsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var appLanguage
+    @EnvironmentObject private var store: TimelineStore
+
+    let postId: String
+
+    @State private var selectedPrimaryTagId: String?
+    @State private var selectedTopicTagIds = Set<String>()
+    @State private var newTopicName = ""
+    @State private var hasLoaded = false
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(L10n.t("Primary", appLanguage)) {
+                    Button {
+                        selectedPrimaryTagId = nil
+                    } label: {
+                        Label(L10n.t("None", appLanguage), systemImage: selectedPrimaryTagId == nil ? "checkmark" : "tag")
+                    }
+
+                    ForEach(store.activePrimaryTags) { tag in
+                        Button {
+                            selectedPrimaryTagId = tag.id
+                        } label: {
+                            Label(L10n.tagName(tag, language: appLanguage), systemImage: selectedPrimaryTagId == tag.id ? "checkmark" : "tag")
+                        }
+                    }
+                }
+
+                Section(L10n.t("Topics", appLanguage)) {
+                    HStack {
+                        TextField(L10n.t("New topic", appLanguage), text: $newTopicName)
+                            .textInputAutocapitalization(.never)
+
+                        Button(L10n.t("Add", appLanguage)) {
+                            addTopic()
+                        }
+                        .disabled(newTopicName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+
+                    if store.activeTopicTags.isEmpty {
+                        Text(L10n.t("Topics appear after AI summaries create them.", appLanguage))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(store.activeTopicTags) { tag in
+                            Button {
+                                toggleTopic(tag.id)
+                            } label: {
+                                Label(tag.name, systemImage: selectedTopicTagIds.contains(tag.id) ? "checkmark" : "tag")
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(L10n.t("Edit Tags", appLanguage))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("Cancel", appLanguage)) {
+                        dismiss()
+                    }
+                    .disabled(isSaving)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        save()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text(L10n.t("Save", appLanguage))
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+            .task {
+                load()
+            }
+        }
+    }
+
+    private func load() {
+        guard !hasLoaded, let item = store.item(id: postId) else {
             return
         }
 
-        commentPendingDeletion = comment
+        selectedPrimaryTagId = item.primaryTag?.tagId
+        selectedTopicTagIds = Set(item.topicTags.map(\.tagId))
+        hasLoaded = true
     }
 
-    private func confirmCommentDelete() {
-        let policy = MomentCommentDeletionPolicy(
-            selectedComment: commentPendingDeletion,
-            deletingCommentID: deletingCommentID
-        )
-        guard let comment = policy.commentToDelete else {
-            commentPendingDeletion = nil
+    private func toggleTopic(_ tagId: String) {
+        if selectedTopicTagIds.contains(tagId) {
+            selectedTopicTagIds.remove(tagId)
+        } else {
+            selectedTopicTagIds.insert(tagId)
+        }
+    }
+
+    private func save() {
+        guard let item = store.item(id: postId) else {
+            dismiss()
             return
         }
 
-        deletingCommentID = comment.id
-        commentPendingDeletion = nil
+        isSaving = true
+        let primary = selectedPrimaryTagId
+        let topics = Array(selectedTopicTagIds)
 
         Task {
-            await store.deleteComment(comment)
+            let didSave = await store.updateTags(item: item, primaryTagId: primary, topicTagIds: topics)
             await MainActor.run {
-                if deletingCommentID == comment.id {
-                    deletingCommentID = nil
+                if didSave {
+                    dismiss()
+                } else {
+                    isSaving = false
                 }
             }
         }
     }
 
-    private func mediaGrid(_ media: [TimelineMedia]) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: media.count == 1 ? 1 : 3), spacing: 6) {
-            ForEach(Array(media.enumerated()), id: \.element.id) { index, item in
-                Button {
-                    gallery = DetailMediaGallery(media: media, startIndex: index)
-                } label: {
-                    TimelineImage(media: item, style: media.count == 1 ? .single : .grid)
+    private func addTopic() {
+        let name = newTopicName
+        newTopicName = ""
+
+        Task {
+            if let tag = await store.createTag(type: "topic", name: name) {
+                await MainActor.run {
+                    _ = selectedTopicTagIds.insert(tag.id)
                 }
-                .buttonStyle(.plain)
             }
+        }
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+    var rowSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let rows = rows(proposal: proposal, subviews: subviews)
+        let width = proposal.width ?? rows.map(\.width).max() ?? 0
+        let height = rows.reduce(CGFloat.zero) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * rowSpacing
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var y = bounds.minY
+        for row in rows(proposal: ProposedViewSize(width: bounds.width, height: proposal.height), subviews: subviews) {
+            var x = bounds.minX
+            for item in row.items {
+                subviews[item.index].place(
+                    at: CGPoint(x: x, y: y),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(item.size)
+                )
+                x += item.size.width + spacing
+            }
+            y += row.height + rowSpacing
+        }
+    }
+
+    private func rows(proposal: ProposedViewSize, subviews: Subviews) -> [FlowRow] {
+        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+        var rows: [FlowRow] = []
+        var current = FlowRow()
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            if !current.items.isEmpty && current.width + spacing + size.width > maxWidth {
+                rows.append(current)
+                current = FlowRow()
+            }
+
+            current.append(index: index, size: size, spacing: spacing)
+        }
+
+        if !current.items.isEmpty {
+            rows.append(current)
+        }
+
+        return rows
+    }
+
+    private struct FlowRow {
+        var items: [(index: Int, size: CGSize)] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+
+        mutating func append(index: Int, size: CGSize, spacing: CGFloat) {
+            if !items.isEmpty {
+                width += spacing
+            }
+            items.append((index, size))
+            width += size.width
+            height = max(height, size.height)
         }
     }
 }
@@ -221,6 +416,7 @@ private struct DetailMediaGallery: Identifiable {
 
 struct EditMomentView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var appLanguage
     @EnvironmentObject private var store: TimelineStore
 
     let postId: String
@@ -253,13 +449,13 @@ struct EditMomentView: View {
             }
             .background(Color(.systemGroupedBackground))
             .scrollDisabled(draggedItemID != nil)
-            .navigationTitle("Edit Moment")
+            .navigationTitle(L10n.t("Edit Moment", appLanguage))
             .navigationBarTitleDisplayMode(.inline)
             .disabled(isSaving)
             .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(L10n.t("Cancel", appLanguage)) {
                         dismiss()
                     }
                     .disabled(isSaving)
@@ -273,7 +469,7 @@ struct EditMomentView: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text("Save")
+                            Text(L10n.t("Save", appLanguage))
                         }
                     }
                     .disabled(isSaving || (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && mediaItems.isEmpty))
@@ -302,35 +498,35 @@ struct EditMomentView: View {
                     appendNewImage(data)
                 }
             }
-            .confirmationDialog("Continue editing draft?", isPresented: $showDraftChoice, titleVisibility: .visible) {
-                Button("Continue Editing Draft") {
+            .confirmationDialog(L10n.t("Continue editing draft?", appLanguage), isPresented: $showDraftChoice, titleVisibility: .visible) {
+                Button(L10n.t("Continue Editing Draft", appLanguage)) {
                     loadDraft()
                 }
-                Button("Discard Draft", role: .destructive) {
+                Button(L10n.t("Discard Draft", appLanguage), role: .destructive) {
                     EditDraftStore.clear(postId: postId)
                     loadFromCurrentItem()
                 }
             } message: {
-                Text("There is an unsaved edit draft for this moment.")
+                Text(L10n.t("There is an unsaved edit draft for this moment.", appLanguage))
             }
-            .confirmationDialog("Discard edit draft?", isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
-                Button("Discard Draft", role: .destructive) {
+            .confirmationDialog(L10n.t("Discard edit draft?", appLanguage), isPresented: $showDiscardConfirmation, titleVisibility: .visible) {
+                Button(L10n.t("Discard Draft", appLanguage), role: .destructive) {
                     EditDraftStore.clear(postId: postId)
                     loadFromCurrentItem()
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(L10n.t("Cancel", appLanguage), role: .cancel) {}
             }
         }
     }
 
     private var editFieldsSection: some View {
         VStack(spacing: 0) {
-            PlainTextListEditor(text: $text)
+            MarkdownTextEditor(text: $text)
                 .frame(minHeight: 160)
 
             Divider()
 
-            DatePicker("Date", selection: $occurredAt, displayedComponents: [.date, .hourAndMinute])
+            DatePicker(L10n.t("Date", appLanguage), selection: $occurredAt, displayedComponents: [.date, .hourAndMinute])
                 .padding(.vertical, 12)
         }
         .padding(.horizontal, 16)
@@ -342,12 +538,12 @@ struct EditMomentView: View {
     private var mediaSection: some View {
         VStack(spacing: 0) {
             PhotosPicker(selection: $selectedItems, maxSelectionCount: max(0, 9 - mediaItems.count), matching: .images) {
-                Label("Add from Library", systemImage: "photo.on.rectangle.angled")
+                Label(L10n.t("Add from Library", appLanguage), systemImage: "photo.on.rectangle.angled")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .padding(.vertical, 14)
-            .disabled(mediaItems.count >= 9)
+            .disabled(mediaItems.count >= 9 || hasNonImageMedia)
 
             Divider()
                 .padding(.leading, 80)
@@ -355,14 +551,24 @@ struct EditMomentView: View {
             Button {
                 showingCamera = true
             } label: {
-                Label("Use Camera", systemImage: "camera")
+                Label(L10n.t("Use Camera", appLanguage), systemImage: "camera")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .padding(.vertical, 14)
-            .disabled(!CameraPicker.isAvailable || mediaItems.count >= 9)
+            .disabled(!CameraPicker.isAvailable || mediaItems.count >= 9 || hasNonImageMedia)
 
-            if !mediaItems.isEmpty {
+            if hasNonImageMedia {
+                Divider()
+                    .padding(.leading, 80)
+
+                ForEach(nonImageMediaItems) { item in
+                    EditableFileMediaPreview(item: item) {
+                        removeMedia(item)
+                    }
+                    .padding(.vertical, 12)
+                }
+            } else if !mediaItems.isEmpty {
                 Divider()
                     .padding(.leading, 80)
 
@@ -381,8 +587,16 @@ struct EditMomentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
+    private var hasNonImageMedia: Bool {
+        mediaItems.contains { !$0.isEditableImage }
+    }
+
+    private var nonImageMediaItems: [MomentEditMediaItem] {
+        mediaItems.filter { !$0.isEditableImage }
+    }
+
     private var discardDraftSection: some View {
-        Button("Discard Draft", role: .destructive) {
+        Button(L10n.t("Discard Draft", appLanguage), role: .destructive) {
             showDiscardConfirmation = true
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -657,6 +871,8 @@ private struct EditableMediaGrid: View {
 }
 
 private struct EditableMediaThumbnail: View {
+    @Environment(\.appLanguage) private var appLanguage
+
     let item: MomentEditMediaItem
     let sideLength: CGFloat
     let isDragging: Bool
@@ -687,7 +903,7 @@ private struct EditableMediaThumbnail: View {
             }
             .buttonStyle(.plain)
             .padding(4)
-            .accessibilityLabel("Remove image")
+            .accessibilityLabel(L10n.t("Remove image", appLanguage))
         }
         .frame(width: sideLength, height: sideLength)
         .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -696,6 +912,41 @@ private struct EditableMediaThumbnail: View {
     @ViewBuilder
     private var image: some View {
         CachedEditMediaImage(item: item)
+    }
+}
+
+private struct EditableFileMediaPreview: View {
+    @Environment(\.appLanguage) private var appLanguage
+
+    let item: MomentEditMediaItem
+    let onRemove: () -> Void
+
+    var body: some View {
+        if let media = item.existingMedia {
+            ZStack(alignment: .topTrailing) {
+                filePreview(media)
+
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.62))
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .padding(6)
+                .accessibilityLabel(L10n.t(media.isAudio ? "Remove audio" : "Remove video", appLanguage))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func filePreview(_ media: TimelineMedia) -> some View {
+        if media.isAudio {
+            TimelineAudioCard(media: media)
+                .padding(.trailing, 34)
+        } else if media.isVideo {
+            TimelineVideoCard(media: media)
+        }
     }
 }
 
@@ -735,6 +986,25 @@ private struct CachedEditMediaImage: View {
 
         case .new(let data):
             return UIImage(data: data)
+        }
+    }
+}
+
+private extension MomentEditMediaItem {
+    var existingMedia: TimelineMedia? {
+        if case .existing(let media) = source {
+            return media
+        }
+
+        return nil
+    }
+
+    var isEditableImage: Bool {
+        switch source {
+        case .new:
+            return true
+        case .existing(let media):
+            return media.isImage
         }
     }
 }

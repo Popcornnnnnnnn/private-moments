@@ -31,8 +31,15 @@ data/
 .gsd/exec/
 .gsd/browser-state/
 .gsd/browser-baselines/
+.gsd/activity/
+.gsd/audit/
+.gsd/event-log.jsonl
+.gsd/gsd.db
 .gsd/gsd.db-shm
 .gsd/gsd.db-wal
+.gsd/journal/
+.gsd/metrics.json
+.gsd/state-manifest.json
 
 # ── GSD baseline (auto-generated) ──
 .gsd-id

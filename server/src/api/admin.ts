@@ -276,7 +276,17 @@ export async function registerAdminRoutes(
       return reply;
     }
 
-    const [activeDevices, revokedDevices, posts, deletedPosts, media, storage] =
+    const [
+      activeDevices,
+      revokedDevices,
+      posts,
+      deletedPosts,
+      media,
+      storage,
+      aiSummaries,
+      tags,
+      serverChangeVersion,
+    ] =
       await Promise.all([
         context.prisma.device.count({
           where: {
@@ -304,6 +314,9 @@ export async function registerAdminRoutes(
         }),
         context.prisma.media.count(),
         collectServerStorageStats(context.paths),
+        collectAISummaryDiagnostics(context.prisma),
+        collectTagDiagnostics(context.prisma),
+        latestServerChangeVersion(context.prisma),
       ]);
 
     return reply.send({
@@ -319,6 +332,11 @@ export async function registerAdminRoutes(
         media,
       },
       storage,
+      aiSummaries,
+      tags,
+      sync: {
+        latestServerChangeVersion: serverChangeVersion,
+      },
     });
   });
 
@@ -338,6 +356,104 @@ export async function registerAdminRoutes(
       logs: await readRecentLogs(context.paths.logsDir, limit),
     });
   });
+}
+
+async function collectTagDiagnostics(prisma: PrismaClient): Promise<Record<string, unknown>> {
+  const [total, primary, topics, archived, aiAssignments, manualAssignments] = await Promise.all([
+    prisma.tag.count(),
+    prisma.tag.count({ where: { type: "primary", isArchived: false } }),
+    prisma.tag.count({ where: { type: "topic", isArchived: false } }),
+    prisma.tag.count({ where: { isArchived: true } }),
+    prisma.postTag.count({ where: { source: "ai", deletedAt: null } }),
+    prisma.postTag.count({ where: { source: "manual", deletedAt: null } }),
+  ]);
+
+  return {
+    total,
+    primary,
+    topics,
+    archived,
+    aiAssignments,
+    manualAssignments,
+  };
+}
+
+async function collectAISummaryDiagnostics(prisma: PrismaClient): Promise<Record<string, unknown>> {
+  const [total, transcribing, summarizing, ready, failed, deleted, recent] = await Promise.all([
+    prisma.aiSummary.count(),
+    prisma.aiSummary.count({ where: { status: "transcribing", deletedAt: null } }),
+    prisma.aiSummary.count({ where: { status: "summarizing", deletedAt: null } }),
+    prisma.aiSummary.count({ where: { status: "ready", deletedAt: null } }),
+    prisma.aiSummary.count({ where: { status: "failed", deletedAt: null } }),
+    prisma.aiSummary.count({ where: { deletedAt: { not: null } } }),
+    prisma.aiSummary.findMany({
+      where: {
+        deletedAt: null,
+        status: {
+          in: ["transcribing", "summarizing", "failed"],
+        },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      take: 5,
+      select: {
+        id: true,
+        mediaId: true,
+        status: true,
+        errorCode: true,
+        inputTranscriptLength: true,
+        inputDurationSeconds: true,
+        updatedAt: true,
+      },
+    }),
+  ]);
+
+  return {
+    total,
+    transcribing,
+    summarizing,
+    ready,
+    failed,
+    deleted,
+    recent: recent.map((summary) => ({
+      id: summary.id,
+      mediaId: summary.mediaId,
+      status: summary.status,
+      errorCode: summary.errorCode,
+      inputTranscriptLength: summary.inputTranscriptLength,
+      inputDurationSeconds: summary.inputDurationSeconds,
+      ageSeconds: Math.max(0, Math.round((Date.now() - summary.updatedAt.getTime()) / 1_000)),
+      retryHint: aiSummaryRetryHint(summary.status),
+      updatedAt: summary.updatedAt.toISOString(),
+    })),
+  };
+}
+
+function aiSummaryRetryHint(status: string): string {
+  if (status === "failed") {
+    return "Open the summary on iPhone and tap Regenerate.";
+  }
+
+  if (status === "transcribing") {
+    return "If this stays here, check local transcription and server logs.";
+  }
+
+  if (status === "summarizing") {
+    return "If this stays here, check AI provider timeout and server logs.";
+  }
+
+  return "No action needed.";
+}
+
+async function latestServerChangeVersion(prisma: PrismaClient): Promise<number> {
+  const result = await prisma.serverChange.aggregate({
+    _max: {
+      version: true,
+    },
+  });
+
+  return result._max.version ?? 0;
 }
 
 async function authenticateOrReply(
@@ -393,9 +509,33 @@ function postWhere({
   }
 
   if (q) {
-    where.text = {
-      contains: q,
-    };
+    where.OR = [
+      {
+        text: {
+          contains: q,
+        },
+      },
+      {
+        media: {
+          some: {
+            deletedAt: null,
+            transcriptionText: {
+              contains: q,
+            },
+          },
+        },
+      },
+      {
+        comments: {
+          some: {
+            deletedAt: null,
+            text: {
+              contains: q,
+            },
+          },
+        },
+      },
+    ];
   }
 
   if (cursor) {
@@ -443,6 +583,9 @@ function serializeAdminPost(post: AdminPost): Record<string, unknown> {
       originalPreserved: media.originalPreserved,
       width: media.width,
       height: media.height,
+      mimeType: media.mimeType,
+      durationSeconds: media.durationSeconds,
+      transcriptionText: media.transcriptionText,
       compressedSizeBytes: media.compressedSizeBytes,
       originalSizeBytes: media.originalSizeBytes,
       checksum: media.checksum,
@@ -500,6 +643,17 @@ async function softDeletePost(
       data: {
         deletedAt,
         status: "deleted",
+      },
+    });
+
+    await tx.comment.updateMany({
+      where: {
+        postId,
+        deletedAt: null,
+      },
+      data: {
+        deletedAt,
+        updatedByDeviceId: adminDeviceId,
       },
     });
 

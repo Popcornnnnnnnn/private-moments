@@ -14,3 +14,13 @@ struct OutboxOperation: Identifiable, Codable {
     var updatedAt: Date
     var sentAt: Date?
 }
+
+struct OutboxOperationTypeCount: Identifiable, Equatable {
+    let type: String
+    let status: String
+    let count: Int
+
+    var id: String {
+        "\(type)-\(status)"
+    }
+}

@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { access, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -10,7 +11,9 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { MultipartFields, MultipartFile, MultipartValue } from "@fastify/multipart";
 
+import { enqueueMediaSummaryJob } from "../ai/media-summary-service.js";
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
+import type { AppConfig } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
 import type { DataPaths } from "../storage/data-dir.js";
 import { sendBadRequest, sendNotFound, sendUnauthorized } from "./http-errors.js";
@@ -19,21 +22,33 @@ const VARIANTS = new Set(["compressed", "original", "thumbnail"]);
 const execFileAsync = promisify(execFile);
 const THUMBNAIL_MAX_EDGE = "800";
 const THUMBNAIL_MAX_BYTES = 180_000;
+const MEDIA_KINDS = new Set(["image", "video", "audio"]);
+const MAX_TRANSCRIPTION_LENGTH = 100_000;
+const UPLOAD_STREAM_TIMEOUT_MS = 240_000;
 
 interface MediaRouteContext {
+  config: AppConfig;
   prisma: PrismaClient;
   paths: DataPaths;
   fileLogger: FileLogger;
 }
 
 type MediaVariant = "compressed" | "original" | "thumbnail";
+type MediaKind = "image" | "video" | "audio";
 
 interface UploadFields {
   mediaId: string;
   postId: string;
   variant: MediaVariant;
+  kind: MediaKind;
+  mimeType: string | null;
+  durationSeconds: number | null;
+  transcriptionText: string | null;
+  width: number | null;
+  height: number | null;
   originalPreserved: boolean;
   sortOrder: number;
+  aiLanguage: "auto" | "zh" | "en";
 }
 
 export async function registerMediaRoutes(
@@ -165,8 +180,10 @@ export async function registerMediaRoutes(
   );
 
   app.post("/api/v1/media/upload", async (request, reply) => {
+    let deviceId: string;
     try {
-      await authenticateDevice(request, context.prisma);
+      const device = await authenticateDevice(request, context.prisma);
+      deviceId = device.id;
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         return sendUnauthorized(reply, error.message);
@@ -180,15 +197,15 @@ export async function registerMediaRoutes(
       return sendBadRequest(reply, "multipart file is required");
     }
 
-    if (!file.mimetype.startsWith("image/")) {
-      file.file.resume();
-      return sendBadRequest(reply, "Only image uploads are supported");
-    }
-
     const fields = parseUploadFields(file.fields, reply);
     if (!fields) {
       file.file.resume();
       return reply;
+    }
+
+    if (!isAllowedUpload(file.mimetype, fields.kind, fields.variant)) {
+      file.file.resume();
+      return sendBadRequest(reply, "Unsupported media upload type");
     }
 
     const post = await context.prisma.post.findUnique({
@@ -205,20 +222,72 @@ export async function registerMediaRoutes(
     const extension = extensionForMimeType(file.mimetype, file.filename);
     const relativePath = relativeMediaPath(fields.variant, fields.mediaId, extension);
     const absolutePath = path.join(context.paths.dataDir, relativePath);
-    const writeResult = await writeUploadedFile(file, absolutePath);
-    const media = await upsertMediaRecord(context.prisma, fields, relativePath, writeResult);
 
-    return reply.send({
-      media: {
-        id: media.id,
+    const uploadStartedAt = Date.now();
+    await context.fileLogger.info("media.upload_started", {
+      mediaId: fields.mediaId,
+      postId: fields.postId,
+      kind: fields.kind,
+      variant: fields.variant,
+      mimeType: file.mimetype,
+      expectedBytes: parseContentLength(request.headers["content-length"]),
+    });
+
+    let writeResult: { sizeBytes: number; checksum: string };
+    try {
+      writeResult = await writeUploadedFile(file, absolutePath);
+      await context.fileLogger.info("media.upload_received", {
+        mediaId: fields.mediaId,
+        postId: fields.postId,
+        kind: fields.kind,
+        variant: fields.variant,
+        sizeBytes: writeResult.sizeBytes,
+        elapsedMs: Date.now() - uploadStartedAt,
+      });
+
+      const media = await upsertMediaRecord(context.prisma, fields, relativePath, writeResult);
+      await context.fileLogger.info("media.upload_completed", {
+        mediaId: media.id,
         postId: media.postId,
+        kind: media.kind,
         variant: fields.variant,
         status: media.status,
-        path: relativePath,
         sizeBytes: writeResult.sizeBytes,
-        checksum: writeResult.checksum,
-      },
-    });
+        elapsedMs: Date.now() - uploadStartedAt,
+      });
+
+      if (fields.variant === "compressed" && (media.kind === "audio" || media.kind === "video")) {
+        enqueueMediaSummaryJob(context, {
+          postId: media.postId,
+          mediaId: media.id,
+          requestedByDeviceId: deviceId,
+          aiLanguage: fields.aiLanguage,
+        });
+      }
+
+      return reply.send({
+        media: {
+          id: media.id,
+          postId: media.postId,
+          variant: fields.variant,
+          status: media.status,
+          path: relativePath,
+          sizeBytes: writeResult.sizeBytes,
+          checksum: writeResult.checksum,
+        },
+      });
+    } catch (error) {
+      await context.fileLogger.warn("media.upload_failed", {
+        mediaId: fields.mediaId,
+        postId: fields.postId,
+        kind: fields.kind,
+        variant: fields.variant,
+        errorCode: mediaUploadErrorCode(error),
+        message: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - uploadStartedAt,
+      });
+      throw error;
+    }
   });
 }
 
@@ -290,13 +359,14 @@ async function pathForVariantOrGeneratedThumbnail(
   context: MediaRouteContext,
   media: {
     id: string;
+    kind: string;
     compressedPath: string | null;
     originalPath: string | null;
     thumbnailPath: string | null;
   },
   variant: MediaVariant,
 ): Promise<string | null> {
-  if (variant === "thumbnail" && media.compressedPath) {
+  if (variant === "thumbnail" && media.kind === "image" && media.compressedPath) {
     return generateThumbnailFromCompressed(context, media.id, media.compressedPath, media.thumbnailPath);
   }
 
@@ -305,7 +375,7 @@ async function pathForVariantOrGeneratedThumbnail(
     return existingPath;
   }
 
-  if (variant !== "thumbnail" || !media.compressedPath) {
+  if (variant !== "thumbnail" || media.kind !== "image" || !media.compressedPath) {
     return null;
   }
 
@@ -414,6 +484,22 @@ function contentTypeForPath(relativePath: string): string {
     return "image/webp";
   }
 
+  if (extension === ".mp4") {
+    return "video/mp4";
+  }
+
+  if (extension === ".mov") {
+    return "video/quicktime";
+  }
+
+  if (extension === ".m4a") {
+    return "audio/mp4";
+  }
+
+  if (extension === ".aac") {
+    return "audio/aac";
+  }
+
   return "application/octet-stream";
 }
 
@@ -421,25 +507,90 @@ async function writeUploadedFile(
   file: MultipartFile,
   absolutePath: string,
 ): Promise<{ sizeBytes: number; checksum: string }> {
+  const tracker = createUploadHashTracker();
+  const tempPath = tempUploadPath(absolutePath);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort(new Error("Media upload timed out"));
+  }, UPLOAD_STREAM_TIMEOUT_MS);
+  timeout.unref();
+
+  let output: ReturnType<typeof createWriteStream> | null = null;
+  try {
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    output = createWriteStream(tempPath, { flags: "wx" });
+    await pipeline(file.file, tracker.stream, output, { signal: controller.signal });
+    await rename(tempPath, absolutePath);
+  } catch (error) {
+    file.file.destroy();
+    output?.destroy();
+    await rm(tempPath, { force: true });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  return tracker.result();
+}
+
+function createUploadHashTracker(): {
+  stream: Transform;
+  result: () => { sizeBytes: number; checksum: string };
+} {
   const hash = createHash("sha256");
   let sizeBytes = 0;
 
-  file.file.on("data", (chunk: Buffer) => {
-    sizeBytes += chunk.length;
-    hash.update(chunk);
+  const stream = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      sizeBytes += chunk.length;
+      hash.update(chunk);
+      callback(null, chunk);
+    },
   });
 
-  try {
-    await pipeline(file.file, createWriteStream(absolutePath));
-  } catch (error) {
-    await rm(absolutePath, { force: true });
-    throw error;
+  return {
+    stream,
+    result: () => ({
+      sizeBytes,
+      checksum: hash.digest("hex"),
+    }),
+  };
+}
+
+function tempUploadPath(absolutePath: string): string {
+  const directory = path.dirname(absolutePath);
+  const extension = path.extname(absolutePath) || ".upload";
+  const baseName = path.basename(absolutePath, extension);
+  return path.join(directory, `.${baseName}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
+}
+
+function parseContentLength(value: string | string[] | undefined): number | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (!rawValue) {
+    return null;
   }
 
-  return {
-    sizeBytes,
-    checksum: hash.digest("hex"),
-  };
+  const parsed = Number(rawValue);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function mediaUploadErrorCode(error: unknown): string {
+  if (error instanceof Error && error.name === "AbortError") {
+    return "upload_timeout";
+  }
+
+  if (error instanceof Error && /premature close/i.test(error.message)) {
+    return "client_premature_close";
+  }
+
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && code.length > 0) {
+      return code.toLowerCase();
+    }
+  }
+
+  return "upload_failed";
 }
 
 async function upsertMediaRecord(
@@ -464,8 +615,14 @@ async function upsertMediaRecord(
           data: {
             id: fields.mediaId,
             postId: fields.postId,
-            kind: "image",
+            kind: fields.kind,
             status,
+            mimeType: fields.variant === "thumbnail" ? null : fields.mimeType,
+            durationSeconds: fields.variant === "thumbnail" ? null : fields.durationSeconds,
+            transcriptionText:
+              fields.variant === "thumbnail" ? null : fields.transcriptionText,
+            width: fields.variant === "thumbnail" ? null : fields.width,
+            height: fields.variant === "thumbnail" ? null : fields.height,
             originalPreserved: fields.originalPreserved || fields.variant === "original",
             sortOrder: fields.sortOrder,
             checksum: writeResult.checksum,
@@ -478,6 +635,19 @@ async function upsertMediaRecord(
           },
           data: {
             status,
+            kind: fields.kind,
+            mimeType:
+              fields.variant === "thumbnail" ? existing.mimeType : fields.mimeType ?? existing.mimeType,
+            durationSeconds:
+              fields.variant === "thumbnail"
+                ? existing.durationSeconds
+                : fields.durationSeconds ?? existing.durationSeconds,
+            transcriptionText:
+              fields.variant === "thumbnail"
+                ? existing.transcriptionText
+                : fields.transcriptionText ?? existing.transcriptionText,
+            width: fields.variant === "thumbnail" ? existing.width : fields.width ?? existing.width,
+            height: fields.variant === "thumbnail" ? existing.height : fields.height ?? existing.height,
             originalPreserved:
               existing.originalPreserved || fields.originalPreserved || fields.variant === "original",
             sortOrder: fields.sortOrder,
@@ -498,6 +668,11 @@ async function upsertMediaRecord(
           status: media.status,
           variant: fields.variant,
           path: relativePath,
+          mimeType: media.mimeType,
+          durationSeconds: media.durationSeconds,
+          transcriptionText: media.transcriptionText,
+          width: media.width,
+          height: media.height,
           originalPreserved: media.originalPreserved,
           sortOrder: media.sortOrder,
           checksum: media.checksum,
@@ -551,8 +726,18 @@ function parseUploadFields(
   const mediaId = getMultipartString(fields, "mediaId");
   const postId = getMultipartString(fields, "postId");
   const variant = getMultipartString(fields, "variant");
+  const kind = getMultipartString(fields, "kind") ?? "image";
+  const mimeType = getMultipartString(fields, "mimeType");
+  const durationSeconds = getMultipartFloat(fields, "durationSeconds");
+  const transcriptionText = normalizeTranscriptionText(
+    getMultipartString(fields, "transcriptionText"),
+    reply,
+  );
+  const width = getMultipartInteger(fields, "width");
+  const height = getMultipartInteger(fields, "height");
   const originalPreserved = getMultipartBoolean(fields, "originalPreserved") ?? false;
   const sortOrder = getMultipartInteger(fields, "sortOrder") ?? 0;
+  const aiLanguage = parseAILanguage(getMultipartString(fields, "aiLanguage"));
 
   if (!mediaId || !postId || !variant) {
     sendBadRequest(reply, "mediaId, postId, and variant are required");
@@ -564,13 +749,42 @@ function parseUploadFields(
     return null;
   }
 
+  if (!MEDIA_KINDS.has(kind)) {
+    sendBadRequest(reply, "kind must be one of: image, video, audio");
+    return null;
+  }
+
+  if (durationSeconds !== null && (durationSeconds < 0 || durationSeconds > 24 * 60 * 60)) {
+    sendBadRequest(reply, "durationSeconds is invalid");
+    return null;
+  }
+
+  if (transcriptionText === false) {
+    return null;
+  }
+
   return {
     mediaId,
     postId,
     variant: variant as MediaVariant,
+    kind: kind as MediaKind,
+    mimeType,
+    durationSeconds,
+    transcriptionText,
+    width,
+    height,
     originalPreserved,
     sortOrder,
+    aiLanguage,
   };
+}
+
+function parseAILanguage(value: string | null): "auto" | "zh" | "en" {
+  if (value === "zh" || value === "en") {
+    return value;
+  }
+
+  return "auto";
 }
 
 function getMultipartString(fields: MultipartFields, key: string): string | null {
@@ -581,6 +795,22 @@ function getMultipartString(fields: MultipartFields, key: string): string | null
 
   const trimmed = field.value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeTranscriptionText(
+  value: string | null,
+  reply: FastifyReply,
+): string | null | false {
+  if (!value) {
+    return null;
+  }
+
+  if (value.length > MAX_TRANSCRIPTION_LENGTH) {
+    sendBadRequest(reply, `transcriptionText cannot exceed ${MAX_TRANSCRIPTION_LENGTH} characters`);
+    return false;
+  }
+
+  return value;
 }
 
 function getMultipartBoolean(fields: MultipartFields, key: string): boolean | null {
@@ -608,6 +838,16 @@ function getMultipartInteger(fields: MultipartFields, key: string): number | nul
 
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function getMultipartFloat(fields: MultipartFields, key: string): number | null {
+  const value = getMultipartString(fields, key);
+  if (value === null) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function firstField(
@@ -642,6 +882,38 @@ function extensionForMimeType(mimetype: string, filename: string): string {
     return ".webp";
   }
 
+  if (mimetype === "video/mp4") {
+    return ".mp4";
+  }
+
+  if (mimetype === "video/quicktime") {
+    return ".mov";
+  }
+
+  if (mimetype === "audio/mp4" || mimetype === "audio/x-m4a") {
+    return ".m4a";
+  }
+
+  if (mimetype === "audio/aac") {
+    return ".aac";
+  }
+
   const extension = path.extname(filename).toLowerCase();
-  return extension.length > 0 && extension.length <= 10 ? extension : ".img";
+  return extension.length > 0 && extension.length <= 10 ? extension : ".bin";
+}
+
+function isAllowedUpload(mimetype: string, kind: MediaKind, variant: MediaVariant): boolean {
+  if (variant === "thumbnail") {
+    return mimetype.startsWith("image/");
+  }
+
+  if (kind === "image") {
+    return mimetype.startsWith("image/");
+  }
+
+  if (kind === "video") {
+    return mimetype.startsWith("video/") || mimetype === "application/octet-stream";
+  }
+
+  return mimetype.startsWith("audio/") || mimetype === "application/octet-stream";
 }

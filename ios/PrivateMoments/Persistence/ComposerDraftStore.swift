@@ -27,6 +27,7 @@ enum ComposerDraftStore {
             let directory = try draftMediaDirectory(create: false)
             let urls = try FileManager.default
                 .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "image" }
                 .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
             return urls.compactMap { try? Data(contentsOf: $0) }
@@ -37,10 +38,16 @@ enum ComposerDraftStore {
 
     static func saveImages(_ imageData: [Data]) throws {
         let fileManager = FileManager.default
-        let directory = try draftMediaDirectory(create: false)
+        let directory = try draftMediaDirectory(create: true)
 
         if fileManager.fileExists(atPath: directory.path) {
-            try fileManager.removeItem(at: directory)
+            let existingImages = try fileManager
+                .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "image" }
+
+            for imageURL in existingImages {
+                try fileManager.removeItem(at: imageURL)
+            }
         }
 
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)

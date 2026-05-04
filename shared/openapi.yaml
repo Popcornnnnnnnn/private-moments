@@ -91,6 +91,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SyncResponse"
+  /api/v1/ai/media-summary:
+    post:
+      summary: Generate or regenerate an AI summary for one audio/video media file.
+      description: >
+        The Mac server transcribes the stored audio/video media file locally, then
+        calls the configured external Chat Completions provider with the internal
+        transcript. Provider credentials stay server-side, and the iOS client only
+        receives generated summary metadata and lightweight failure status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaSummaryRequest"
+      responses:
+        "200":
+          description: Summary status or generated summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSummaryResponse"
+  /api/v1/ai/media-summary/{summaryId}:
+    delete:
+      summary: Soft delete one generated AI media summary.
+      parameters:
+        - name: summaryId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted summary metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaSummaryResponse"
   /api/v1/media/upload:
     post:
       summary: Upload a media file for a post.
@@ -118,6 +156,20 @@ paths:
                     - compressed
                     - original
                     - thumbnail
+                kind:
+                  type: string
+                  enum:
+                    - image
+                    - video
+                    - audio
+                  default: image
+                mimeType:
+                  type: string
+                durationSeconds:
+                  type: number
+                transcriptionText:
+                  type: string
+                  description: Legacy optional transcript metadata for older clients; new iOS uploads omit it.
                 originalPreserved:
                   type: boolean
                   default: false
@@ -284,7 +336,7 @@ paths:
                     $ref: "#/components/schemas/Post"
   /api/v1/search:
     get:
-      summary: Search server archive by text.
+      summary: Search server archive by post text, comments, and historical media transcript metadata.
       parameters:
         - name: q
           in: query
@@ -626,6 +678,134 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Media"
+        aiTagProcessedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Set when the first ready audio AI summary has attempted automatic tag application.
+        tagsUserEditedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Set after the user edits the complete tag set for this post.
+    Tag:
+      type: object
+      required:
+        - id
+        - type
+        - name
+        - normalizedName
+        - isDefault
+        - isArchived
+        - aiUsableAsPrimary
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - primary
+            - topic
+        name:
+          type: string
+        normalizedName:
+          type: string
+        colorHex:
+          type:
+            - string
+            - "null"
+        isDefault:
+          type: boolean
+        isArchived:
+          type: boolean
+        aiUsableAsPrimary:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        archivedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    TagAlias:
+      type: object
+      required:
+        - id
+        - tagId
+        - alias
+        - normalizedAlias
+        - createdAt
+      properties:
+        id:
+          type: string
+        tagId:
+          type: string
+        alias:
+          type: string
+        normalizedAlias:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    PostTag:
+      type: object
+      required:
+        - id
+        - postId
+        - tagId
+        - role
+        - source
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        postId:
+          type: string
+        tagId:
+          type: string
+        role:
+          type: string
+          enum:
+            - primary
+            - topic
+        source:
+          type: string
+          enum:
+            - manual
+            - ai
+        confidence:
+          type:
+            - number
+            - "null"
+        aiSummaryId:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
     Media:
       type: object
       required:
@@ -641,6 +821,8 @@ components:
           type: string
           enum:
             - image
+            - video
+            - audio
         status:
           type: string
           enum:
@@ -660,6 +842,19 @@ components:
           type:
             - integer
             - "null"
+        mimeType:
+          type:
+            - string
+            - "null"
+        durationSeconds:
+          type:
+            - number
+            - "null"
+        transcriptionText:
+          type:
+            - string
+            - "null"
+          description: Legacy transcript metadata when present; new iOS does not generate or display it.
         compressedSizeBytes:
           type:
             - integer
@@ -689,6 +884,183 @@ components:
           type:
             - string
             - "null"
+    MediaSummaryRequest:
+      type: object
+      required:
+        - postId
+        - mediaId
+      properties:
+        postId:
+          type: string
+          format: uuid
+        mediaId:
+          type: string
+          format: uuid
+        forceRegenerate:
+          type: boolean
+          default: false
+    MediaSummaryResponse:
+      type: object
+      required:
+        - summary
+      properties:
+        summary:
+          $ref: "#/components/schemas/AISummary"
+    AISummary:
+      type: object
+      required:
+        - id
+        - postId
+        - mediaId
+        - status
+        - keyPoints
+        - sections
+        - documentBlocks
+        - promptVersion
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        postId:
+          type: string
+          format: uuid
+        mediaId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - transcribing
+            - summarizing
+            - ready
+            - failed
+            - deleted
+        format:
+          type:
+            - string
+            - "null"
+          enum:
+            - sentence
+            - summary_with_points
+            - sectioned
+            - document
+            - null
+        language:
+          type:
+            - string
+            - "null"
+        overview:
+          type:
+            - string
+            - "null"
+        keyPoints:
+          type: array
+          items:
+            type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/AISummarySection"
+        summaryText:
+          type:
+            - string
+            - "null"
+        documentTitle:
+          type:
+            - string
+            - "null"
+          description: Optional generated display title for v3 document-style summaries.
+        oneLiner:
+          type:
+            - string
+            - "null"
+          description: Short top-level summary for v3 document-style summaries.
+        documentBlocks:
+          type: array
+          description: Native block model rendered by iOS as a Markdown-like summary document. Empty for legacy summaries.
+          items:
+            $ref: "#/components/schemas/AISummaryDocumentBlock"
+        inputTranscriptLength:
+          type:
+            - integer
+            - "null"
+          description: Nullable when no usable transcript was produced or older generated records used a no-transcript path.
+        inputDurationSeconds:
+          type:
+            - number
+            - "null"
+        promptVersion:
+          type: string
+        provider:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        errorCode:
+          type:
+            - string
+            - "null"
+        errorMessage:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    AISummarySection:
+      type: object
+      required:
+        - heading
+        - bullets
+      properties:
+        heading:
+          type: string
+        bullets:
+          type: array
+          items:
+            type: string
+    AISummaryDocumentBlock:
+      type: object
+      required:
+        - kind
+        - level
+        - text
+        - items
+      properties:
+        kind:
+          type: string
+          enum:
+            - heading
+            - paragraph
+            - bullets
+            - numbered_list
+            - ai_suggested
+        level:
+          type: integer
+          enum:
+            - 0
+            - 1
+            - 2
+          description: Heading depth for heading blocks; 0 for non-heading blocks.
+        text:
+          type: string
+        items:
+          type: array
+          items:
+            type: string
     MediaBatchDownloadItem:
       type: object
       required:
@@ -718,6 +1090,9 @@ components:
         - uptimeSeconds
         - counts
         - storage
+        - aiSummaries
+        - tags
+        - sync
       properties:
         serverVersion:
           type: string
@@ -731,6 +1106,12 @@ components:
           $ref: "#/components/schemas/AdminStatusCounts"
         storage:
           $ref: "#/components/schemas/ServerStorageStats"
+        aiSummaries:
+          $ref: "#/components/schemas/AdminAISummaryDiagnostics"
+        tags:
+          $ref: "#/components/schemas/AdminTagDiagnostics"
+        sync:
+          $ref: "#/components/schemas/AdminSyncDiagnostics"
     AdminStatusCounts:
       type: object
       required:
@@ -750,6 +1131,103 @@ components:
           type: integer
         media:
           type: integer
+    AdminAISummaryDiagnostics:
+      type: object
+      required:
+        - total
+        - transcribing
+        - summarizing
+        - ready
+        - failed
+        - deleted
+        - recent
+      properties:
+        total:
+          type: integer
+        transcribing:
+          type: integer
+        summarizing:
+          type: integer
+        ready:
+          type: integer
+        failed:
+          type: integer
+        deleted:
+          type: integer
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAISummaryDiagnosticItem"
+    AdminSyncDiagnostics:
+      type: object
+      required:
+        - latestServerChangeVersion
+      properties:
+        latestServerChangeVersion:
+          type: integer
+    AdminTagDiagnostics:
+      type: object
+      required:
+        - total
+        - primary
+        - topics
+        - archived
+        - aiAssignments
+        - manualAssignments
+      properties:
+        total:
+          type: integer
+        primary:
+          type: integer
+        topics:
+          type: integer
+        archived:
+          type: integer
+        aiAssignments:
+          type: integer
+        manualAssignments:
+          type: integer
+    AdminAISummaryDiagnosticItem:
+      type: object
+      required:
+        - id
+        - mediaId
+        - status
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        mediaId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - transcribing
+            - summarizing
+            - failed
+        errorCode:
+          type:
+            - string
+            - "null"
+        inputTranscriptLength:
+          type:
+            - integer
+            - "null"
+        inputDurationSeconds:
+          type:
+            - number
+            - "null"
+        ageSeconds:
+          type: integer
+          description: Seconds since this non-ready summary record was last updated.
+        retryHint:
+          type: string
+          description: Human-readable diagnostic hint for the current summary state.
+        updatedAt:
+          type: string
+          format: date-time
     ServerStorageStats:
       type: object
       required:
@@ -874,14 +1352,28 @@ components:
             - create_post
             - delete_post
             - update_post
+            - insert_ai_title
             - update_post_favorite
             - create_comment
             - delete_comment
+            - update_media_transcription
+            - upsert_media
+            - upsert_tag
+            - archive_tag
+            - restore_tag
+            - delete_tag
+            - merge_tag
+            - upsert_tag_alias
+            - delete_tag_alias
+            - set_post_tags
         entityType:
           type: string
           enum:
             - post
             - comment
+            - media
+            - tag
+            - tag_alias
         entityId:
           type: string
           format: uuid
@@ -891,10 +1383,28 @@ components:
         payload:
           type: object
           description: >
-            Operation-specific payload. `create_comment` requires `postId`, `text`, and optional `createdAt`.
-            `delete_comment` accepts optional `deletedAt`. Comment server changes use
-            `comment_created` with `{id, postId, text, createdAt, updatedAt, deletedAt}` and
-            `comment_deleted` with `{id, postId, deletedAt}`.
+            Operation-specific payload. `create_comment` uses `entityType: comment`,
+            `entityId` as the comment id, and payload `{postId, text, createdAt}`.
+            `text` is plain text and must be non-empty and at most 500 characters.
+            `delete_comment` uses payload `{postId, deletedAt}`. Server changes include
+            `comment_created` with `{id, postId, text, createdAt, updatedAt, deletedAt}`
+            and `comment_deleted` with `{id, postId, deletedAt}`.
+            `update_media_transcription` is retained for older clients. It uses
+            `entityType: media` and payload `{postId, transcriptionText, updatedAt}`;
+            server changes include `media_transcription_updated` with
+            `{id, postId, transcriptionText, updatedAt}`.
+            Tag vocabulary operations use `upsert_tag`, `archive_tag`,
+            `restore_tag`, `delete_tag`, `merge_tag`, `upsert_tag_alias`, and
+            `delete_tag_alias`. Post assignments use `set_post_tags` with
+            payload `{primaryTagId, topicTagIds, updatedAt}`. Server changes
+            include `tag_updated`, `tag_deleted`, `tag_alias_updated`, `tag_alias_deleted`,
+            `post_tag_updated`, `post_tag_deleted`, and
+            `post_tag_state_updated`.
+            `insert_ai_title` uses `entityType: post` with payload
+            `{summaryId, mediaId, insertedAt}`. The title text is not sent by
+            the client; the server reloads it from a ready audio AI summary and
+            emits `post_updated` with `updateSource: ai_title` when it changes
+            the post text.
           additionalProperties: true
     SyncResponse:
       type: object

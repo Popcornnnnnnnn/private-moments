@@ -35,6 +35,7 @@ model Device {
   updatedPosts Post[] @relation("UpdatedPosts")
   createdComments Comment[] @relation("CreatedComments")
   updatedComments Comment[] @relation("UpdatedComments")
+  requestedAiSummaries AiSummary[] @relation("RequestedAiSummaries")
   syncOperations SyncOperation[]
 
   @@index([userId])
@@ -47,6 +48,8 @@ model Post {
   id                String    @id
   text              String
   isFavorite        Boolean   @default(false) @map("is_favorite")
+  aiTagProcessedAt  DateTime? @map("ai_tag_processed_at")
+  tagsUserEditedAt  DateTime? @map("tags_user_edited_at")
   occurredAt        DateTime  @map("occurred_at")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -61,11 +64,70 @@ model Post {
   updatedByDevice Device? @relation("UpdatedPosts", fields: [updatedByDeviceId], references: [id], onDelete: SetNull)
   media           Media[]
   comments        Comment[]
+  aiSummaries     AiSummary[]
+  tags            PostTag[]
 
   @@index([occurredAt])
   @@index([deletedAt])
   @@index([serverVersion])
   @@map("posts")
+}
+
+model Tag {
+  id                String    @id
+  type              String
+  name              String
+  normalizedName    String    @unique @map("normalized_name")
+  colorHex          String?   @map("color_hex")
+  isDefault         Boolean   @default(false) @map("is_default")
+  isArchived        Boolean   @default(false) @map("is_archived")
+  aiUsableAsPrimary Boolean   @default(false) @map("ai_usable_as_primary")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  archivedAt        DateTime? @map("archived_at")
+
+  aliases  TagAlias[]
+  postTags PostTag[]
+
+  @@index([type])
+  @@index([isArchived])
+  @@map("tags")
+}
+
+model TagAlias {
+  id              String    @id
+  tagId           String    @map("tag_id")
+  alias           String
+  normalizedAlias String    @unique @map("normalized_alias")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([tagId])
+  @@map("tag_aliases")
+}
+
+model PostTag {
+  id          String    @id
+  postId      String    @map("post_id")
+  tagId       String    @map("tag_id")
+  role        String
+  source      String
+  confidence  Float?
+  aiSummaryId String?   @map("ai_summary_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, tagId])
+  @@index([postId])
+  @@index([tagId])
+  @@index([role])
+  @@map("post_tags")
 }
 
 model Media {
@@ -76,6 +138,9 @@ model Media {
   compressedPath      String?   @map("compressed_path")
   originalPath        String?   @map("original_path")
   thumbnailPath       String?   @map("thumbnail_path")
+  mimeType            String?   @map("mime_type")
+  durationSeconds     Float?    @map("duration_seconds")
+  transcriptionText   String?   @map("transcription_text")
   originalPreserved   Boolean   @default(false) @map("original_preserved")
   width               Int?
   height              Int?
@@ -88,11 +153,49 @@ model Media {
   deletedAt           DateTime? @map("deleted_at")
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  aiSummaries AiSummary[]
 
   @@index([postId])
   @@index([status])
   @@index([deletedAt])
   @@map("media")
+}
+
+model AiSummary {
+  id                    String    @id
+  postId                String    @map("post_id")
+  mediaId               String    @unique @map("media_id")
+  status                String
+  format                String?
+  language              String?
+  overview              String?
+  keyPointsJson         String    @default("[]") @map("key_points_json")
+  sectionsJson          String    @default("[]") @map("sections_json")
+  summaryText           String?   @map("summary_text")
+  documentTitle         String?   @map("document_title")
+  oneLiner              String?   @map("one_liner")
+  documentBlocksJson    String    @default("[]") @map("document_blocks_json")
+  inputTranscriptHash   String?   @map("input_transcript_hash")
+  inputTranscriptLength Int?      @map("input_transcript_length")
+  inputDurationSeconds  Float?    @map("input_duration_seconds")
+  promptVersion         String    @map("prompt_version")
+  provider              String?
+  model                 String?
+  errorCode             String?   @map("error_code")
+  errorMessage          String?   @map("error_message")
+  requestedByDeviceId   String?   @map("requested_by_device_id")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  requestedByDevice Device? @relation("RequestedAiSummaries", fields: [requestedByDeviceId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("ai_summaries")
 }
 
 model Comment {
