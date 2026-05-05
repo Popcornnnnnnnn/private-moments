@@ -111,6 +111,8 @@ Current documentation responsibilities:
 
 Use lightweight continuous maintenance by default. Upgrade work to milestone/slice planning when it touches high-risk areas: sync semantics, schema migrations, media storage or recovery, backup or restore, auth/security boundaries, or cross-device behavior.
 
+Keep `main` as the fixed integration/version line. Parallel feature work should happen in dedicated Git worktrees, with one Codex thread bound to one worktree. Feature worktrees may run development, testing, builds, packaging, and UAT, but server runtime data should be isolated by default and real iPhone installs must not downgrade schema, clear app containers, lose unsynced local data, or otherwise risk existing personal data without an explicit recovery checkpoint.
+
 Every non-trivial change must close with a short summary, fresh verification evidence, known issues or next steps, and updates to affected `.gsd` or `docs/` files.
 
 ## Milestone Sequence

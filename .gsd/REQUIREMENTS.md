@@ -76,6 +76,14 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M010/S08
 - Validation: Schema includes `ai_usage_events`; AI provider wrappers record usage without transcript/prompt/summary/review input bodies; `/api/v1/admin/status.aiUsage` returns safe aggregates; iOS Settings renders the token usage section.
 
+### R048 — Parallel development must use feature worktrees while preserving live data safety.
+- Class: operational
+- Status: active
+- Description: `main` remains the fixed integration/version line. Each feature branch must use its own Git worktree for development, testing, building, packaging, and real-device UAT. Feature worktrees must use isolated server runtime data by default, and real iPhone installs from worktrees must preserve the existing app container and protect unsynced local data unless an explicitly planned recovery flow says otherwise.
+- Why it matters: Branch switching inside one working directory makes Codex threads, builds, and merges hard to reason about. More importantly, Private Moments contains personal SQLite/media data, so temporary code must not accidentally downgrade schema, wipe local data, or write experiments into the live archive.
+- Source: branch/worktree workflow discussion 2026-05-06
+- Validation: New feature work starts in a dedicated worktree; completion summaries name the worktree/branch used; high-risk worktree installs include Sync Health/outbox review plus backup/container-copy evidence or an explicit recovery checkpoint; merged worktrees and branches are removed after integration.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active

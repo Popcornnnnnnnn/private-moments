@@ -30,6 +30,28 @@ Private Moments 使用两层文档：
 
 默认使用轻量连续维护。只有当风险类别需要时，才升级为 milestone/slice planning。
 
+## 分支和 Worktree 纪律
+
+`main` 是固定版本的集成线。它用于保存已经合并、可继续验证和可继续发版的项目状态，不作为日常功能开发目录使用。
+
+每个功能分支只承载一个边界清楚的迭代。具体开发、测试、构建、打包和真实设备安装，默认都在该功能分支对应的独立 Git worktree 中完成。不要在 `main` 工作目录里来回切换功能分支，也不要让多个 Codex thread 共享同一个工作目录做不同分支的开发。
+
+推荐约束：
+
+- 一个 Codex thread 固定对应一个 worktree。
+- 功能开发前，从 `main` 创建或移交到独立 worktree。
+- 功能 worktree 内可以提交 checkpoint、运行 server/admin/iOS build、做真实设备安装和 UAT。
+- `main` worktree 只做最终合并、合并后验证、release candidate 检查和稳定服务重启。
+- 功能合并并确认不再继续开发后，删除对应 worktree 和已合并分支。
+
+Worktree 是代码工作目录隔离，不是数据隔离。数据一致性由 runtime 配置、iOS bundle/container 行为和迁移兼容性保证：
+
+- Feature worktree 启动 Mac server 时，默认使用独立端口和独立 data directory，避免临时分支写入当前 live archive。
+- 只有在明确做最终集成验证、且已经确认当前分支就是准备合入的版本时，才允许让 worktree 指向 live data。
+- 从 feature worktree 安装到真实 iPhone 会更新同一个 `Moments` app bundle，并继续使用同一个 app container。安装前必须确认分支基于当前 `main`，不会降级本地 SQLite/schema、删除 app container、清空 outbox、改变 bundle id/app group，或执行破坏性迁移。
+- Mac archive backup 只保护已经同步到 Mac archive 的数据。若 iPhone 可能有未同步 outbox、draft、local media cache 或 local-only 数据，真实设备安装前必须先同步确认，或复制 iPhone app container 作为安装前恢复点。
+- 任何涉及 SQLite schema、sync、media storage/recovery、backup/restore、auth/security 或真实设备恢复的 worktree 安装，都必须升级到 milestone/slice planning，并在安装前准备可恢复证据，例如 Mac archive backup、export/import artifact，或 iPhone app container copy。
+
 ### Quick Track
 
 低风险工作走 quick track，例如：

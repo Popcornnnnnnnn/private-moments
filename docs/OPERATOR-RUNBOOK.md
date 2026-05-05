@@ -53,6 +53,63 @@ curl -fsS http://127.0.0.1:3210/api/v1/health
 
 `/api/v1/health` 的 `schemaVersion` 必须和 `server/src/config/app-config.ts` 中的 `SCHEMA_VERSION` 一致。若 build 通过但 health 仍返回旧 schema，说明 LaunchAgent 或当前 server 进程仍在运行旧代码，先重启服务再继续验证。
 
+## Worktree 开发和数据安全
+
+`main` 工作目录只作为固定版本的集成线。功能开发、测试、构建、打包和真实设备 UAT 默认在独立 worktree 中完成。
+
+创建功能 worktree：
+
+```bash
+git worktree list
+mkdir -p ../private-moments-worktrees
+git worktree add -b codex/<topic> ../private-moments-worktrees/<topic> main
+```
+
+在 Codex App 中，一个 thread 固定使用一个 worktree。不要在同一个工作目录中反复切换 `main` 和功能分支。功能完成后，先在功能 worktree 中提交 checkpoint 并完成对应验证，再回到 `main` 工作目录合并。
+
+合并后清理：
+
+```bash
+git worktree remove ../private-moments-worktrees/<topic>
+git branch -d codex/<topic>
+git worktree list
+```
+
+### Worktree server 数据隔离
+
+Worktree 隔离的是代码目录，不自动隔离 runtime data。临时功能分支启动 server 时，默认使用独立端口和独立 data directory，不要直接写当前 live archive：
+
+```bash
+mkdir -p server/data-worktree
+PORT=3310 \
+PRIVATE_MOMENTS_DATA_DIR="$PWD/server/data-worktree" \
+DATABASE_URL="file:$PWD/server/data-worktree/app.sqlite" \
+npm run server:dev
+```
+
+如果需要对临时 data directory 初始化 schema，先在同一组环境变量下运行 Prisma deploy 或 `setup:local`。不要删除或重建已有真实 SQLite 文件来解决迁移问题。
+
+只有在准备最终集成验证时，才允许让当前代码指向 live data。这样做前必须确认：
+
+- 当前分支就是准备合入 `main` 的版本。
+- 已经有可恢复的 archive backup、export artifact，或其他等价恢复点。
+- 没有另一个 3210 server 进程仍在运行旧代码。
+- `/api/v1/health` 返回的 schemaVersion 与当前代码一致。
+
+### Worktree iOS 安装数据安全
+
+真实 iPhone 上的 `Moments` 使用固定 bundle id。无论 app 是从 `main` 还是 feature worktree 打包安装，只要 bundle id 不变，iOS 都会继续使用同一个 app container。这是保留用户数据的基础，但也意味着临时分支的代码会直接运行在现有本地数据上。
+
+从 feature worktree 安装到真实 iPhone 前，必须确认：
+
+- 分支基于当前 `main`，不是旧分支或旧 schema 回退。
+- 没有改变 bundle id、App Group id、local database 文件位置或 media cache 路径。
+- 没有删除 app、清空 app container、重置 SQLite、清空 outbox 或清理 media cache 的调试代码。
+- Sync Health 没有显示必须保留的未同步 outbox、local-only draft 或 media upload 队列；如果有，先完成 Sync Now，或复制 app container 后再安装。
+- 涉及 SQLite、sync cursor、outbox、media recovery、backup/restore、auth 或真实设备恢复的变更，已经按 milestone/slice planning 准备验证和恢复方案。
+
+如果需要验证高风险 iOS 变更，优先在 simulator 或隔离数据上做第一轮。真实 iPhone 安装前，先创建 Mac archive backup。注意 Mac archive backup 只保护已经同步到 Mac archive 的数据；如果 iPhone 可能还有未同步本地数据，必须用 `xcrun devicectl` copy app container，保留安装前的本地数据库和媒体 cache 证据。
+
 ## Archive / Backup / Restore
 
 Archive 功能用于自用灾难恢复，入口在 Mac Admin 的 `Archive` tab。日常备份/恢复不需要直接运行 restic 命令，但 Mac 上必须安装 restic：
