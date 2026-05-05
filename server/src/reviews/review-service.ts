@@ -12,6 +12,7 @@ import {
   type ReviewRangeMode,
   type ReviewTrigger,
 } from "../ai/review-generation.js";
+import { recordAIUsageEvent } from "../ai/usage-ledger.js";
 import type { AppConfig } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
 import { assertReviewMomentCount, MAX_REVIEW_INPUT_MOMENTS } from "./review-limits.js";
@@ -20,6 +21,8 @@ import { reviewToMarkdown } from "./review-markdown.js";
 const DEFAULT_SETTINGS_ID = "default";
 const REVIEW_MEMORY_SCOPE = "periodic_review";
 const REVIEW_MEMORY_FEEDBACK_KEY = "feedback_preferences";
+const REVIEW_GENERATION_STALE_MS = 15 * 60 * 1000;
+let inFlightReviewGeneration: Promise<Review | null> | null = null;
 
 type ReviewPost = Prisma.PostGetPayload<{
   include: {
@@ -78,6 +81,35 @@ export class ReviewService {
   }
 
   async generate(input: GenerateReviewInput): Promise<Review> {
+    const existing = await this.activeGeneratingReview();
+    if (existing) {
+      return existing;
+    }
+
+    if (inFlightReviewGeneration) {
+      const active = await this.activeGeneratingReview();
+      if (active) {
+        return active;
+      }
+
+      const generated = await inFlightReviewGeneration;
+      if (generated) {
+        return generated;
+      }
+    }
+
+    const task = this.generateUnlocked(input);
+    inFlightReviewGeneration = task;
+    try {
+      return await task;
+    } finally {
+      if (inFlightReviewGeneration === task) {
+        inFlightReviewGeneration = null;
+      }
+    }
+  }
+
+  private async generateUnlocked(input: GenerateReviewInput): Promise<Review> {
     const reviewId = randomUUID();
     const created = await this.context.prisma.review.create({
       data: {
@@ -99,7 +131,13 @@ export class ReviewService {
     try {
       const inputPack = await this.buildInputPack(input);
       const digest = reviewInputDigest(inputPack);
-      const output = await generateReview(this.context.config.aiSummary, inputPack);
+      const output = await generateReview(this.context.config.aiSummary, inputPack, {
+        feature: "weekly_review",
+        subjectType: "review",
+        subjectId: created.id,
+        promptVersion: REVIEW_PROMPT_VERSION,
+        recorder: (event) => recordAIUsageEvent(this.context.prisma, event),
+      });
       const ready = await this.context.prisma.review.update({
         where: {
           id: created.id,
@@ -162,6 +200,11 @@ export class ReviewService {
       return null;
     }
 
+    const generating = await this.activeGeneratingReview();
+    if (generating) {
+      return generating;
+    }
+
     return this.generate({
       kind: parseReviewKind(existing.kind),
       rangeMode: parseReviewRangeMode(existing.rangeMode),
@@ -170,6 +213,83 @@ export class ReviewService {
       trigger: "regenerate",
       regeneratedFromReviewId: existing.id,
     });
+  }
+
+  private async activeGeneratingReview(now = new Date()): Promise<Review | null> {
+    const staleCutoff = new Date(now.getTime() - REVIEW_GENERATION_STALE_MS);
+    const staleReviews = await this.context.prisma.review.findMany({
+      where: {
+        status: "generating",
+        deletedAt: null,
+        updatedAt: {
+          lt: staleCutoff,
+        },
+      },
+      orderBy: {
+        updatedAt: "asc",
+      },
+      take: 20,
+    });
+
+    for (const stale of staleReviews) {
+      await this.context.prisma.review.update({
+        where: {
+          id: stale.id,
+        },
+        data: {
+          status: "failed",
+          errorCode: "review_generation_timeout",
+          errorMessage: "Review generation timed out. Please regenerate.",
+        },
+      });
+      await this.context.fileLogger.warn("review.generation_timed_out", {
+        reviewId: stale.id,
+        kind: stale.kind,
+        trigger: stale.trigger,
+        updatedAt: stale.updatedAt.toISOString(),
+      });
+    }
+
+    return this.context.prisma.review.findFirst({
+      where: {
+        status: "generating",
+        deletedAt: null,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
+  }
+
+  async deleteReview(reviewId: string): Promise<Review | null> {
+    const review = await this.context.prisma.review.findUnique({
+      where: {
+        id: reviewId,
+      },
+    });
+    if (!review) {
+      return null;
+    }
+
+    if (review.deletedAt) {
+      return review;
+    }
+
+    const deleted = await this.context.prisma.review.update({
+      where: {
+        id: review.id,
+      },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+
+    await this.context.fileLogger.info("review.deleted", {
+      reviewId: deleted.id,
+      kind: deleted.kind,
+      status: deleted.status,
+    });
+    return deleted;
   }
 
   async saveFeedback(reviewId: string, type: string, note: string | null): Promise<void> {

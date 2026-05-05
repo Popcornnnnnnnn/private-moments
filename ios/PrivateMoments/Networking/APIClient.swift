@@ -184,6 +184,13 @@ struct APIClient: Sendable {
         return response.review
     }
 
+    func deleteReview(reviewId: String) async throws -> ReviewPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/\(reviewId)"))
+        request.httpMethod = "DELETE"
+        let response: ReviewResponse = try await send(request)
+        return response.review
+    }
+
     func sendReviewFeedback(reviewId: String, type: String, note: String? = nil) async throws {
         var request = try authorizedRequest(url: endpoint("api/v1/reviews/\(reviewId)/feedback"))
         request.httpMethod = "POST"

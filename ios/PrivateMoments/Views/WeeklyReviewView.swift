@@ -12,9 +12,13 @@ struct WeeklyReviewListView: View {
                         await store.generateWeeklyReview()
                     }
                 } label: {
-                    Label(L10n.t("Generate Last 7 Days", appLanguage), systemImage: "sparkles")
+                    if store.isReviewGenerationInFlight {
+                        Label(L10n.t("Generating review", appLanguage), systemImage: "hourglass")
+                    } else {
+                        Label(L10n.t("Generate Last 7 Days", appLanguage), systemImage: "sparkles")
+                    }
                 }
-                .disabled(!store.isAuthenticated || store.isLoadingReviews)
+                .disabled(!store.isAuthenticated || store.isLoadingReviews || store.isReviewGenerationInFlight)
             }
 
             Section(L10n.t("Recent Reviews", appLanguage)) {
@@ -31,6 +35,12 @@ struct WeeklyReviewListView: View {
                             WeeklyReviewDetailView(review: review)
                         } label: {
                             WeeklyReviewRow(review: review)
+                        }
+                        .disabled(store.isReviewGenerationInFlight || store.isReviewMutationInFlight(review))
+                    }
+                    .onDelete { offsets in
+                        Task {
+                            await store.deleteReviews(at: offsets)
                         }
                     }
                 }
@@ -91,12 +101,14 @@ private struct WeeklyReviewRow: View {
 struct WeeklyReviewDetailView: View {
     @EnvironmentObject private var store: TimelineStore
     @Environment(\.appLanguage) private var appLanguage
+    @Environment(\.dismiss) private var dismiss
 
     let review: ReviewPayload
 
     @State private var selectedMomentId: String?
     @State private var feedbackNote = ""
     @State private var showMissedPointPrompt = false
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         ScrollView {
@@ -122,9 +134,13 @@ struct WeeklyReviewDetailView: View {
                             await store.regenerateReview(review)
                         }
                     } label: {
-                        Label(L10n.t("Regenerate", appLanguage), systemImage: "arrow.clockwise")
+                        if isBusy {
+                            Label(L10n.t("Regenerating review", appLanguage), systemImage: "hourglass")
+                        } else {
+                            Label(L10n.t("Regenerate", appLanguage), systemImage: "arrow.clockwise")
+                        }
                     }
-                    .disabled(store.isLoadingReviews)
+                    .disabled(isBusy || store.isLoadingReviews)
 
                     Button {
                         Task {
@@ -133,7 +149,14 @@ struct WeeklyReviewDetailView: View {
                     } label: {
                         Label(L10n.t("Publish as Moment", appLanguage), systemImage: "square.and.arrow.up")
                     }
-                    .disabled(review.status != "ready" || review.publishedPostId != nil)
+                    .disabled(isBusy || review.status != "ready" || review.publishedPostId != nil)
+
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label(L10n.t("Delete Review", appLanguage), systemImage: "trash")
+                    }
+                    .disabled(isBusy)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -161,6 +184,19 @@ struct WeeklyReviewDetailView: View {
             }
             Button(L10n.t("Cancel", appLanguage), role: .cancel) {}
         }
+        .alert(L10n.t("Delete review?", appLanguage), isPresented: $showDeleteConfirmation) {
+            Button(L10n.t("Delete", appLanguage), role: .destructive) {
+                Task {
+                    await store.deleteReview(review)
+                    dismiss()
+                }
+            }
+            Button(L10n.t("Cancel", appLanguage), role: .cancel) {}
+        }
+    }
+
+    private var isBusy: Bool {
+        store.isReviewGenerationInFlight || store.isReviewMutationInFlight(review)
     }
 
     private var header: some View {
@@ -178,6 +214,15 @@ struct WeeklyReviewDetailView: View {
             Text(rangeTitle)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
+
+            if isBusy {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(L10n.t("Regenerating review", appLanguage))
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -296,11 +341,12 @@ struct WeeklyReviewDetailView: View {
             } else {
                 Text(review.errorMessage ?? L10n.t("Review failed", appLanguage))
                     .foregroundStyle(.secondary)
-                Button(L10n.t("Regenerate", appLanguage)) {
+                Button(isBusy ? L10n.t("Regenerating review", appLanguage) : L10n.t("Regenerate", appLanguage)) {
                     Task {
                         await store.regenerateReview(review)
                     }
                 }
+                .disabled(isBusy)
             }
         }
     }

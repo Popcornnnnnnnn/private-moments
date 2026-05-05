@@ -6,6 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import type { AISummaryConfig } from "../config/app-config.js";
+import { recordCompletionUsage, type AIUsageContext } from "./usage.js";
 
 export const MEDIA_SUMMARY_PROMPT_VERSION = "media-summary-v3";
 const execFileAsync = promisify(execFile);
@@ -80,6 +81,7 @@ export interface MediaFileSummaryOutput {
 
 export interface MediaSummaryGenerationHooks {
   onTranscriptReady?: () => Promise<void>;
+  usageContext?: AIUsageContext;
 }
 
 interface TopicTagContext {
@@ -198,17 +200,18 @@ function documentSummaryText(output: MediaSummaryOutput): string {
 export async function generateMediaSummary(
   config: AISummaryConfig,
   input: MediaSummaryInput,
+  usageContext?: AIUsageContext,
 ): Promise<MediaSummaryOutput> {
   if (!config.apiKey) {
     throw new AISummaryProviderError("not_configured", "AI summary provider is not configured");
   }
 
-  const response = await callChatCompletions(config, input);
+  const response = await callChatCompletions(config, input, usageContext);
   let output = ensureDocumentTitleForRecognizableSummary(
     normalizeSummaryTagsForContext(validateSummaryOutput(response), input),
   );
   if (needsTagFallback(output.suggestedTags) && input.transcriptText.trim().length >= 8) {
-    const fallbackTags = await generateTagSuggestions(config, input);
+    const fallbackTags = await generateTagSuggestions(config, input, usageContext);
     output = normalizeSummaryTagsForContext(
       {
         ...output,
@@ -238,7 +241,7 @@ export async function generateMediaSummaryFromFile(
     transcriptText = await transcribeMediaFile(config, input);
   } catch (error) {
     if (shouldFallbackToAudioInput(error)) {
-      return generateMediaSummaryFromAudioInput(config, input);
+      return generateMediaSummaryFromAudioInput(config, input, hooks);
     }
 
     throw error;
@@ -258,16 +261,21 @@ export async function generateMediaSummaryFromFile(
       transcriptText: trimmedTranscript,
       durationSeconds: input.durationSeconds,
       aiLanguage: input.aiLanguage ?? "auto",
-    }),
+    }, hooks.usageContext),
   };
 }
 
 async function generateMediaSummaryFromAudioInput(
   config: AISummaryConfig,
   input: MediaFileSummaryInput,
+  hooks: MediaSummaryGenerationHooks,
 ): Promise<MediaFileSummaryOutput> {
   const summary = ensureDocumentTitleForRecognizableSummary(
-    normalizeSummaryTagsForContext(validateSummaryOutput(await callChatCompletionsWithAudio(config, input)), {
+    normalizeSummaryTagsForContext(validateSummaryOutput(await callChatCompletionsWithAudio(
+      config,
+      input,
+      hooks.usageContext,
+    )), {
       durationSeconds: input.durationSeconds,
     }),
   );
@@ -430,9 +438,14 @@ async function transcribeMediaFileWithOpenAI(
 async function callChatCompletions(
   config: AISummaryConfig,
   input: MediaSummaryInput,
+  usageContext?: AIUsageContext,
 ): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const systemContent = systemPrompt(input.aiLanguage ?? "auto");
+  const userContent = userPrompt(input);
+  const inputChars = systemContent.length + userContent.length + JSON.stringify(summaryJsonSchema()).length;
+  const startedAt = Date.now();
 
   try {
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -449,11 +462,11 @@ async function callChatCompletions(
         messages: [
           {
             role: "system",
-            content: systemPrompt(input.aiLanguage ?? "auto"),
+            content: systemContent,
           },
           {
             role: "user",
-            content: userPrompt(input),
+            content: userContent,
           },
         ],
         response_format: {
@@ -468,6 +481,14 @@ async function callChatCompletions(
     });
 
     if (!response.ok) {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        durationMs: Date.now() - startedAt,
+        errorCode: `provider_http_${response.status}`,
+      });
       throw new AISummaryProviderError(
         `provider_http_${response.status}`,
         `AI provider returned HTTP ${response.status}`,
@@ -477,12 +498,41 @@ async function callChatCompletions(
     const parsed = (await response.json()) as unknown;
     const content = extractMessageContent(parsed);
     if (!content) {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+        errorCode: "empty_response",
+      });
       throw new AISummaryProviderError("empty_response", "AI provider returned no summary");
     }
 
     try {
-      return JSON.parse(content) as unknown;
+      const parsedContent = JSON.parse(content) as unknown;
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "success",
+        inputChars,
+        outputChars: content.length,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+      });
+      return parsedContent;
     } catch {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        outputChars: content.length,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+        errorCode: "invalid_json",
+      });
       throw new AISummaryProviderError("invalid_json", "AI provider returned invalid JSON");
     }
   } catch (error) {
@@ -491,9 +541,25 @@ async function callChatCompletions(
     }
 
     if (error instanceof Error && error.name === "AbortError") {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        durationMs: Date.now() - startedAt,
+        errorCode: "provider_timeout",
+      });
       throw new AISummaryProviderError("provider_timeout", "AI provider request timed out");
     }
 
+    await recordCompletionUsage(usageContext, {
+      provider: config.provider,
+      model: config.model,
+      status: "failed",
+      inputChars,
+      durationMs: Date.now() - startedAt,
+      errorCode: "provider_request_failed",
+    });
     throw new AISummaryProviderError("provider_request_failed", "AI provider request failed");
   } finally {
     clearTimeout(timeout);
@@ -503,9 +569,10 @@ async function callChatCompletions(
 async function generateTagSuggestions(
   config: AISummaryConfig,
   input: MediaSummaryInput,
+  parentUsageContext?: AIUsageContext,
 ): Promise<MediaSummaryTagOutput> {
   try {
-    const value = await callTagCompletions(config, input);
+    const value = await callTagCompletions(config, input, parentUsageContext);
     const suggestedTags = parseSuggestedTags(value);
     return normalizeSuggestedTagsForContext(
       {
@@ -525,12 +592,40 @@ async function generateTagSuggestions(
 async function callTagCompletions(
   config: AISummaryConfig,
   input: MediaSummaryInput,
+  parentUsageContext?: AIUsageContext,
 ): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const usageContext = parentUsageContext
+    ? {
+        ...parentUsageContext,
+        feature: "tag_suggestion",
+      }
+    : undefined;
 
   try {
     const transcript = input.transcriptText.trim();
+    const systemContent = [
+      "You classify private spoken notes into organization tags for a personal timeline app.",
+      "Return only the requested JSON object.",
+      "primary must be one of 日记, 想法, 学习整理, 情绪, 碎碎念, 复盘, or null only when the transcript has no meaningful content.",
+      "Use primary 想法 for product ideas, feature requests, app/UI design thoughts, opinions, plans, and design discussions.",
+      "Use primary 学习整理 for learning notes, primary 日记 for day recaps, primary 情绪 for explicit emotional venting, primary 复盘 for after-event reflection, and primary 碎碎念 for pure casual/test notes.",
+      "topics must be concrete reusable subjects from the transcript, at most 3 items. Use Chinese canonical names when natural.",
+      "Be conservative with topic count: one clear subject should produce one topic. Multiple topics are only for clearly separate themes, not details under the same theme.",
+      "For short notes, prefer exactly one topic unless the transcript explicitly covers multiple unrelated subjects with high confidence.",
+      "Return confidence numbers from 0 to 1. For recognizable content, primary confidence should normally be at least 0.6.",
+    ].join("\n");
+    const userContent = [
+      `Media duration seconds: ${input.durationSeconds ?? "unknown"}`,
+      `Transcript characters: ${transcript.length}`,
+      `Suggested topic count: ${topicCountHint(input)}`,
+      "",
+      "Transcript:",
+      transcript,
+    ].join("\n");
+    const inputChars = systemContent.length + userContent.length + JSON.stringify(tagSuggestionJsonSchema()).length;
+    const startedAt = Date.now();
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: "POST",
       signal: controller.signal,
@@ -545,28 +640,11 @@ async function callTagCompletions(
         messages: [
           {
             role: "system",
-            content: [
-              "You classify private spoken notes into organization tags for a personal timeline app.",
-              "Return only the requested JSON object.",
-              "primary must be one of 日记, 想法, 学习整理, 情绪, 碎碎念, 复盘, or null only when the transcript has no meaningful content.",
-              "Use primary 想法 for product ideas, feature requests, app/UI design thoughts, opinions, plans, and design discussions.",
-              "Use primary 学习整理 for learning notes, primary 日记 for day recaps, primary 情绪 for explicit emotional venting, primary 复盘 for after-event reflection, and primary 碎碎念 for pure casual/test notes.",
-              "topics must be concrete reusable subjects from the transcript, at most 3 items. Use Chinese canonical names when natural.",
-              "Be conservative with topic count: one clear subject should produce one topic. Multiple topics are only for clearly separate themes, not details under the same theme.",
-              "For short notes, prefer exactly one topic unless the transcript explicitly covers multiple unrelated subjects with high confidence.",
-              "Return confidence numbers from 0 to 1. For recognizable content, primary confidence should normally be at least 0.6.",
-            ].join("\n"),
+            content: systemContent,
           },
           {
             role: "user",
-            content: [
-              `Media duration seconds: ${input.durationSeconds ?? "unknown"}`,
-              `Transcript characters: ${transcript.length}`,
-              `Suggested topic count: ${topicCountHint(input)}`,
-              "",
-              "Transcript:",
-              transcript,
-            ].join("\n"),
+            content: userContent,
           },
         ],
         response_format: {
@@ -581,6 +659,14 @@ async function callTagCompletions(
     });
 
     if (!response.ok) {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        durationMs: Date.now() - startedAt,
+        errorCode: `tag_provider_http_${response.status}`,
+      });
       throw new AISummaryProviderError(
         `tag_provider_http_${response.status}`,
         `AI tag provider returned HTTP ${response.status}`,
@@ -590,19 +676,54 @@ async function callTagCompletions(
     const parsed = (await response.json()) as unknown;
     const content = extractMessageContent(parsed);
     if (!content) {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+        errorCode: "tag_empty_response",
+      });
       throw new AISummaryProviderError("tag_empty_response", "AI provider returned no tags");
     }
 
-    return JSON.parse(content) as unknown;
+    const parsedContent = JSON.parse(content) as unknown;
+    await recordCompletionUsage(usageContext, {
+      provider: config.provider,
+      model: config.model,
+      status: "success",
+      inputChars,
+      outputChars: content.length,
+      response: parsed,
+      durationMs: Date.now() - startedAt,
+    });
+    return parsedContent;
   } catch (error) {
     if (error instanceof AISummaryProviderError) {
       throw error;
     }
 
     if (error instanceof Error && error.name === "AbortError") {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars: 0,
+        durationMs: config.timeoutMs,
+        errorCode: "tag_provider_timeout",
+      });
       throw new AISummaryProviderError("tag_provider_timeout", "AI tag request timed out");
     }
 
+    await recordCompletionUsage(usageContext, {
+      provider: config.provider,
+      model: config.model,
+      status: "failed",
+      inputChars: 0,
+      durationMs: 0,
+      errorCode: "tag_provider_failed",
+    });
     throw new AISummaryProviderError("tag_provider_failed", "AI tag request failed");
   } finally {
     clearTimeout(timeout);
@@ -612,6 +733,7 @@ async function callTagCompletions(
 async function callChatCompletionsWithAudio(
   config: AISummaryConfig,
   input: MediaFileSummaryInput,
+  usageContext?: AIUsageContext,
 ): Promise<unknown> {
   if (!config.apiKey) {
     throw new AISummaryProviderError("not_configured", "AI summary provider is not configured");
@@ -619,6 +741,10 @@ async function callChatCompletionsWithAudio(
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const systemContent = audioSystemPrompt(input.aiLanguage ?? "auto");
+  const userText = audioUserPrompt(input);
+  const inputChars = systemContent.length + userText.length + JSON.stringify(summaryJsonSchema()).length;
+  const startedAt = Date.now();
 
   try {
     const audioData = await convertMediaFileToWavBase64(input.filePath);
@@ -637,14 +763,14 @@ async function callChatCompletionsWithAudio(
         messages: [
           {
             role: "system",
-            content: audioSystemPrompt(input.aiLanguage ?? "auto"),
+            content: systemContent,
           },
           {
             role: "user",
             content: [
               {
                 type: "text",
-                text: audioUserPrompt(input),
+                text: userText,
               },
               {
                 type: "input_audio",
@@ -668,6 +794,14 @@ async function callChatCompletionsWithAudio(
     });
 
     if (!response.ok) {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        durationMs: Date.now() - startedAt,
+        errorCode: `audio_input_http_${response.status}`,
+      });
       throw new AISummaryProviderError(
         `audio_input_http_${response.status}`,
         `AI audio input provider returned HTTP ${response.status}`,
@@ -677,12 +811,41 @@ async function callChatCompletionsWithAudio(
     const parsed = (await response.json()) as unknown;
     const content = extractMessageContent(parsed);
     if (!content) {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+        errorCode: "empty_response",
+      });
       throw new AISummaryProviderError("empty_response", "AI provider returned no summary");
     }
 
     try {
-      return JSON.parse(content) as unknown;
+      const parsedContent = JSON.parse(content) as unknown;
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "success",
+        inputChars,
+        outputChars: content.length,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+      });
+      return parsedContent;
     } catch {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        outputChars: content.length,
+        response: parsed,
+        durationMs: Date.now() - startedAt,
+        errorCode: "invalid_json",
+      });
       throw new AISummaryProviderError("invalid_json", "AI provider returned invalid JSON");
     }
   } catch (error) {
@@ -691,9 +854,25 @@ async function callChatCompletionsWithAudio(
     }
 
     if (error instanceof Error && error.name === "AbortError") {
+      await recordCompletionUsage(usageContext, {
+        provider: config.provider,
+        model: config.model,
+        status: "failed",
+        inputChars,
+        durationMs: Date.now() - startedAt,
+        errorCode: "audio_input_timeout",
+      });
       throw new AISummaryProviderError("audio_input_timeout", "AI audio input request timed out");
     }
 
+    await recordCompletionUsage(usageContext, {
+      provider: config.provider,
+      model: config.model,
+      status: "failed",
+      inputChars,
+      durationMs: Date.now() - startedAt,
+      errorCode: "audio_input_failed",
+    });
     throw new AISummaryProviderError("audio_input_failed", "AI audio input request failed");
   } finally {
     clearTimeout(timeout);

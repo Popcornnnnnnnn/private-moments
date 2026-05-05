@@ -26,6 +26,8 @@ final class TimelineStore: ObservableObject {
     @Published var automaticSyncEnabled = AppSettings.automaticSyncEnabled
     @Published var weeklyReviews: [ReviewPayload] = []
     @Published var isLoadingReviews = false
+    @Published var reviewGenerationInFlightId: String?
+    @Published var reviewMutationIds = Set<String>()
     @Published var autoWeeklyReviewEnabled = AppSettings.autoWeeklyReviewEnabled
     @Published var publishWeeklyReviewToMoments = AppSettings.publishWeeklyReviewToMoments
 
@@ -185,18 +187,88 @@ final class TimelineStore: ObservableObject {
     }
 
     func generateWeeklyReview() async {
+        guard !isReviewGenerationInFlight else {
+            return
+        }
+
+        reviewGenerationInFlightId = "manual-generate"
+        syncMessage = "Generating review"
+        defer {
+            reviewGenerationInFlightId = nil
+        }
+
         await runReviewMutation { client in
             try await client.generateWeeklyReview()
         }
     }
 
     func regenerateReview(_ review: ReviewPayload) async {
+        guard !isReviewGenerationInFlight else {
+            return
+        }
+
+        reviewGenerationInFlightId = review.id
+        syncMessage = "Regenerating review"
+        defer {
+            reviewGenerationInFlightId = nil
+        }
+
         await runReviewMutation { client in
             try await client.regenerateReview(reviewId: review.id)
         }
     }
 
+    func deleteReview(_ review: ReviewPayload) async {
+        guard !isReviewGenerationInFlight, !isReviewMutationInFlight(review) else {
+            return
+        }
+
+        reviewMutationIds.insert(review.id)
+        syncMessage = "Deleting review"
+        defer {
+            reviewMutationIds.remove(review.id)
+        }
+
+        guard isAuthenticated else {
+            errorMessage = "Log in first"
+            return
+        }
+
+        do {
+            let token = try KeychainStore.deviceToken()
+            _ = try await withAvailableAPIClient(token: token) { client in
+                try await client.deleteReview(reviewId: review.id)
+            }
+            weeklyReviews.removeAll { $0.id == review.id }
+            syncMessage = "Review deleted"
+            await refreshReviews()
+        } catch {
+            handleSyncError(error, showErrors: true)
+        }
+    }
+
+    func deleteReviews(at offsets: IndexSet) async {
+        let reviews = offsets.compactMap { index in
+            weeklyReviews.indices.contains(index) ? weeklyReviews[index] : nil
+        }
+        for review in reviews {
+            await deleteReview(review)
+        }
+    }
+
+    func isReviewMutationInFlight(_ review: ReviewPayload) -> Bool {
+        review.status == "generating" || reviewMutationIds.contains(review.id)
+    }
+
+    var isReviewGenerationInFlight: Bool {
+        reviewGenerationInFlightId != nil || weeklyReviews.contains { $0.status == "generating" }
+    }
+
     func publishReviewAsMoment(_ review: ReviewPayload) async {
+        guard !isReviewGenerationInFlight else {
+            return
+        }
+
         await runReviewMutation { client in
             try await client.publishReviewAsMoment(reviewId: review.id)
         }

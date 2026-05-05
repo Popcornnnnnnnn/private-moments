@@ -396,7 +396,7 @@ curl -fsS http://127.0.0.1:3210/api/v1/admin/status \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-响应应包含 `counts`，以及 `storage.totalBytes`、`storage.databaseBytes`、`storage.mediaBytes`、`storage.logsBytes`、`storage.availableBytes`、`sync.latestServerChangeVersion` 和 `aiSummaries`。`aiSummaries` 只暴露计数、状态、错误码、duration、transcript length、卡住时长和排查提示，不暴露 transcript 或 summary 正文。
+响应应包含 `counts`，以及 `storage.totalBytes`、`storage.databaseBytes`、`storage.mediaBytes`、`storage.logsBytes`、`storage.availableBytes`、`sync.latestServerChangeVersion`、`aiSummaries` 和 `aiUsage`。`aiSummaries` 只暴露计数、状态、错误码、duration、transcript length、卡住时长和排查提示，不暴露 transcript 或 summary 正文。`aiUsage` 只暴露 token/request/error 聚合，不暴露 prompt、transcript、review input 或 summary/review 正文。
 
 Sync Health 还应包含 server-side `pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady`、`lastServerChangeAt`、`lastSyncOperationAt`、`lastSuccessfulSyncAt` 和 `lastRejectedSyncAt`。iOS Settings > Storage & Diagnostics 会把这些 Mac 侧计数和本机 cursor、outbox、pending upload、failed upload、missing media download 状态合并展示，并提供安全动作：`Sync Now`、`Pull Server Changes`、`Retry Uploads`、`Re-download Missing Media`。
 
@@ -633,7 +633,7 @@ AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示
 
 Settings > Storage & Diagnostics 总是显示本机 iPhone usage。只有在 app 已登录且 `/api/v1/admin/status` 成功时，Mac Server section 才会出现。如果 Mac section 被隐藏，检查 server URL、token state 和 Tailscale reachability。
 
-AI Summaries subsection 来自 `/api/v1/admin/status.aiSummaries`，Tags subsection 来自 `/api/v1/admin/status.tags`。如果 Mac Server section 出现但这些 subsection 不出现，先确认已安装包含 Storage & Diagnostics 更新的 iOS build，再用 curl 检查 admin status 响应是否包含对应字段。
+AI Summaries subsection 来自 `/api/v1/admin/status.aiSummaries`，AI Token Usage subsection 来自 `/api/v1/admin/status.aiUsage`，Tags subsection 来自 `/api/v1/admin/status.tags`。如果 Mac Server section 出现但这些 subsection 不出现，先确认已安装包含 Storage & Diagnostics 更新的 iOS build，再用 curl 检查 admin status 响应是否包含对应字段。
 
 ### Build Fails With Signing/Profile Errors
 

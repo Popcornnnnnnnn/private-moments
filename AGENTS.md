@@ -43,6 +43,7 @@ Every non-trivial change must close with:
 - Known issues, limitations, or next steps.
 - Updates to affected `.gsd` fact-source files.
 - Updates to affected human-facing docs when usage, operation, architecture, or product behavior changed.
+- A git commit after the feature or fix reaches a verified checkpoint, even if human UAT is still pending. Do not leave multiple completed features or milestone slices piled up as uncommitted changes; use a clear checkpoint commit message and note any remaining UAT in the docs/final response.
 
 Keep docs single-purpose:
 
@@ -96,7 +97,7 @@ The paired phone is commonly named `wwz 的 iphone`; the real-device script can 
 - Development server port: `3210`.
 - Bundle id: `com.popcornnnnnn.privatemoments`.
 - App display name: `Moments`.
-- Current schema version: `11`.
+- Current schema version: `12`.
 - Read the development password from `server/.env`; do not hard-code it into reusable docs or code.
 - Get the current Mac Tailscale IP with `tailscale ip -4`.
 - iOS Settings server URL may be `http://<mac-tailscale-ip>:3210` or a Tailscale Serve HTTPS URL.
@@ -129,6 +130,7 @@ Do not hard-code personal Tailscale values into reusable code unless the user as
 - Server thumbnails are generated with `sips`, max edge `800px`, with oversized thumbnails regenerated.
 - `GET /api/v1/admin/status` returns admin counts plus storage, `sync.latestServerChangeVersion`, and `aiSummaries` diagnostics used by Settings > Storage & Diagnostics. iOS hides the Mac Server section if this request fails.
 - Server-originated AI summary changes can be ready on Mac while a quiet iPhone has an older `lastSyncCursor`. If summaries look stale, compare iPhone `lastSyncCursor` with server `MAX(server_changes.version)` or admin status `sync.latestServerChangeVersion`; app foreground, Storage & Diagnostics refresh, and Settings > Sync > Sync Now should pull remote-only changes.
+- AI token usage is recorded server-side in `ai_usage_events` for media summary, weekly review, and tag fallback provider calls. Store only privacy-safe metadata and token counts: feature, subject type/id, provider/model, promptVersion, status, duration, provider usage, cached input tokens, local estimates, and error codes. Do not store transcript, prompt, review input JSON, generated summary/review bodies, or provider raw responses.
 
 ## Code Organization
 

@@ -77,6 +77,7 @@ struct AdminStatusResponse: Decodable {
     let counts: AdminStatusCounts
     let storage: ServerStorageStats
     let aiSummaries: AdminAISummaryDiagnostics?
+    let aiUsage: AdminAIUsageDiagnostics?
     let tags: AdminTagDiagnostics?
     let sync: AdminSyncDiagnostics?
 }
@@ -334,6 +335,51 @@ struct AdminAISummaryDiagnosticItem: Decodable, Equatable, Identifiable {
     let ageSeconds: Int?
     let retryHint: String?
     let updatedAt: String
+}
+
+struct AdminAIUsageDiagnostics: Decodable, Equatable {
+    let today: AdminAIUsageWindow
+    let currentWeek: AdminAIUsageWindow
+    let currentMonth: AdminAIUsageWindow
+    let allTime: AdminAIUsageWindow
+    let byFeatureCurrentMonth: [AdminAIUsageFeature]
+    let recentFailures: [AdminAIUsageFailure]
+}
+
+struct AdminAIUsageWindow: Decodable, Equatable {
+    let requests: Int
+    let successfulRequests: Int
+    let failedRequests: Int
+    let totalTokens: Int
+    let inputTokens: Int
+    let outputTokens: Int
+    let cachedInputTokens: Int
+    let estimatedRequests: Int
+}
+
+struct AdminAIUsageFeature: Decodable, Equatable, Identifiable {
+    let feature: String
+    let requests: Int
+    let successfulRequests: Int
+    let failedRequests: Int
+    let totalTokens: Int
+    let inputTokens: Int
+    let outputTokens: Int
+    let cachedInputTokens: Int
+    let estimatedRequests: Int
+
+    var id: String { feature }
+}
+
+struct AdminAIUsageFailure: Decodable, Equatable, Identifiable {
+    let id: String
+    let feature: String
+    let subjectType: String
+    let subjectId: String?
+    let provider: String?
+    let model: String?
+    let errorCode: String?
+    let createdAt: String
 }
 
 struct AdminSyncDiagnostics: Decodable, Equatable {

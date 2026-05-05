@@ -67,6 +67,15 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M010/S04,M010/S06
 - Validation: Settings default off; publish action creates a normal server post only when called explicitly.
 
+### R047 — AI token usage must be measurable without storing private AI content.
+- Class: operational
+- Status: active
+- Description: Server-side AI provider calls for media summaries, weekly reviews, and focused tag fallback calls must write privacy-safe usage events with feature, subject, provider/model, promptVersion, status, duration, token usage, cached input token count, local estimates when provider usage is unavailable, and safe error codes. Settings > Storage & Diagnostics should expose Today, current week, current month, all-time totals, failures, estimated request count, and current-month feature breakdown.
+- Why it matters: The project now has multiple AI surfaces and recurring review generation; without usage accounting the user cannot reason about cost, retry loops, prompt/model changes, or runaway automatic jobs.
+- Source: token usage planning 2026-05-06
+- Primary owning slice: M010/S08
+- Validation: Schema includes `ai_usage_events`; AI provider wrappers record usage without transcript/prompt/summary/review input bodies; `/api/v1/admin/status.aiUsage` returns safe aggregates; iOS Settings renders the token usage section.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active

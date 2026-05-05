@@ -75,3 +75,13 @@ Deliver an extensible AI review system whose first artifact is a Weekly Review: 
 **Outcome:** Required checks: Prisma generate/migrate, server typecheck/build, iOS generic build, HTTP smoke for review settings/list/generate failure or success path, and human review of generated tone/quality on real data.
 
 **Primary requirements:** R001, R002, R003, R040-R046.
+
+### S08 — AI Token Usage Ledger
+
+**Status:** Implemented.
+
+**Goal:** Make AI usage measurable without storing private AI content.
+
+**Outcome:** Server schema version 12 adds `ai_usage_events`. Media summary, weekly review, and tag fallback provider calls record feature, subject, provider/model, promptVersion, status, duration, token usage, cached input tokens, safe error codes, and local estimates when provider usage is missing. `/api/v1/admin/status.aiUsage` exposes Today, current week, current month, all-time totals, current-month feature breakdown, and recent failures. iOS Settings > Storage & Diagnostics renders a read-only `AI Token Usage` section.
+
+**Primary requirements:** R047.

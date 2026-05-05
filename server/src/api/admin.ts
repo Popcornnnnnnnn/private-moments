@@ -5,6 +5,7 @@ import type { Device, Media, Post, Prisma, PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
+import { collectAIUsageDiagnostics } from "../ai/usage-ledger.js";
 import { SCHEMA_VERSION, SERVER_VERSION } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
 import {
@@ -297,6 +298,7 @@ export async function registerAdminRoutes(
       media,
       storage,
       aiSummaries,
+      aiUsage,
       tags,
       sync,
     ] =
@@ -328,6 +330,7 @@ export async function registerAdminRoutes(
         context.prisma.media.count(),
         collectServerStorageStats(context.paths),
         collectAISummaryDiagnostics(context.prisma),
+        collectAIUsageDiagnostics(context.prisma),
         collectTagDiagnostics(context.prisma),
         collectSyncDiagnostics(context.prisma),
       ]);
@@ -346,6 +349,7 @@ export async function registerAdminRoutes(
       },
       storage,
       aiSummaries,
+      aiUsage,
       tags,
       sync,
     });

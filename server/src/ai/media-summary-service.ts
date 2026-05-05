@@ -13,6 +13,7 @@ import {
   type AILanguagePreference,
   type MediaSummaryOutput,
 } from "./media-summary.js";
+import { recordAIUsageEvent } from "./usage-ledger.js";
 import type { AppConfig } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
 import type { DataPaths } from "../storage/data-dir.js";
@@ -296,6 +297,13 @@ async function generateMediaSummaryFromFileWithRetry(
         },
         {
           onTranscriptReady: input.onTranscriptReady,
+          usageContext: {
+            feature: "media_summary",
+            subjectType: "media",
+            subjectId: input.mediaId,
+            promptVersion: MEDIA_SUMMARY_PROMPT_VERSION,
+            recorder: (event) => recordAIUsageEvent(context.prisma, event),
+          },
         },
       );
     } catch (error) {

@@ -51,6 +51,25 @@ export async function registerReviewRoutes(
     });
   });
 
+  app.delete<{ Params: { reviewId: string } }>("/api/v1/reviews/:reviewId", async (request, reply) => {
+    if (!(await authenticateOrReply(request, reply, context.prisma))) {
+      return reply;
+    }
+    const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+    if (maintenanceReply) {
+      return maintenanceReply;
+    }
+
+    const review = await context.reviews.deleteReview(request.params.reviewId);
+    if (!review) {
+      return sendNotFound(reply, "Review not found");
+    }
+
+    return reply.send({
+      review: serializeReview(review),
+    });
+  });
+
   app.post("/api/v1/reviews/generate", async (request, reply) => {
     if (!(await authenticateOrReply(request, reply, context.prisma))) {
       return reply;

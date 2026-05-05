@@ -399,7 +399,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {
@@ -446,6 +446,62 @@ Response shape：
       }
     ]
   },
+  "aiUsage": {
+    "today": {
+      "requests": 2,
+      "successfulRequests": 2,
+      "failedRequests": 0,
+      "totalTokens": 8200,
+      "inputTokens": 6900,
+      "outputTokens": 1300,
+      "cachedInputTokens": 0,
+      "estimatedRequests": 0
+    },
+    "currentWeek": {
+      "requests": 24,
+      "successfulRequests": 23,
+      "failedRequests": 1,
+      "totalTokens": 128000,
+      "inputTokens": 112000,
+      "outputTokens": 16000,
+      "cachedInputTokens": 5000,
+      "estimatedRequests": 3
+    },
+    "currentMonth": {
+      "requests": 24,
+      "successfulRequests": 23,
+      "failedRequests": 1,
+      "totalTokens": 128000,
+      "inputTokens": 112000,
+      "outputTokens": 16000,
+      "cachedInputTokens": 5000,
+      "estimatedRequests": 3
+    },
+    "allTime": {
+      "requests": 24,
+      "successfulRequests": 23,
+      "failedRequests": 1,
+      "totalTokens": 128000,
+      "inputTokens": 112000,
+      "outputTokens": 16000,
+      "cachedInputTokens": 5000,
+      "estimatedRequests": 3
+    },
+    "byFeatureCurrentMonth": [
+      {
+        "feature": "media_summary",
+        "requests": 20,
+        "successfulRequests": 20,
+        "failedRequests": 0,
+        "totalTokens": 86000,
+        "inputTokens": 74000,
+        "outputTokens": 12000,
+        "cachedInputTokens": 0,
+        "estimatedRequests": 2
+      }
+    ],
+    "recentFailures": []
+  },
   "tags": {
     "total": 18,
     "primary": 6,
@@ -457,7 +513,7 @@ Response shape：
 }
 ```
 
-`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。`sync.latestServerChangeVersion` 是 Mac server 已写入的最大 `server_changes.version`，可和 iPhone `lastSyncCursor` 比较。`sync.pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady` 和 timestamps 用于 Mac Admin / iOS Settings 的 Sync Health。`aiSummaries.recent` 只返回非 ready 项的状态、错误码、duration 和 transcript length，不返回 transcript 或 summary 正文。`tags` 只返回安全计数，不返回 post text、comment text、transcript 或 summary 正文。
+`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。`sync.latestServerChangeVersion` 是 Mac server 已写入的最大 `server_changes.version`，可和 iPhone `lastSyncCursor` 比较。`sync.pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady` 和 timestamps 用于 Mac Admin / iOS Settings 的 Sync Health。`aiSummaries.recent` 只返回非 ready 项的状态、错误码、duration 和 transcript length，不返回 transcript 或 summary 正文。`aiUsage` 来自 `ai_usage_events`，按 Today、current week、current month、all time 聚合，并返回本月 feature breakdown；provider 没有返回 usage 时会用字符数估算并计入 `estimatedRequests`。`tags` 只返回安全计数，不返回 post text、comment text、transcript、prompt、review input 或 summary 正文。
 
 ## Maintenance Jobs And Archive API
 
@@ -630,7 +686,11 @@ curl -X POST http://127.0.0.1:3210/api/v1/reviews/generate \
 }
 ```
 
-Review generation 是面向私密生活数据的受控 AI provider 调用。server 会拒绝超过 35 天的生成范围；构建 provider 输入时最多读取 240 条 moments，超过后该 review 会以 `review_input_too_large` 失败，避免大范围自定义回顾造成成本、延迟或隐私暴露面失控。
+Review generation 是面向私密生活数据的受控 AI provider 调用。server 会拒绝超过 35 天的生成范围；构建 provider 输入时最多读取 240 条 moments，超过后该 review 会以 `review_input_too_large` 失败，避免大范围自定义回顾造成成本、延迟或隐私暴露面失控。如果 provider 返回的是合法 JSON 但内容几乎为空，server 会重试并阻止空壳内容被标记成 `ready`。
+
+对于 `provider_http_5xx`、`provider_timeout`、`provider_request_failed`、`invalid_json`、`empty_response`、`empty_review_content` 等 provider 不稳定或输出质量问题，server 会先重试 3 次。重试后仍失败时，server 会根据本地 review input pack 生成一篇保守兜底 review，并在 `uncertainty` 中说明这是 provider 失败后的本地兜底版本。配置错误、认证错误、输入过大等问题仍会正常失败，不会伪装成成功。
+
+Review generation 是全局互斥的：同一时刻 server 只允许一个 review 处于 `generating`。如果另一个客户端或另一个界面入口在生成期间再次调用 generate/regenerate，server 会返回当前 active generating review，而不会创建第二条 generated review artifact。若某条 `generating` review 超过 15 分钟仍未完成，server 会把它熔断为 `failed`，错误码为 `review_generation_timeout`，之后允许用户再次生成。
 
 重新生成：
 
@@ -638,6 +698,15 @@ Review generation 是面向私密生活数据的受控 AI provider 调用。serv
 curl -X POST http://127.0.0.1:3210/api/v1/reviews/$REVIEW_ID/regenerate \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+删除一条 generated review：
+
+```bash
+curl -X DELETE http://127.0.0.1:3210/api/v1/reviews/$REVIEW_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+删除 review 是幂等 soft delete：重复删除同一个已存在 review 不应该在客户端显示 `HTTP 404`。删除只软删除 generated review artifact，不会删除已经通过 `Publish as Moment` 创建出的 moment。
 
 反馈：
 

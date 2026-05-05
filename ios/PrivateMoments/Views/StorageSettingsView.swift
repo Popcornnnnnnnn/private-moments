@@ -84,6 +84,9 @@ struct StorageDetailsView: View {
                 if let aiSummaries = serverStatus.aiSummaries {
                     aiSummarySection(aiSummaries)
                 }
+                if let aiUsage = serverStatus.aiUsage {
+                    aiUsageSection(aiUsage)
+                }
                 if let tags = serverStatus.tags {
                     tagSection(tags)
                 }
@@ -275,6 +278,40 @@ struct StorageDetailsView: View {
         }
     }
 
+    private func aiUsageSection(_ diagnostics: AdminAIUsageDiagnostics) -> some View {
+        Section(L10n.t("AI Token Usage", appLanguage)) {
+            LabeledContent(L10n.t("Today", appLanguage), value: tokenText(diagnostics.today.totalTokens))
+            LabeledContent(L10n.t("This week", appLanguage), value: tokenText(diagnostics.currentWeek.totalTokens))
+            LabeledContent(L10n.t("This month", appLanguage), value: tokenText(diagnostics.currentMonth.totalTokens))
+            LabeledContent(L10n.t("All time", appLanguage), value: tokenText(diagnostics.allTime.totalTokens))
+            LabeledContent(L10n.t("Requests", appLanguage), value: "\(diagnostics.currentMonth.requests)")
+            LabeledContent(L10n.t("Failed requests", appLanguage), value: "\(diagnostics.currentMonth.failedRequests)")
+
+            if diagnostics.currentMonth.cachedInputTokens > 0 {
+                LabeledContent(L10n.t("Cached input", appLanguage), value: tokenText(diagnostics.currentMonth.cachedInputTokens))
+            }
+
+            if diagnostics.currentMonth.estimatedRequests > 0 {
+                LabeledContent(L10n.t("Estimated requests", appLanguage), value: "\(diagnostics.currentMonth.estimatedRequests)")
+            }
+
+            ForEach(diagnostics.byFeatureCurrentMonth.prefix(5)) { feature in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(featureTitle(feature.feature))
+                        Spacer()
+                        Text(tokenText(feature.totalTokens))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("\(feature.requests) \(L10n.t("requests", appLanguage))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
     private func tagSection(_ diagnostics: AdminTagDiagnostics) -> some View {
         Section(L10n.t("Tags", appLanguage)) {
             LabeledContent(L10n.t("Primary", appLanguage), value: "\(diagnostics.primary)")
@@ -314,6 +351,31 @@ struct StorageDetailsView: View {
 
     private func shortTimestamp(_ value: String) -> String {
         value.replacingOccurrences(of: "T", with: " ").replacingOccurrences(of: "Z", with: "")
+    }
+
+    private func tokenText(_ value: Int) -> String {
+        if value >= 1_000_000 {
+            return String(format: "%.1fM", Double(value) / 1_000_000)
+        }
+
+        if value >= 1_000 {
+            return String(format: "%.1fK", Double(value) / 1_000)
+        }
+
+        return "\(value)"
+    }
+
+    private func featureTitle(_ value: String) -> String {
+        switch value {
+        case "media_summary":
+            return L10n.t("Media summaries", appLanguage)
+        case "weekly_review":
+            return L10n.t("Weekly Review", appLanguage)
+        case "tag_suggestion":
+            return L10n.t("AI tags", appLanguage)
+        default:
+            return value.replacingOccurrences(of: "_", with: " ")
+        }
     }
 
     private func diagnosticDetail(for item: AdminAISummaryDiagnosticItem) -> String {

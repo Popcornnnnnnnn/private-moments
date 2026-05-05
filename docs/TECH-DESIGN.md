@@ -249,7 +249,7 @@ iOS Settings 的 Storage 功能主要是诊断入口。主 Settings 只显示一
 - 待上传 media 数。
 - 失败上传数。
 
-Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server/src/storage/stats.ts` 统计数据目录总量、SQLite 相关文件、media 目录、logs 目录和数据目录所在卷的可用空间；同一个响应还返回 `aiSummaries` 轻量诊断。iOS 已登录且请求成功时显示 Mac Server 和 AI summary 诊断；如果 Mac 不在线、token 不可用或请求失败，详情页隐藏 Mac Server 区域，不弹错误。
+Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server/src/storage/stats.ts` 统计数据目录总量、SQLite 相关文件、media 目录、logs 目录和数据目录所在卷的可用空间；同一个响应还返回 `aiSummaries` 和 `aiUsage` 轻量诊断。iOS 已登录且请求成功时显示 Mac Server、AI summary 诊断和 AI token usage；如果 Mac 不在线、token 不可用或请求失败，详情页隐藏 Mac Server 区域，不弹错误。
 
 Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Settings 主界面变成后台管理台。当前清理动作只删除已上传且可重新下载的本机完整语音/视频文件；不会删除视频 poster、本地待上传媒体或 Mac 归档内容。
 
@@ -324,7 +324,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 {
   "app": "PrivateMoments",
   "dataVersion": 1,
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "createdAt": "2026-04-28T00:00:00.000Z",
   "mediaLayoutVersion": 1
 }
@@ -496,6 +496,34 @@ deleted
 ```
 
 服务端通过 `ai_summary_updated` 和 `ai_summary_deleted` server changes 同步结果。失败状态只影响 summary record，不改变 post/media/comment 的同步状态。AI media summary job 全局串行执行，避免断网恢复或批量补传后同时启动多个本地 `mlx-whisper` 进程。`/api/v1/admin/status` 暴露轻量 AI summary diagnostics，Settings > Storage & Diagnostics 可查看 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项的错误码，不暴露 transcript 或 summary 正文。
+
+### AIUsageEvent
+
+`ai_usage_events` 是 privacy-safe 的 AI 使用计量账本。它记录每次外部 AI provider 调用的 feature、subject、provider/model、promptVersion、请求状态、duration、token usage 和本地估算值；不记录 prompt、transcript、summary body、review input JSON 或 provider request/response 正文。provider 返回 usage 时优先使用真实 `inputTokens`、`outputTokens`、`totalTokens` 和 `cachedInputTokens`；没有 usage 时只用字符数估算，并在 Admin/iOS 诊断里计入 estimated requests。
+
+```text
+ai_usage_events
+  id
+  feature
+  subjectType
+  subjectId
+  provider
+  model
+  promptVersion
+  status
+  inputChars
+  outputChars
+  inputTokens
+  outputTokens
+  totalTokens
+  cachedInputTokens
+  estimatedInputTokens
+  estimatedOutputTokens
+  estimatedTotalTokens
+  durationMs
+  errorCode
+  createdAt
+```
 
 ### SyncOperation
 
@@ -902,7 +930,7 @@ POST   /api/v1/admin/archive/jobs/import
 - AI 摘要由 Mac server 在完整 audio/video 上传后后台触发：先用本地 `mlx-whisper` 转写，再调用外部 summary provider；`/api/v1/ai/media-summary` 仍可用于 regenerate。iOS 只拿到 summary metadata 和轻量错误状态。新摘要使用 `media-summary-v3` document block 模型：`documentTitle`、`oneLiner`、`documentBlocks` 是主要渲染字段，旧 `overview`、`keyPoints`、`sections` 保留作兼容。
 - iOS 拉取远端图片缩略图和视频 poster 时优先使用 `/api/v1/media/batch-download` 获取 base64 JSON，避免真机/Tailscale 场景下多次二进制下载超时。
 - Mac Admin 路由复用 Bearer device token，普通内容发布仍然只在 iOS 端进行。
-- `/api/v1/admin/status` 同时给 Mac Admin 和 iOS Settings > Storage & Diagnostics 使用；storage 字段包含 `totalBytes`、`databaseBytes`、`mediaBytes`、`logsBytes`、`availableBytes`，`sync.latestServerChangeVersion` 用于和 iPhone `lastSyncCursor` 对比，`sync.pendingOperations`、`sync.rejectedOperations`、`sync.failedMediaUploads`、`sync.aiNonReady` 和 last-sync timestamps 用于 Sync Health，`aiSummaries` 字段包含 summary 状态计数和非 ready 项的安全错误 metadata，`tags` 字段包含安全的标签计数和 AI/manual assignment 计数。
+- `/api/v1/admin/status` 同时给 Mac Admin 和 iOS Settings > Storage & Diagnostics 使用；storage 字段包含 `totalBytes`、`databaseBytes`、`mediaBytes`、`logsBytes`、`availableBytes`，`sync.latestServerChangeVersion` 用于和 iPhone `lastSyncCursor` 对比，`sync.pendingOperations`、`sync.rejectedOperations`、`sync.failedMediaUploads`、`sync.aiNonReady` 和 last-sync timestamps 用于 Sync Health，`aiSummaries` 字段包含 summary 状态计数和非 ready 项的安全错误 metadata，`aiUsage` 字段包含 Today、This week、This month、All time 的 AI token usage、请求数、失败数、cached input token 和本月按 feature 聚合，`tags` 字段包含安全的标签计数和 AI/manual assignment 计数。
 
 ## 8. Sync Endpoint
 
@@ -946,7 +974,7 @@ POST   /api/v1/admin/archive/jobs/import
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "acceptedOps": ["op-uuid-1", "op-uuid-2"],
   "rejectedOps": [],
   "serverChanges": [
@@ -1163,7 +1191,7 @@ MVP 安全边界：
 - 同步不阻塞主 UI。
 - 图片压缩在后台任务中执行。
 - 失败同步和上传自动延迟重试。
-- Settings > Storage & Diagnostics 可快速查看本地占用、同步健康状态和 AI summary 诊断。
+- Settings > Storage & Diagnostics 可快速查看本地占用、同步健康状态、AI summary 诊断和 AI token usage。
 
 ### Mac
 
@@ -1171,7 +1199,7 @@ MVP 安全边界：
 - 媒体文件存磁盘，数据库只存路径和元数据。
 - `server_change.version` 支持增量同步。
 - sync endpoint 支持批量操作和重试。
-- `/api/v1/admin/status` 暴露服务端数据目录存储诊断和 AI summary 诊断，供 Admin 和 iOS Settings 使用。
+- `/api/v1/admin/status` 暴露服务端数据目录存储诊断、AI summary 诊断和 AI token usage，供 Admin 和 iOS Settings 使用。
 - AI summary provider 失败只写入 `ai_summaries.status = failed`，不影响 post/media/comment sync，也不把私人 transcript 或 summary 正文写入正常日志。
 
 ## 17. 未来阶段

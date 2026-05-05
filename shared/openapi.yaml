@@ -182,6 +182,26 @@ paths:
                 properties:
                   review:
                     $ref: "#/components/schemas/Review"
+    delete:
+      summary: Soft delete one generated periodic review.
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted review.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - review
+                properties:
+                  review:
+                    $ref: "#/components/schemas/Review"
   /api/v1/reviews/generate:
     post:
       summary: Generate a periodic review.
@@ -274,9 +294,12 @@ paths:
                 type: object
                 required:
                   - postId
+                  - review
                 properties:
                   postId:
                     type: string
+                  review:
+                    $ref: "#/components/schemas/Review"
   /api/v1/reviews/settings:
     get:
       summary: Read periodic review settings.
@@ -1589,6 +1612,7 @@ components:
         - counts
         - storage
         - aiSummaries
+        - aiUsage
         - tags
         - sync
       properties:
@@ -1606,6 +1630,8 @@ components:
           $ref: "#/components/schemas/ServerStorageStats"
         aiSummaries:
           $ref: "#/components/schemas/AdminAISummaryDiagnostics"
+        aiUsage:
+          $ref: "#/components/schemas/AdminAIUsageDiagnostics"
         tags:
           $ref: "#/components/schemas/AdminTagDiagnostics"
         sync:
@@ -1656,6 +1682,103 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminAISummaryDiagnosticItem"
+    AdminAIUsageDiagnostics:
+      type: object
+      required:
+        - today
+        - currentWeek
+        - currentMonth
+        - allTime
+        - byFeatureCurrentMonth
+        - recentFailures
+      properties:
+        today:
+          $ref: "#/components/schemas/AdminAIUsageWindow"
+        currentWeek:
+          $ref: "#/components/schemas/AdminAIUsageWindow"
+        currentMonth:
+          $ref: "#/components/schemas/AdminAIUsageWindow"
+        allTime:
+          $ref: "#/components/schemas/AdminAIUsageWindow"
+        byFeatureCurrentMonth:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAIUsageFeature"
+        recentFailures:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAIUsageFailure"
+    AdminAIUsageWindow:
+      type: object
+      required:
+        - requests
+        - successfulRequests
+        - failedRequests
+        - totalTokens
+        - inputTokens
+        - outputTokens
+        - cachedInputTokens
+        - estimatedRequests
+      properties:
+        requests:
+          type: integer
+        successfulRequests:
+          type: integer
+        failedRequests:
+          type: integer
+        totalTokens:
+          type: integer
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        cachedInputTokens:
+          type: integer
+        estimatedRequests:
+          type: integer
+          description: Requests where provider usage was unavailable and token totals use local estimates.
+    AdminAIUsageFeature:
+      allOf:
+        - $ref: "#/components/schemas/AdminAIUsageWindow"
+        - type: object
+          required:
+            - feature
+          properties:
+            feature:
+              type: string
+    AdminAIUsageFailure:
+      type: object
+      required:
+        - id
+        - feature
+        - subjectType
+        - createdAt
+      properties:
+        id:
+          type: string
+        feature:
+          type: string
+        subjectType:
+          type: string
+        subjectId:
+          type:
+            - string
+            - "null"
+        provider:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        errorCode:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
     AdminSyncDiagnostics:
       type: object
       required:

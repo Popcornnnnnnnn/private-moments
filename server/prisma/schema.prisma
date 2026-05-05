@@ -268,6 +268,34 @@ model AiSummary {
   @@map("ai_summaries")
 }
 
+model AiUsageEvent {
+  id                    String   @id @default(uuid())
+  feature               String
+  subjectType           String   @map("subject_type")
+  subjectId             String?  @map("subject_id")
+  provider              String?
+  model                 String?
+  promptVersion         String?  @map("prompt_version")
+  status                String
+  inputChars            Int?     @map("input_chars")
+  outputChars           Int?     @map("output_chars")
+  inputTokens           Int?     @map("input_tokens")
+  outputTokens          Int?     @map("output_tokens")
+  totalTokens           Int?     @map("total_tokens")
+  cachedInputTokens     Int?     @map("cached_input_tokens")
+  estimatedInputTokens  Int?     @map("estimated_input_tokens")
+  estimatedOutputTokens Int?     @map("estimated_output_tokens")
+  estimatedTotalTokens  Int?     @map("estimated_total_tokens")
+  durationMs            Int?     @map("duration_ms")
+  errorCode             String?  @map("error_code")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([feature, createdAt])
+  @@index([status, createdAt])
+  @@map("ai_usage_events")
+}
+
 model Comment {
   id                String    @id
   postId            String    @map("post_id")
