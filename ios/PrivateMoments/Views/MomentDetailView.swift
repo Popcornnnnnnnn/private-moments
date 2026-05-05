@@ -15,6 +15,7 @@ struct MomentDetailView: View {
     @State private var gallery: DetailMediaGallery?
     @State private var videoPlayer: VideoPlayerRoute?
     @State private var isTagEditorPresented = false
+    @State private var didCopyText = false
 
     var body: some View {
         Group {
@@ -38,6 +39,15 @@ struct MomentDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
+                        if !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button {
+                                copyMomentText(item.post.text)
+                            } label: {
+                                Image(systemName: didCopyText ? "checkmark" : "doc.on.doc")
+                            }
+                            .accessibilityLabel(L10n.t(didCopyText ? "Copied" : "Copy text", appLanguage))
+                        }
+
                         Button {
                             Task {
                                 await store.toggleFavorite(item)
@@ -93,8 +103,23 @@ struct MomentDetailView: View {
                 .onDisappear {
                     playbackCenter.pauseForInterfaceChange()
                 }
+                .onChange(of: item.post.text) { _, _ in
+                    didCopyText = false
+                }
             } else {
                 ContentUnavailableView(L10n.t("Moment unavailable", appLanguage), systemImage: "rectangle.stack.badge.minus")
+            }
+        }
+    }
+
+    private func copyMomentText(_ text: String) {
+        UIPasteboard.general.string = text
+        didCopyText = true
+
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            await MainActor.run {
+                didCopyText = false
             }
         }
     }

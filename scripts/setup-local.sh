@@ -31,6 +31,75 @@ need_command() {
   fi
 }
 
+read_env_value() {
+  local key="$1"
+  local line value
+  if [[ -n "${!key-}" ]]; then
+    printf '%s\n' "${!key}"
+    return 0
+  fi
+
+  line="$(grep -E "^${key}=" server/.env | tail -n 1 || true)"
+  if [[ -z "$line" ]]; then
+    return 1
+  fi
+
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+
+  printf '%s\n' "$value"
+}
+
+sqlite_path_from_database_url() {
+  local database_url="$1"
+  local sqlite_path
+  if [[ "$database_url" != file:* ]]; then
+    return 1
+  fi
+
+  sqlite_path="${database_url#file:}"
+  sqlite_path="${sqlite_path%%\?*}"
+  if [[ -z "$sqlite_path" ]]; then
+    return 1
+  fi
+
+  if [[ "$sqlite_path" == /* ]]; then
+    printf '%s\n' "$sqlite_path"
+  else
+    # Prisma resolves relative SQLite URLs from the schema directory.
+    printf '%s\n' "$ROOT_DIR/server/prisma/$sqlite_path"
+  fi
+}
+
+prepare_sqlite_database_file() {
+  local database_url sqlite_path
+  database_url="$(read_env_value DATABASE_URL || true)"
+  if [[ -z "$database_url" ]]; then
+    warn "DATABASE_URL is missing from server/.env; Prisma deploy may fail."
+    return
+  fi
+
+  sqlite_path="$(sqlite_path_from_database_url "$database_url" || true)"
+  if [[ -z "$sqlite_path" ]]; then
+    return
+  fi
+
+  if [[ -f "$sqlite_path" ]]; then
+    log "Keeping existing SQLite database file"
+    return
+  fi
+
+  need_command sqlite3
+  mkdir -p "$(dirname "$sqlite_path")"
+  sqlite3 "$sqlite_path" 'PRAGMA user_version=0;'
+  log "Created empty SQLite database file for Prisma migrations"
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
@@ -103,6 +172,7 @@ fi
 
 log "Preparing Prisma client and local database"
 npm run server:prisma:generate
+prepare_sqlite_database_file
 npm run server:prisma:deploy
 
 if [[ "$WITH_AI" -eq 1 ]]; then

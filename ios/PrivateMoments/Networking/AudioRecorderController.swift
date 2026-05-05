@@ -85,7 +85,11 @@ final class AudioRecorderController: NSObject, ObservableObject, AVAudioRecorder
     private func startRecordingAfterPermission() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
+            )
             try session.setActive(true)
 
             let directory = try AppDirectories.draftMediaDirectory()

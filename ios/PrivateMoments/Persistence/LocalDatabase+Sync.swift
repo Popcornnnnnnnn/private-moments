@@ -111,7 +111,10 @@ extension LocalDatabase {
                   WHERE o.entityId = m.postId
                     AND o.status IN ('pending', 'failed')
               )
-            ORDER BY m.createdAt ASC, m.sortOrder ASC
+            ORDER BY
+              CASE WHEN m.uploadStatus = 'pending' THEN 0 ELSE 1 END,
+              m.createdAt ASC,
+              m.sortOrder ASC
             LIMIT 50
             """
         )

@@ -35,3 +35,14 @@ export function sendConflict(reply: FastifyReply, message: string): FastifyReply
   });
 }
 
+export function sendServiceUnavailable(
+  reply: FastifyReply,
+  message: string,
+  extra: Record<string, unknown> = {},
+): FastifyReply {
+  return reply.status(503).send({
+    error: "service_unavailable",
+    message,
+    ...extra,
+  });
+}

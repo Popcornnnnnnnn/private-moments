@@ -73,6 +73,76 @@ model Post {
   @@map("posts")
 }
 
+model Review {
+  id                      String    @id
+  kind                    String
+  rangeMode               String    @map("range_mode")
+  rangeStart              DateTime  @map("range_start")
+  rangeEnd                DateTime  @map("range_end")
+  status                  String
+  trigger                 String
+  contentJson             String    @default("{}") @map("content_json")
+  inputDigestHash         String?   @map("input_digest_hash")
+  promptVersion           String    @map("prompt_version")
+  provider                String?
+  model                   String?
+  language                String?
+  errorCode               String?   @map("error_code")
+  errorMessage            String?   @map("error_message")
+  generatedAt             DateTime? @map("generated_at")
+  regeneratedFromReviewId String?   @map("regenerated_from_review_id")
+  publishedPostId         String?   @map("published_post_id")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  deletedAt               DateTime? @map("deleted_at")
+
+  feedback ReviewFeedback[]
+
+  @@index([kind])
+  @@index([status])
+  @@index([rangeStart, rangeEnd])
+  @@index([createdAt])
+  @@map("reviews")
+}
+
+model ReviewFeedback {
+  id           String   @id @default(uuid())
+  reviewId     String   @map("review_id")
+  type         String
+  note         String?
+  metadataJson String   @default("{}") @map("metadata_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@index([type])
+  @@map("review_feedback")
+}
+
+model ReviewMemory {
+  id        String   @id @default(uuid())
+  scope     String
+  key       String
+  valueJson String   @default("{}") @map("value_json")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([scope, key])
+  @@map("review_memory")
+}
+
+model ReviewSetting {
+  id                      String   @id
+  autoWeeklyEnabled       Boolean  @default(false) @map("auto_weekly_enabled")
+  publishWeeklyToMoments  Boolean  @default(false) @map("publish_weekly_to_moments")
+  lastAutoWeeklyDate      String?  @map("last_auto_weekly_date")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("review_settings")
+}
+
 model Tag {
   id                String    @id
   type              String
@@ -251,4 +321,24 @@ model ServerChange {
 
   @@index([entityType, entityId])
   @@map("server_changes")
+}
+
+model MaintenanceJob {
+  id           String    @id @default(uuid())
+  type         String
+  status       String
+  stage        String?
+  progress     Int       @default(0)
+  metadataJson String    @default("{}") @map("metadata_json")
+  artifactPath String?   @map("artifact_path")
+  errorCode    String?   @map("error_code")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("maintenance_jobs")
 }

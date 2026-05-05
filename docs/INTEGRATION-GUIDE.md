@@ -66,6 +66,21 @@ Authorization: Bearer <device-token>
 | `DELETE` | `/api/v1/admin/posts/:postId` | 从 Admin soft delete 单个 post。 |
 | `GET` | `/api/v1/admin/devices/:deviceId/clean-posts/preview` | 预览某个 device 创建的 posts 永久清理候选。 |
 | `POST` | `/api/v1/admin/devices/:deviceId/clean-posts` | 永久清理某个 device 创建的测试 posts。 |
+| `GET` | `/api/v1/admin/maintenance/state` | 读取 maintenance mode 和当前 running job。 |
+| `GET` | `/api/v1/admin/maintenance/jobs` | 列出最近 maintenance jobs，可按 type/status 过滤。 |
+| `GET` | `/api/v1/admin/maintenance/jobs/:jobId` | 读取单个 maintenance job。 |
+| `POST` | `/api/v1/admin/maintenance/jobs/sync-health-refresh` | 创建并运行一次安全 Sync Health refresh job。 |
+| `GET` | `/api/v1/admin/archive/repository` | 读取 restic backup repository 状态。 |
+| `POST` | `/api/v1/admin/archive/repository` | 配置 backup repository path。 |
+| `POST` | `/api/v1/admin/archive/repository/init` | 初始化 restic repository。 |
+| `POST` | `/api/v1/admin/archive/schedule` | 设置每日备份 schedule。 |
+| `GET` | `/api/v1/admin/archive/snapshots` | 列出 restic snapshots。 |
+| `POST` | `/api/v1/admin/archive/jobs/backup` | 启动手动 backup job。 |
+| `POST` | `/api/v1/admin/archive/jobs/check` | 启动 repository check job。 |
+| `POST` | `/api/v1/admin/archive/jobs/restore` | 把 snapshot 恢复到新的 staged data directory。 |
+| `POST` | `/api/v1/admin/archive/jobs/promote` | 验证 staged restore、做 pre-promote backup，并写入 restart instructions。 |
+| `POST` | `/api/v1/admin/archive/jobs/export` | 创建 migration-first export package，支持全量或日期范围。 |
+| `POST` | `/api/v1/admin/archive/jobs/import` | 从 export package 导入到新的 staged data directory。 |
 
 ## Sync
 
@@ -384,7 +399,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 9,
+  "schemaVersion": 11,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {
@@ -402,7 +417,15 @@ Response shape：
     "availableBytes": 143418429440
   },
   "sync": {
-    "latestServerChangeVersion": 194
+    "latestServerChangeVersion": 194,
+    "pendingOperations": 0,
+    "rejectedOperations": 0,
+    "failedMediaUploads": 0,
+    "aiNonReady": 0,
+    "lastServerChangeAt": "2026-05-05T10:20:30.000Z",
+    "lastSyncOperationAt": "2026-05-05T10:18:30.000Z",
+    "lastSuccessfulSyncAt": "2026-05-05T10:18:31.000Z",
+    "lastRejectedSyncAt": null
   },
   "aiSummaries": {
     "total": 10,
@@ -434,7 +457,125 @@ Response shape：
 }
 ```
 
-`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。`sync.latestServerChangeVersion` 是 Mac server 已写入的最大 `server_changes.version`，可和 iPhone `lastSyncCursor` 比较。`aiSummaries.recent` 只返回非 ready 项的状态、错误码、duration 和 transcript length，不返回 transcript 或 summary 正文。`tags` 只返回安全计数，不返回 post text、comment text、transcript 或 summary 正文。
+`databaseBytes` 包含 SQLite database 以及 `-wal`、`-shm` sidecar files。`totalBytes` 是整个 configured data directory。`availableBytes` 是 data directory 所在 volume 的可用空间。`sync.latestServerChangeVersion` 是 Mac server 已写入的最大 `server_changes.version`，可和 iPhone `lastSyncCursor` 比较。`sync.pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady` 和 timestamps 用于 Mac Admin / iOS Settings 的 Sync Health。`aiSummaries.recent` 只返回非 ready 项的状态、错误码、duration 和 transcript length，不返回 transcript 或 summary 正文。`tags` 只返回安全计数，不返回 post text、comment text、transcript 或 summary 正文。
+
+## Maintenance Jobs And Archive API
+
+Maintenance jobs 是 backup/restore/export/import/sync-health 的统一 job record。普通列表：
+
+```bash
+curl -X GET "http://127.0.0.1:3210/api/v1/admin/maintenance/jobs?limit=12" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response：
+
+```json
+{
+  "jobs": [
+    {
+      "id": "job-uuid",
+      "type": "backup_create",
+      "status": "succeeded",
+      "stage": "completed",
+      "progress": 100,
+      "metadata": {
+        "source": "manual",
+        "snapshotId": "restic-snapshot-id"
+      },
+      "artifactPath": null,
+      "errorCode": null,
+      "errorMessage": null,
+      "createdAt": "2026-05-05T10:00:00.000Z",
+      "startedAt": "2026-05-05T10:00:01.000Z",
+      "finishedAt": "2026-05-05T10:00:08.000Z"
+    }
+  ]
+}
+```
+
+job metadata 只能包含安全 metadata，例如路径、状态、计数、snapshot id、verification result、错误码。不要把私人正文、comment、transcript、summary 正文或媒体内容写入 job metadata。
+
+Export/import job 也走同一套 maintenance jobs：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/jobs/export \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"2026-05-01T00:00:00.000Z","to":"2026-06-01T00:00:00.000Z"}'
+```
+
+`from` 和 `to` 都可省略，省略时导出全量 archive。导出完成后，job `artifactPath` 指向 `.tar.gz` package。导入时传这个 package path：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/jobs/import \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"packagePath":"/path/to/private-moments-export.tar.gz","importName":"migration-test"}'
+```
+
+导入目标总是新的 staged data directory；不会覆盖当前 data dir，也不会导入旧 device/session/sync operation runtime state。
+
+配置 repository：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/repository \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"repositoryPath":"/Users/you/Library/Mobile Documents/com~apple~CloudDocs/PrivateMomentsBackup"}'
+```
+
+初始化并创建立即备份：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/repository/init \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/jobs/backup \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+设置每日备份：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/schedule \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":true,"timeOfDay":"03:30"}'
+```
+
+列出/检查 snapshots：
+
+```bash
+curl -X GET http://127.0.0.1:3210/api/v1/admin/archive/snapshots \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/jobs/check \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+恢复 snapshot 到 staged data directory：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/jobs/restore \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"snapshotId":"snapshot-id","restoreName":"before-migration"}'
+```
+
+Promote 当前是 preparation，不是运行中热切换：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/admin/archive/jobs/promote \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "restoredDataDir":"/path/to/restored/data",
+    "confirmation":"PROMOTE restored-folder-name"
+  }'
+```
+
+成功后 job `artifactPath` 指向 `<dataDir>/archive/pending-promote.json`。operator 需要停止 server，按该 JSON 中的 `requiredEnv` 更新 `PRIVATE_MOMENTS_DATA_DIR` 和 `DATABASE_URL`，再重启 server。
 
 ## Admin Posts Filters
 
@@ -457,3 +598,68 @@ Response shape：
 ```
 
 它会永久删除该 device 创建的 posts，并写入最小化的 `post_deleted` server changes，让 iOS caches 在下次 sync 时隐藏这些 posts。
+
+## AI Periodic Reviews
+
+Review routes 使用 device bearer token。第一版支持 `weekly` review，底层字段保留 `kind` 和 `rangeMode` 以便后续扩展月度或自定义时间段。
+
+列出 reviews：
+
+```bash
+curl -X GET 'http://127.0.0.1:3210/api/v1/reviews?kind=weekly&limit=20' \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+手动生成最近 7 天 Weekly Review：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/reviews/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"weekly","rangeMode":"rolling_7_days"}'
+```
+
+也可以传入显式范围：
+
+```json
+{
+  "kind": "weekly",
+  "rangeMode": "rolling_7_days",
+  "rangeStart": "2026-04-28T14:00:00.000Z",
+  "rangeEnd": "2026-05-05T14:00:00.000Z"
+}
+```
+
+Review generation 是面向私密生活数据的受控 AI provider 调用。server 会拒绝超过 35 天的生成范围；构建 provider 输入时最多读取 240 条 moments，超过后该 review 会以 `review_input_too_large` 失败，避免大范围自定义回顾造成成本、延迟或隐私暴露面失控。
+
+重新生成：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/reviews/$REVIEW_ID/regenerate \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+反馈：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/reviews/$REVIEW_ID/feedback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"too_much_inference","note":"少做单条 moment 推断"}'
+```
+
+支持的 `type` 包括 `useful`、`too_much_inference`、`too_dry`、`missed_point`、`hide_theme`。
+
+Review settings：
+
+```bash
+curl -X GET http://127.0.0.1:3210/api/v1/reviews/settings \
+  -H "Authorization: Bearer $TOKEN"
+
+curl -X PUT http://127.0.0.1:3210/api/v1/reviews/settings \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"autoWeeklyEnabled":true,"publishWeeklyToMoments":false}'
+```
+
+`autoWeeklyEnabled` 默认 false。开启后 Mac server 在每周日晚上生成 rolling 7 days review；不会通知，也不会自动发布。`publishWeeklyToMoments` 作为 server setting 保留，但当前版本仍要求用户在 Review detail 显式 `Publish as Moment`。

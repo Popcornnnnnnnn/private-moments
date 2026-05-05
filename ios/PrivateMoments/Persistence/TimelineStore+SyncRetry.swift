@@ -10,6 +10,11 @@ private enum SyncRetryPolicy {
 
 extension TimelineStore {
     func scheduleSyncRetryIfNeeded() {
+        guard automaticSyncEnabled else {
+            cancelScheduledSyncRetry()
+            return
+        }
+
         do {
             try refreshPendingCounts()
         } catch {

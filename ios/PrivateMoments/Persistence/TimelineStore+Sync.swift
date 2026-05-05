@@ -1,7 +1,17 @@
 import Foundation
 
 extension TimelineStore {
-    func syncNow(showErrors: Bool = true, scheduleRetryOnFailure: Bool = true) async {
+    func syncNow(
+        showErrors: Bool = true,
+        scheduleRetryOnFailure: Bool = true,
+        userInitiated: Bool = true
+    ) async {
+        guard automaticSyncEnabled || userInitiated else {
+            cancelScheduledSyncRetry()
+            syncMessage = "Local-only"
+            return
+        }
+
         if isSyncing {
             needsFollowUpSync = true
             return
@@ -24,35 +34,42 @@ extension TimelineStore {
                 isSyncing = false
             }
 
-            let client = APIClient(baseURL: try normalizeServerURL(AppSettings.serverURLString), token: token)
-
             repeat {
                 needsFollowUpSync = false
-                try await runSyncPass(database: database, client: client, deviceId: deviceId)
+                try await runSyncPass(database: database, deviceId: deviceId, token: token)
                 try await reload()
                 try refreshPendingCounts()
             } while needsFollowUpSync
 
             if pendingOperationCount > 0 || pendingUploadCount > 0 {
-                syncMessage = "Retrying"
-                scheduleSyncRetryIfNeeded()
+                if automaticSyncEnabled {
+                    syncMessage = "Retrying"
+                    scheduleSyncRetryIfNeeded()
+                } else {
+                    syncMessage = "Waiting"
+                    cancelScheduledSyncRetry()
+                }
             } else {
                 syncMessage = "Synced"
                 cancelScheduledSyncRetry()
                 Task {
-                    await downloadMissingRemoteMediaIfNeeded(showErrors: false)
+                    await downloadMissingRemoteMediaIfNeeded(showErrors: false, userInitiated: userInitiated)
                 }
             }
         } catch {
             handleSyncError(error, showErrors: showErrors)
-            if scheduleRetryOnFailure {
+            if scheduleRetryOnFailure && automaticSyncEnabled {
                 scheduleSyncRetryIfNeeded()
             }
         }
     }
 
-    func downloadMissingRemoteMediaIfNeeded(showErrors: Bool = false) async {
+    func downloadMissingRemoteMediaIfNeeded(showErrors: Bool = false, userInitiated: Bool = true) async {
         guard !isDownloadingMedia else {
+            return
+        }
+
+        guard automaticSyncEnabled || userInitiated else {
             return
         }
 
@@ -74,8 +91,9 @@ extension TimelineStore {
                 isDownloadingMedia = false
             }
 
-            let client = APIClient(baseURL: try normalizeServerURL(AppSettings.serverURLString), token: token)
-            try await downloadMissingMedia(client: client, database: database)
+            try await withAvailableAPIClient(token: token) { client in
+                try await downloadMissingMedia(client: client, database: database)
+            }
             try await reload()
         } catch {
             if showErrors {
@@ -85,6 +103,12 @@ extension TimelineStore {
     }
 
     func syncPendingWorkIfNeeded(showErrors: Bool = false) async {
+        guard automaticSyncEnabled else {
+            cancelScheduledSyncRetry()
+            syncMessage = "Local-only"
+            return
+        }
+
         do {
             guard let database else {
                 return
@@ -97,12 +121,29 @@ extension TimelineStore {
             }
 
             if pendingOperationCount > 0 || pendingUploadCount > 0 {
-                await syncNow(showErrors: showErrors)
+                await syncNow(showErrors: showErrors, userInitiated: false)
             } else if missingMediaDownloadCount > 0 {
-                await downloadMissingRemoteMediaIfNeeded(showErrors: showErrors)
+                await downloadMissingRemoteMediaIfNeeded(showErrors: showErrors, userInitiated: false)
             } else {
-                await syncNow(showErrors: showErrors, scheduleRetryOnFailure: false)
+                await syncNow(showErrors: showErrors, scheduleRetryOnFailure: false, userInitiated: false)
             }
+        } catch {
+            if showErrors {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func retryMediaUploadsNow(showErrors: Bool = true) async {
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            _ = try database.retryFailedMediaUploads()
+            try await reload()
+            try refreshPendingCounts()
+            await syncNow(showErrors: showErrors, userInitiated: true)
         } catch {
             if showErrors {
                 errorMessage = error.localizedDescription
@@ -122,7 +163,7 @@ extension TimelineStore {
             if shouldRunRecoverySync {
                 AppSettings.lastSyncCursor = 0
                 lastSyncCursor = 0
-                await syncNow(showErrors: true)
+                await syncNow(showErrors: true, userInitiated: false)
                 if AppSettings.lastSyncCursor > 0 {
                     AppSettings.didApplySyncRecoveryV1 = true
                 }
@@ -136,7 +177,7 @@ extension TimelineStore {
         if items.isEmpty {
             AppSettings.lastSyncCursor = 0
             lastSyncCursor = 0
-            await syncNow(showErrors: true)
+            await syncNow(showErrors: true, userInitiated: false)
             return
         }
 
@@ -152,7 +193,7 @@ extension TimelineStore {
         AppSettings.lastSyncCursor = 0
         lastSyncCursor = 0
         syncMessage = "Resyncing"
-        await syncNow()
+        await syncNow(userInitiated: true)
     }
 
     func apply(sync response: SyncResponseBody, database: LocalDatabase) throws {
@@ -173,7 +214,7 @@ extension TimelineStore {
         }
     }
 
-    func runSyncPass(database: LocalDatabase, client: APIClient, deviceId: String) async throws {
+    func runSyncPass(database: LocalDatabase, deviceId: String, token: String) async throws {
         let operations = try database.fetchPendingOperations()
         let requestedCursor = try database.localPostCount() == 0 ? 0 : AppSettings.lastSyncCursor
         let request = SyncRequestBody(
@@ -182,14 +223,18 @@ extension TimelineStore {
             localChanges: try operations.map { try $0.syncLocalChange() }
         )
 
-        let firstSync = try await client.sync(request)
+        let firstSync = try await withAvailableAPIClient(token: token) { client in
+            try await client.sync(request)
+        }
         try apply(sync: firstSync, database: database)
 
         let pendingMedia = try database.fetchPendingMediaReadyForUpload()
         var didUploadSummarizableMedia = false
         for media in pendingMedia {
             do {
-                let uploaded = try await client.uploadMedia(media, variant: "compressed")
+                let uploaded = try await withAvailableAPIClient(token: token) { client in
+                    try await client.uploadMedia(media, variant: "compressed")
+                }
                 try database.markMediaUploaded(
                     mediaId: media.id,
                     variant: uploaded.variant,
@@ -201,7 +246,9 @@ extension TimelineStore {
                 }
 
                 if media.isVideo, media.localThumbnailPath != nil {
-                    let uploadedThumbnail = try await client.uploadMedia(media, variant: "thumbnail")
+                    let uploadedThumbnail = try await withAvailableAPIClient(token: token) { client in
+                        try await client.uploadMedia(media, variant: "thumbnail")
+                    }
                     try database.markMediaUploaded(
                         mediaId: media.id,
                         variant: uploadedThumbnail.variant,
@@ -216,13 +263,14 @@ extension TimelineStore {
 
         if !pendingMedia.isEmpty {
             let followUpOperations = try database.fetchPendingOperations()
-            let secondSync = try await client.sync(
-                SyncRequestBody(
+            let followUpRequest = SyncRequestBody(
                     deviceId: deviceId,
                     lastSyncCursor: AppSettings.lastSyncCursor,
                     localChanges: try followUpOperations.map { try $0.syncLocalChange() }
                 )
-            )
+            let secondSync = try await withAvailableAPIClient(token: token) { client in
+                try await client.sync(followUpRequest)
+            }
             try apply(sync: secondSync, database: database)
         }
 
@@ -234,6 +282,12 @@ extension TimelineStore {
     }
 
     func scheduleAISummaryFollowUpSync() {
+        guard automaticSyncEnabled else {
+            aiSummaryFollowUpSyncTask?.cancel()
+            aiSummaryFollowUpSyncTask = nil
+            return
+        }
+
         aiSummaryFollowUpSyncTask?.cancel()
         aiSummaryFollowUpSyncTask = Task { [weak self] in
             for seconds in [8.0, 20.0, 45.0, 90.0] {
@@ -247,7 +301,7 @@ extension TimelineStore {
                     return
                 }
 
-                await self?.syncNow(showErrors: false)
+                await self?.syncNow(showErrors: false, userInitiated: false)
             }
         }
     }

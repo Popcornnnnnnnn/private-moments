@@ -5,6 +5,7 @@ enum MomentTextMarkdown {
 
     enum LineKind: Equatable {
         case heading(level: Int, text: String)
+        case link(URL)
         case paragraph(String)
         case blank
     }
@@ -27,6 +28,10 @@ enum MomentTextMarkdown {
         text.components(separatedBy: .newlines).map { rawLine in
             if let heading = heading(in: rawLine) {
                 return Line(kind: .heading(level: heading.level, text: heading.text))
+            }
+
+            if let url = standaloneURL(in: rawLine) {
+                return Line(kind: .link(url))
             }
 
             if rawLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -55,6 +60,8 @@ enum MomentTextMarkdown {
                 switch line.kind {
                 case .heading(_, let text):
                     return text
+                case .link(let url):
+                    return url.absoluteString
                 case .paragraph(let text):
                     return text
                 case .blank:
@@ -143,6 +150,20 @@ enum MomentTextMarkdown {
         }
 
         return (level, text)
+    }
+
+    private static func standaloneURL(in line: String) -> URL? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 8,
+              trimmed.rangeOfCharacter(from: .whitespacesAndNewlines) == nil,
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host != nil else {
+            return nil
+        }
+
+        return url
     }
 
     private static func headingMarker(in line: String) -> (level: Int, length: Int)? {

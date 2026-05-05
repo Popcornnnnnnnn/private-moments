@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  Archive,
   Database,
   Eye,
   HardDrive,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   Smartphone,
   Star,
+  Timer,
   Trash2,
   Video,
   X,
@@ -50,6 +52,17 @@ interface AdminStatus {
   };
   storage: {
     totalBytes: number;
+  };
+  sync?: {
+    latestServerChangeVersion: number;
+    pendingOperations?: number;
+    rejectedOperations?: number;
+    failedMediaUploads?: number;
+    aiNonReady?: number;
+    lastServerChangeAt?: string | null;
+    lastSyncOperationAt?: string | null;
+    lastSuccessfulSyncAt?: string | null;
+    lastRejectedSyncAt?: string | null;
   };
 }
 
@@ -109,7 +122,47 @@ interface CleanPreview {
   candidateCount: number;
 }
 
-type AdminTab = "overview" | "posts";
+interface MaintenanceJob {
+  id: string;
+  type: string;
+  status: string;
+  stage: string | null;
+  progress: number;
+  metadata: Record<string, unknown>;
+  artifactPath: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+interface ArchiveRepositoryState {
+  configured: boolean;
+  repositoryPath: string | null;
+  keyFilePath: string | null;
+  resticAvailable: boolean;
+  resticVersion: string | null;
+  initialized: boolean;
+  schedule: {
+    enabled: boolean;
+    timeOfDay: string;
+    lastRunAt: string | null;
+    nextRunAt: string | null;
+  };
+  updatedAt: string | null;
+}
+
+interface ArchiveSnapshot {
+  id: string;
+  shortId: string;
+  time: string;
+  hostname: string | null;
+  paths: string[];
+  tags: string[];
+}
+
+type AdminTab = "overview" | "posts" | "archive";
 type DeletedFilter = "active" | "deleted" | "all";
 
 export function App() {
@@ -351,6 +404,13 @@ function Dashboard({
         >
           Posts
         </button>
+        <button
+          className={activeTab === "archive" ? "tab-button active" : "tab-button"}
+          onClick={() => setActiveTab("archive")}
+          type="button"
+        >
+          Archive
+        </button>
       </nav>
 
       {error ? <div className="banner error">{error}</div> : null}
@@ -367,7 +427,7 @@ function Dashboard({
           onRevokeDevice={revokeDevice}
           status={status}
         />
-      ) : (
+      ) : activeTab === "posts" ? (
         <PostsManager
           devices={devices}
           onChanged={() => {
@@ -377,6 +437,8 @@ function Dashboard({
           reloadSignal={postsReloadKey}
           token={token}
         />
+      ) : (
+        <ArchiveManager token={token} />
       )}
 
       {cleanPreview ? (
@@ -456,6 +518,58 @@ function Overview({
             <div>
               <dt>Uptime</dt>
               <dd>{status ? formatDuration(status.uptimeSeconds) : "-"}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="panel wide">
+          <div className="panel-heading">
+            <h2>Sync Health</h2>
+            <RefreshCw size={18} />
+          </div>
+          <div className="sync-health-grid">
+            <MetricLite
+              label="Latest change"
+              value={String(status?.sync?.latestServerChangeVersion ?? "-")}
+              tone="neutral"
+            />
+            <MetricLite
+              label="Pending ops"
+              value={String(status?.sync?.pendingOperations ?? 0)}
+              tone={(status?.sync?.pendingOperations ?? 0) > 0 ? "warn" : "good"}
+            />
+            <MetricLite
+              label="Rejected ops"
+              value={String(status?.sync?.rejectedOperations ?? 0)}
+              tone={(status?.sync?.rejectedOperations ?? 0) > 0 ? "danger" : "good"}
+            />
+            <MetricLite
+              label="Failed media"
+              value={String(status?.sync?.failedMediaUploads ?? 0)}
+              tone={(status?.sync?.failedMediaUploads ?? 0) > 0 ? "danger" : "good"}
+            />
+            <MetricLite
+              label="AI not ready"
+              value={String(status?.sync?.aiNonReady ?? 0)}
+              tone={(status?.sync?.aiNonReady ?? 0) > 0 ? "warn" : "good"}
+            />
+          </div>
+          <dl className="details-list compact">
+            <div>
+              <dt>Last server change</dt>
+              <dd>{formatDate(status?.sync?.lastServerChangeAt)}</dd>
+            </div>
+            <div>
+              <dt>Last sync operation</dt>
+              <dd>{formatDate(status?.sync?.lastSyncOperationAt)}</dd>
+            </div>
+            <div>
+              <dt>Last successful sync</dt>
+              <dd>{formatDate(status?.sync?.lastSuccessfulSyncAt)}</dd>
+            </div>
+            <div>
+              <dt>Last rejected sync</dt>
+              <dd>{formatDate(status?.sync?.lastRejectedSyncAt)}</dd>
             </div>
           </dl>
         </section>
@@ -753,6 +867,510 @@ function PostsManager({
           token={token}
         />
       ) : null}
+    </section>
+  );
+}
+
+function ArchiveManager({ token }: { token: string }) {
+  const [repository, setRepository] = useState<ArchiveRepositoryState | null>(null);
+  const [repositoryPath, setRepositoryPath] = useState("");
+  const [snapshots, setSnapshots] = useState<ArchiveSnapshot[]>([]);
+  const [jobs, setJobs] = useState<MaintenanceJob[]>([]);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("03:30");
+  const [restoreSnapshotId, setRestoreSnapshotId] = useState("");
+  const [restoreName, setRestoreName] = useState("");
+  const [promotePath, setPromotePath] = useState("");
+  const [promoteConfirmation, setPromoteConfirmation] = useState("");
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [importPackagePath, setImportPackagePath] = useState("");
+  const [importName, setImportName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState<string | null>(null);
+
+  async function loadArchive() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [repositoryResponse, snapshotsResponse, jobsResponse] = await Promise.all([
+        apiFetch<{ repository: ArchiveRepositoryState }>("/api/v1/admin/archive/repository", token),
+        apiFetch<{ snapshots: ArchiveSnapshot[] }>("/api/v1/admin/archive/snapshots", token).catch(() => ({
+          snapshots: [],
+        })),
+        apiFetch<{ jobs: MaintenanceJob[] }>("/api/v1/admin/maintenance/jobs?limit=12", token),
+      ]);
+
+      setRepository(repositoryResponse.repository);
+      setRepositoryPath(repositoryResponse.repository.repositoryPath ?? "");
+      setScheduleEnabled(repositoryResponse.repository.schedule.enabled);
+      setScheduleTime(repositoryResponse.repository.schedule.timeOfDay);
+      setSnapshots(snapshotsResponse.snapshots);
+      setJobs(jobsResponse.jobs);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to load archive state");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadArchive();
+  }, []);
+
+  async function runAction(name: string, action: () => Promise<string>) {
+    setSubmitting(name);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const message = await action();
+      setNotice(message);
+      await loadArchive();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Archive action failed");
+    } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function saveRepository() {
+    await runAction("repository", async () => {
+      const response = await apiFetch<{ repository: ArchiveRepositoryState }>(
+        "/api/v1/admin/archive/repository",
+        token,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            repositoryPath,
+          }),
+        },
+      );
+      setRepository(response.repository);
+      return "Backup repository path saved.";
+    });
+  }
+
+  async function initializeRepository() {
+    await runAction("init", async () => {
+      await apiFetch("/api/v1/admin/archive/repository/init", token, {
+        method: "POST",
+      });
+      return "Backup repository initialized.";
+    });
+  }
+
+  async function saveSchedule() {
+    await runAction("schedule", async () => {
+      await apiFetch("/api/v1/admin/archive/schedule", token, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: scheduleEnabled,
+          timeOfDay: scheduleTime,
+        }),
+      });
+      return "Backup schedule updated.";
+    });
+  }
+
+  async function startJob(kind: "backup" | "check") {
+    await runAction(kind, async () => {
+      await apiFetch(`/api/v1/admin/archive/jobs/${kind}`, token, {
+        method: "POST",
+      });
+      return kind === "backup" ? "Backup job started." : "Repository check started.";
+    });
+  }
+
+  async function startRestore(snapshotId: string) {
+    await runAction("restore", async () => {
+      await apiFetch("/api/v1/admin/archive/jobs/restore", token, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          snapshotId,
+          restoreName,
+        }),
+      });
+      setRestoreSnapshotId(snapshotId);
+      return "Restore job started. Watch recent jobs for the verified restore path.";
+    });
+  }
+
+  async function startPromote() {
+    await runAction("promote", async () => {
+      await apiFetch("/api/v1/admin/archive/jobs/promote", token, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          restoredDataDir: promotePath,
+          confirmation: promoteConfirmation,
+        }),
+      });
+      return "Promote preparation started. It will write restart instructions after verification and pre-promote backup.";
+    });
+  }
+
+  async function startExport() {
+    await runAction("export", async () => {
+      await apiFetch("/api/v1/admin/archive/jobs/export", token, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: exportFrom ? startOfLocalDay(exportFrom).toISOString() : undefined,
+          to: exportTo ? nextLocalDay(exportTo).toISOString() : undefined,
+        }),
+      });
+      return "Export job started. The package path will appear in Recent Jobs.";
+    });
+  }
+
+  async function startImport() {
+    await runAction("import", async () => {
+      await apiFetch("/api/v1/admin/archive/jobs/import", token, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          packagePath: importPackagePath,
+          importName,
+        }),
+      });
+      return "Import job started. It will create a new staged data directory and leave the current archive untouched.";
+    });
+  }
+
+  const runningJob = jobs.find((job) => job.status === "running");
+
+  return (
+    <section className="archive-manager">
+      {error ? <div className="banner error">{error}</div> : null}
+      {notice ? <div className="banner success">{notice}</div> : null}
+      {loading ? <div className="banner">Loading archive state</div> : null}
+
+      <section className="metric-grid">
+        <Metric
+          icon={<Archive size={20} />}
+          label="Repository"
+          value={repository?.configured ? "Configured" : "Not set"}
+          detail={repository?.initialized ? "initialized" : "not initialized"}
+        />
+        <Metric
+          icon={<HardDrive size={20} />}
+          label="restic"
+          value={repository?.resticAvailable ? "Available" : "Missing"}
+          detail={repository?.resticVersion ?? "brew install restic"}
+        />
+        <Metric
+          icon={<Timer size={20} />}
+          label="Schedule"
+          value={repository?.schedule.enabled ? repository.schedule.timeOfDay : "Off"}
+          detail={repository?.schedule.nextRunAt ? `next ${formatDate(repository.schedule.nextRunAt)}` : "manual only"}
+        />
+        <Metric
+          icon={<Activity size={20} />}
+          label="Running job"
+          value={runningJob ? runningJob.type : "None"}
+          detail={runningJob ? `${runningJob.progress}% · ${runningJob.stage ?? "running"}` : `${jobs.length} recent jobs`}
+        />
+      </section>
+
+      <section className="layout-grid archive-grid">
+        <section className="panel wide">
+          <div className="panel-heading">
+            <h2>Backup Repository</h2>
+            <Archive size={18} />
+          </div>
+          <p className="muted-text">
+            Repository plus key file can restore your archive. This is a recovery tool for your own
+            Mac, not a separate encrypted vault if someone has both files.
+          </p>
+          <div className="form-grid">
+            <label>
+              <span>Repository path</span>
+              <input
+                onChange={(event) => setRepositoryPath(event.target.value)}
+                placeholder="/Users/you/Library/Mobile Documents/com~apple~CloudDocs/PrivateMomentsBackup"
+                value={repositoryPath}
+              />
+            </label>
+            <button
+              className="primary-button"
+              disabled={submitting !== null || !repositoryPath.trim()}
+              onClick={() => void saveRepository()}
+              type="button"
+            >
+              Save path
+            </button>
+          </div>
+          <dl className="details-list compact">
+            <div>
+              <dt>Key file</dt>
+              <dd>{repository?.keyFilePath ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>Updated</dt>
+              <dd>{formatDate(repository?.updatedAt)}</dd>
+            </div>
+          </dl>
+          <div className="toolbar-row">
+            <button
+              className="icon-button"
+              disabled={submitting !== null || !repository?.configured}
+              onClick={() => void initializeRepository()}
+              type="button"
+            >
+              <Database size={17} />
+              Initialize
+            </button>
+            <button
+              className="primary-button"
+              disabled={submitting !== null || !repository?.configured}
+              onClick={() => void startJob("backup")}
+              type="button"
+            >
+              <Archive size={17} />
+              Backup now
+            </button>
+            <button
+              className="icon-button"
+              disabled={submitting !== null || !repository?.initialized}
+              onClick={() => void startJob("check")}
+              type="button"
+            >
+              <ShieldCheck size={17} />
+              Check repository
+            </button>
+            <button className="icon-button" onClick={() => void loadArchive()} type="button">
+              <RefreshCw size={17} />
+              Refresh
+            </button>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <h2>Daily Backup</h2>
+            <Timer size={18} />
+          </div>
+          <div className="form-grid compact-form">
+            <label className="checkbox-label">
+              <input
+                checked={scheduleEnabled}
+                onChange={(event) => setScheduleEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Enable daily backup</span>
+            </label>
+            <label>
+              <span>Time</span>
+              <input
+                onChange={(event) => setScheduleTime(event.target.value)}
+                type="time"
+                value={scheduleTime}
+              />
+            </label>
+            <button
+              className="primary-button"
+              disabled={submitting !== null}
+              onClick={() => void saveSchedule()}
+              type="button"
+            >
+              Save schedule
+            </button>
+          </div>
+          <dl className="details-list compact">
+            <div>
+              <dt>Last run</dt>
+              <dd>{formatDate(repository?.schedule.lastRunAt)}</dd>
+            </div>
+            <div>
+              <dt>Next run</dt>
+              <dd>{formatDate(repository?.schedule.nextRunAt)}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <h2>Promote Restore</h2>
+            <ShieldCheck size={18} />
+          </div>
+          <p className="muted-text">
+            Restore first, then paste the verified restore path here. Promotion creates a
+            pre-promote backup and writes restart instructions instead of replacing the live SQLite
+            database in-process.
+          </p>
+          <div className="form-grid compact-form">
+            <label>
+              <span>Restored data directory</span>
+              <input
+                onChange={(event) => setPromotePath(event.target.value)}
+                placeholder="/path/from/restore/job"
+                value={promotePath}
+              />
+            </label>
+            <label>
+              <span>Confirmation</span>
+              <input
+                onChange={(event) => setPromoteConfirmation(event.target.value)}
+                placeholder={promotePath ? `PROMOTE ${lastPathSegment(promotePath)}` : "PROMOTE <folder>"}
+                value={promoteConfirmation}
+              />
+            </label>
+            <button
+              className="primary-button destructive"
+              disabled={submitting !== null || !promotePath.trim() || !promoteConfirmation.trim()}
+              onClick={() => void startPromote()}
+              type="button"
+            >
+              Prepare promote
+            </button>
+          </div>
+        </section>
+
+        <section className="panel wide">
+          <div className="panel-heading">
+            <h2>Snapshots</h2>
+            <span className="status-pill">{snapshots.length}</span>
+          </div>
+          <div className="snapshot-list">
+            {snapshots.map((snapshot) => (
+              <div className="snapshot-row" key={snapshot.id}>
+                <div>
+                  <strong>{snapshot.shortId}</strong>
+                  <span>{formatDate(snapshot.time)}</span>
+                  <span>{snapshot.tags.length ? snapshot.tags.join(", ") : "private-moments"}</span>
+                </div>
+                <button
+                  className="icon-button"
+                  disabled={submitting !== null}
+                  onClick={() => void startRestore(snapshot.id)}
+                  type="button"
+                >
+                  Restore
+                </button>
+              </div>
+            ))}
+            {!snapshots.length ? <div className="empty-state">No snapshots yet</div> : null}
+          </div>
+          <label className="restore-name-label">
+            <span>Restore label</span>
+            <input
+              onChange={(event) => setRestoreName(event.target.value)}
+              placeholder="optional label"
+              value={restoreName}
+            />
+          </label>
+          {restoreSnapshotId ? (
+            <p className="muted-text">Last selected snapshot: {restoreSnapshotId.slice(0, 12)}</p>
+          ) : null}
+        </section>
+
+        <section className="panel wide">
+          <div className="panel-heading">
+            <h2>Exports</h2>
+            <Archive size={18} />
+          </div>
+          <p className="muted-text">
+            Export is migration-first: JSON is the source of truth, media files are included, and
+            Markdown is only a preview. Import always stages into a new data directory.
+          </p>
+          <div className="form-grid export-form">
+            <label>
+              <span>From</span>
+              <input
+                onChange={(event) => setExportFrom(event.target.value)}
+                type="date"
+                value={exportFrom}
+              />
+            </label>
+            <label>
+              <span>To</span>
+              <input
+                onChange={(event) => setExportTo(event.target.value)}
+                type="date"
+                value={exportTo}
+              />
+            </label>
+            <button
+              className="primary-button"
+              disabled={submitting !== null}
+              onClick={() => void startExport()}
+              type="button"
+            >
+              Create export
+            </button>
+          </div>
+          <div className="form-grid import-form">
+            <label>
+              <span>Package path</span>
+              <input
+                onChange={(event) => setImportPackagePath(event.target.value)}
+                placeholder="/path/to/private-moments-export.tar.gz"
+                value={importPackagePath}
+              />
+            </label>
+            <label>
+              <span>Import label</span>
+              <input
+                onChange={(event) => setImportName(event.target.value)}
+                placeholder="optional label"
+                value={importName}
+              />
+            </label>
+            <button
+              className="icon-button"
+              disabled={submitting !== null || !importPackagePath.trim()}
+              onClick={() => void startImport()}
+              type="button"
+            >
+              Import package
+            </button>
+          </div>
+        </section>
+
+        <section className="panel wide">
+          <div className="panel-heading">
+            <h2>Recent Jobs</h2>
+            <Activity size={18} />
+          </div>
+          <div className="job-list">
+            {jobs.map((job) => (
+              <div className="job-row" key={job.id}>
+                <div>
+                  <strong>{job.type}</strong>
+                  <span>
+                    {formatDate(job.createdAt)} · {job.stage ?? "queued"} · {job.progress}%
+                  </span>
+                  {job.artifactPath ? <span className="mono">{job.artifactPath}</span> : null}
+                  {job.errorMessage ? <span className="danger-text">{job.errorMessage}</span> : null}
+                </div>
+                <span className={job.status === "failed" ? "status-pill danger" : "status-pill"}>
+                  {job.status}
+                </span>
+              </div>
+            ))}
+            {!jobs.length ? <div className="empty-state">No maintenance jobs yet</div> : null}
+          </div>
+        </section>
+      </section>
     </section>
   );
 }
@@ -1079,6 +1697,23 @@ function Metric({
   );
 }
 
+function MetricLite({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "good" | "warn" | "danger" | "neutral";
+  value: string;
+}) {
+  return (
+    <article className={`metric-lite ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
 async function apiFetch<T>(
   path: string,
   token: string | null,
@@ -1193,6 +1828,20 @@ function deviceLabel(device: Device | null): string {
 function deviceOptionLabel(device: Device): string {
   const state = device.revokedAt ? "revoked" : formatDate(device.lastSeenAt ?? device.createdAt);
   return `${device.name} · ${shortId(device.id)} · ${state}`;
+}
+
+function lastPathSegment(value: string): string {
+  return value.split("/").filter(Boolean).at(-1) ?? "";
+}
+
+function startOfLocalDay(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+function nextLocalDay(value: string): Date {
+  const date = startOfLocalDay(value);
+  date.setDate(date.getDate() + 1);
+  return date;
 }
 
 function adminDeviceKey(): string {

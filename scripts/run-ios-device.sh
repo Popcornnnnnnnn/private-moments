@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IOS_DIR="$ROOT_DIR/ios"
+if [[ -f "$ROOT_DIR/.env.local" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env.local"
+  set +a
+fi
 DEVICE_NAME="${PRIVATE_MOMENTS_DEVICE_NAME:-wwz 的 iphone}"
 BUNDLE_ID="com.popcornnnnnn.privatemoments"
 TAILSCALE_DNS="$(tailscale status --self --json 2>/dev/null | jq -r '.Self.DNSName // "" | rtrimstr(".")' 2>/dev/null || true)"
@@ -50,6 +56,10 @@ fi
 
 mkdir -p "$ROOT_DIR/.tmp"
 build_log="$ROOT_DIR/.tmp/ios-device-build.log"
+xcodebuild_overrides=()
+if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
+  xcodebuild_overrides+=("PRIVATE_MOMENTS_FALLBACK_SERVER_URL=$PRIVATE_MOMENTS_FALLBACK_SERVER_URL")
+fi
 
 if ! xcodebuild \
   -project PrivateMoments.xcodeproj \
@@ -58,7 +68,8 @@ if ! xcodebuild \
   -configuration Debug \
   -derivedDataPath "$IOS_DIR/build-device" \
   -allowProvisioningUpdates \
-  build 2>&1 | tee "$build_log"; then
+  build \
+  "${xcodebuild_overrides[@]}" 2>&1 | tee "$build_log"; then
   if grep -q "No Account for Team\\|No profiles for" "$build_log"; then
     cat >&2 <<MSG
 
@@ -111,4 +122,7 @@ echo
 echo "Moments is installed and launched on $DEVICE_NAME."
 echo "In app Settings, use:"
 echo "Server: $SERVER_URL"
+if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
+  echo "Fallback server: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+fi
 echo "Password: use PRIVATE_MOMENTS_INITIAL_PASSWORD from server/.env"

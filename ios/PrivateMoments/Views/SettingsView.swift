@@ -23,6 +23,20 @@ struct SettingsView: View {
                 }
 
                 Section(L10n.t("Sync", appLanguage)) {
+                    Toggle(
+                        L10n.t("Automatic Sync", appLanguage),
+                        isOn: Binding(
+                            get: { store.automaticSyncEnabled },
+                            set: { store.setAutomaticSyncEnabled($0) }
+                        )
+                    )
+
+                    if !store.automaticSyncEnabled {
+                        Text(L10n.t("Local-only mode keeps new work on this iPhone until you tap Sync Now or turn automatic sync back on.", appLanguage))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if hasPendingSyncWork {
                         LabeledContent(L10n.t("Waiting", appLanguage), value: pendingSummary)
                     }
@@ -114,6 +128,22 @@ struct SettingsView: View {
                             set: { store.setAITitleAutoInsertEnabled($0) }
                         )
                     )
+
+                    Toggle(
+                        L10n.t("Auto-generate Weekly Review", appLanguage),
+                        isOn: Binding(
+                            get: { store.autoWeeklyReviewEnabled },
+                            set: { store.setAutoWeeklyReviewEnabled($0) }
+                        )
+                    )
+
+                    Toggle(
+                        L10n.t("Publish Weekly Review to Moments", appLanguage),
+                        isOn: Binding(
+                            get: { store.publishWeeklyReviewToMoments },
+                            set: { store.setPublishWeeklyReviewToMoments($0) }
+                        )
+                    )
                 }
             }
             .navigationTitle(L10n.t("Settings", appLanguage))
@@ -174,6 +204,10 @@ struct SettingsView: View {
 
         if store.isSyncing {
             return .syncing
+        }
+
+        if !store.automaticSyncEnabled {
+            return .localOnly
         }
 
         if hasPendingSyncWork {
@@ -320,6 +354,7 @@ private struct SyncButtonLabel: View {
 
 private enum SyncButtonState {
     case notLoggedIn
+    case localOnly
     case needsSync
     case syncing
     case synced
@@ -328,6 +363,8 @@ private enum SyncButtonState {
         switch self {
         case .notLoggedIn:
             return L10n.t("Log In First", language)
+        case .localOnly:
+            return L10n.t("Sync Now", language)
         case .needsSync:
             return L10n.t("Sync Now", language)
         case .syncing:
@@ -341,6 +378,8 @@ private enum SyncButtonState {
         switch self {
         case .notLoggedIn:
             return "lock"
+        case .localOnly:
+            return "icloud.slash"
         case .needsSync, .syncing:
             return "arrow.triangle.2.circlepath"
         case .synced:
@@ -354,6 +393,8 @@ private enum SyncButtonState {
             return .green
         case .notLoggedIn:
             return .secondary
+        case .localOnly:
+            return .orange
         case .needsSync, .syncing:
             return .accentColor
         }
@@ -363,6 +404,8 @@ private enum SyncButtonState {
         switch self {
         case .notLoggedIn:
             return "Log in before syncing"
+        case .localOnly:
+            return "Automatic Sync is off. Tap to sync once."
         case .needsSync:
             return "Sync now"
         case .syncing:

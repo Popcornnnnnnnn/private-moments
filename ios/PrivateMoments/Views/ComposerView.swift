@@ -1,3 +1,4 @@
+import Foundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -415,10 +416,40 @@ struct ComposerView: View {
             return
         }
 
+        let normalizedSharedText = Self.normalizedSharedText(trimmedSharedText)
         let trimmedCurrentText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         text = trimmedCurrentText.isEmpty
-            ? trimmedSharedText
-            : "\(trimmedCurrentText)\n\n\(trimmedSharedText)"
+            ? normalizedSharedText
+            : "\(trimmedCurrentText)\n\n\(normalizedSharedText)"
+    }
+
+    private static func normalizedSharedText(_ value: String) -> String {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return value
+        }
+
+        let nsValue = value as NSString
+        let fullRange = NSRange(location: 0, length: nsValue.length)
+        let matches = detector.matches(in: value, options: [], range: fullRange)
+        guard !matches.isEmpty else {
+            return value
+        }
+
+        var result = value
+        for match in matches.reversed() {
+            guard let url = match.url,
+                  let range = Range(match.range, in: result) else {
+                continue
+            }
+
+            result.replaceSubrange(range, with: "\n\(url.absoluteString)\n")
+        }
+
+        return result
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 
     private func applySharedAttachments(_ envelope: PendingShareImportEnvelope) async throws {

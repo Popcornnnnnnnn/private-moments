@@ -81,6 +81,13 @@ struct CalendarView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
+                        navigationPath.append(CalendarReviewsRoute())
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
+                    .accessibilityLabel(L10n.t("Reviews", appLanguage))
+
+                    Button {
                         showMonthStats = true
                     } label: {
                         Image(systemName: "chart.bar.xaxis")
@@ -156,6 +163,9 @@ struct CalendarView: View {
                 } else {
                     ContentUnavailableView(L10n.t("No moments", appLanguage), systemImage: "calendar")
                 }
+            }
+            .navigationDestination(for: CalendarReviewsRoute.self) { _ in
+                WeeklyReviewListView()
             }
             .navigationDestination(for: TimelineItem.ID.self) { postId in
                 MomentDetailView(postId: postId)
@@ -269,6 +279,8 @@ struct CalendarView: View {
 private struct CalendarDayRoute: Hashable {
     let dayStart: Date
 }
+
+private struct CalendarReviewsRoute: Hashable {}
 
 private struct CalendarMonthHeader: View {
     @Environment(\.appLanguage) private var appLanguage

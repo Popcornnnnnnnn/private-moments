@@ -16,10 +16,11 @@
     "server:build": "npm run build -w server",
     "server:start": "npm run start -w server",
     "server:typecheck": "npm run typecheck -w server",
+    "server:test": "npm run test -w server",
     "server:prisma:generate": "npm run prisma:generate -w server",
     "server:prisma:migrate": "npm run prisma:migrate -w server",
     "server:prisma:deploy": "npm run prisma:deploy -w server",
-    "verify:server": "npm run server:typecheck && npm run server:build && npm run admin:build",
+    "verify:server": "npm run server:typecheck && npm run server:test && npm run server:build && npm run admin:build",
     "ios:simulator": "scripts/run-ios-simulator.sh",
     "ios:device": "scripts/run-ios-device.sh"
   },

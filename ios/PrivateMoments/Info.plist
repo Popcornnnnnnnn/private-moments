@@ -46,6 +46,8 @@
 	<string>Moments uses the microphone to record audio moments.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Moments uses your photo library to attach images to posts.</string>
+	<key>PrivateMomentsFallbackServerURL</key>
+	<string>$(PRIVATE_MOMENTS_FALLBACK_SERVER_URL)</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Moments saves selected moment images to your photo library when you choose Save.</string>
 		<key>UILaunchScreen</key>

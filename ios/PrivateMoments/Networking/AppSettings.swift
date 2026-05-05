@@ -47,7 +47,12 @@ enum AppSettings {
         static let appAppearanceMode = "appAppearanceMode"
         static let appLanguageMode = "appLanguageMode"
         static let aiLanguageMode = "aiLanguageMode"
+        static let automaticSyncEnabled = "automaticSyncEnabled"
+        static let autoWeeklyReviewEnabled = "autoWeeklyReviewEnabled"
+        static let publishWeeklyReviewToMoments = "publishWeeklyReviewToMoments"
     }
+
+    private static let fallbackServerURLInfoKey = "PrivateMomentsFallbackServerURL"
 
     static var serverURLString: String {
         get {
@@ -56,6 +61,38 @@ enum AppSettings {
         set {
             UserDefaults.standard.set(newValue, forKey: Keys.serverURLString)
         }
+    }
+
+    static var bundledFallbackServerURLString: String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: fallbackServerURLInfoKey) as? String else {
+            return nil
+        }
+
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
+            return nil
+        }
+
+        return trimmed
+    }
+
+    static func serverURLCandidateStrings(primary: String = AppSettings.serverURLString) -> [String] {
+        var candidates: [String] = []
+        for value in [primary, bundledFallbackServerURLString].compactMap({ $0 }) {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                continue
+            }
+
+            let comparable = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+            if !candidates.contains(where: {
+                $0.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased() == comparable
+            }) {
+                candidates.append(trimmed)
+            }
+        }
+
+        return candidates
     }
 
     static var deviceId: String? {
@@ -193,6 +230,45 @@ enum AppSettings {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: Keys.aiLanguageMode)
+        }
+    }
+
+    static var automaticSyncEnabled: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: Keys.automaticSyncEnabled) == nil {
+                return true
+            }
+
+            return UserDefaults.standard.bool(forKey: Keys.automaticSyncEnabled)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Keys.automaticSyncEnabled)
+        }
+    }
+
+    static var autoWeeklyReviewEnabled: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: Keys.autoWeeklyReviewEnabled) == nil {
+                return false
+            }
+
+            return UserDefaults.standard.bool(forKey: Keys.autoWeeklyReviewEnabled)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Keys.autoWeeklyReviewEnabled)
+        }
+    }
+
+    static var publishWeeklyReviewToMoments: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: Keys.publishWeeklyReviewToMoments) == nil {
+                return false
+            }
+
+            return UserDefaults.standard.bool(forKey: Keys.publishWeeklyReviewToMoments)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Keys.publishWeeklyReviewToMoments)
         }
     }
 

@@ -15,6 +15,10 @@ import { enqueueMediaSummaryJob } from "../ai/media-summary-service.js";
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
 import type { AppConfig } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
+import {
+  blockWritesDuringMaintenance,
+  type MaintenanceModeService,
+} from "../maintenance/maintenance-mode.js";
 import type { DataPaths } from "../storage/data-dir.js";
 import { sendBadRequest, sendNotFound, sendUnauthorized } from "./http-errors.js";
 
@@ -31,6 +35,7 @@ interface MediaRouteContext {
   prisma: PrismaClient;
   paths: DataPaths;
   fileLogger: FileLogger;
+  maintenanceMode: MaintenanceModeService;
 }
 
 type MediaVariant = "compressed" | "original" | "thumbnail";
@@ -190,6 +195,10 @@ export async function registerMediaRoutes(
       }
 
       throw error;
+    }
+    const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+    if (maintenanceReply) {
+      return maintenanceReply;
     }
 
     const file = await request.file();

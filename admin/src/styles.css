@@ -92,6 +92,11 @@ select {
   padding: 10px 12px;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  accent-color: #2f7d68;
+}
+
 input:focus,
 select:focus {
   border-color: #2f7d68;
@@ -260,6 +265,48 @@ select:focus {
   line-height: 1.1;
 }
 
+.sync-health-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.metric-lite {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #edf0ed;
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 12px;
+}
+
+.metric-lite span {
+  color: #657078;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric-lite strong {
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.metric-lite.good {
+  border-color: #cde2d6;
+  background: #f5fbf7;
+}
+
+.metric-lite.warn {
+  border-color: #efdca9;
+  background: #fffaf0;
+}
+
+.metric-lite.danger {
+  border-color: #e7beb8;
+  background: #fff7f5;
+}
+
 .layout-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
@@ -404,6 +451,83 @@ dd {
 .posts-manager {
   display: grid;
   gap: 14px;
+}
+
+.archive-manager {
+  display: grid;
+  gap: 14px;
+}
+
+.archive-grid {
+  align-items: start;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.form-grid.compact-form {
+  grid-template-columns: 1fr;
+}
+
+.form-grid.export-form {
+  grid-template-columns: minmax(140px, 180px) minmax(140px, 180px) auto;
+}
+
+.form-grid.import-form {
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) auto;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.snapshot-list,
+.job-list {
+  display: grid;
+  gap: 8px;
+}
+
+.snapshot-row,
+.job-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #edf0ed;
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 12px;
+}
+
+.snapshot-row div,
+.job-row div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.snapshot-row span,
+.job-row span {
+  color: #657078;
+  font-size: 12px;
+}
+
+.restore-name-label {
+  margin-top: 12px;
 }
 
 .posts-toolbar {
@@ -749,9 +873,11 @@ dd {
   }
 
   .metric-grid,
+  .sync-health-grid,
   .layout-grid,
   .posts-layout,
-  .filter-bar {
+  .filter-bar,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 

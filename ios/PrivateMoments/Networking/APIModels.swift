@@ -100,6 +100,148 @@ struct MediaSummaryResponse: Decodable {
     let summary: AISummaryPayload
 }
 
+struct ReviewListResponse: Decodable {
+    let reviews: [ReviewPayload]
+}
+
+struct ReviewResponse: Decodable {
+    let review: ReviewPayload
+}
+
+struct ReviewSettingsResponse: Decodable {
+    let settings: ReviewSettingsPayload
+}
+
+struct ReviewFeedbackResponse: Decodable {
+    let ok: Bool
+}
+
+struct ReviewPublishResponse: Decodable {
+    let review: ReviewPayload
+    let postId: String
+}
+
+struct GenerateReviewRequest: Encodable {
+    let kind: String
+    let rangeMode: String
+    let rangeStart: Date?
+    let rangeEnd: Date?
+}
+
+struct ReviewSettingsRequest: Encodable {
+    let autoWeeklyEnabled: Bool
+    let publishWeeklyToMoments: Bool
+}
+
+struct ReviewFeedbackRequest: Encodable {
+    let type: String
+    let note: String?
+}
+
+struct ReviewSettingsPayload: Decodable {
+    let autoWeeklyEnabled: Bool
+    let publishWeeklyToMoments: Bool
+    let lastAutoWeeklyDate: String?
+    let updatedAt: String
+}
+
+struct ReviewPayload: Decodable, Identifiable {
+    let id: String
+    let kind: String
+    let rangeMode: String
+    let rangeStart: String
+    let rangeEnd: String
+    let status: String
+    let trigger: String
+    let content: ReviewContentPayload
+    let promptVersion: String
+    let provider: String?
+    let model: String?
+    let language: String?
+    let errorCode: String?
+    let errorMessage: String?
+    let generatedAt: String?
+    let regeneratedFromReviewId: String?
+    let publishedPostId: String?
+    let createdAt: String
+    let updatedAt: String
+    let deletedAt: String?
+
+    var parsedRangeStart: Date? {
+        Self.parseServerDate(rangeStart)
+    }
+
+    var parsedRangeEnd: Date? {
+        Self.parseServerDate(rangeEnd)
+    }
+
+    private static func parseServerDate(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: value) {
+            return date
+        }
+
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value)
+    }
+}
+
+struct ReviewContentPayload: Decodable {
+    let title: String?
+    let oneLiner: String?
+    let keywords: [ReviewKeywordPayload]?
+    let themes: [ReviewThemePayload]?
+    let emotionalReflection: ReviewEmotionalReflectionPayload?
+    let progressAndOpenLoops: ReviewProgressPayload?
+    let rhythm: ReviewRhythmPayload?
+    let notableMoments: [ReviewNotableMomentPayload]?
+    let gentleSuggestions: [String]?
+    let uncertainty: [String]?
+}
+
+struct ReviewKeywordPayload: Decodable, Identifiable {
+    let label: String
+    let note: String
+
+    var id: String {
+        label
+    }
+}
+
+struct ReviewThemePayload: Decodable, Identifiable {
+    let title: String
+    let body: String
+
+    var id: String {
+        title
+    }
+}
+
+struct ReviewEmotionalReflectionPayload: Decodable {
+    let tone: String
+    let body: String
+}
+
+struct ReviewProgressPayload: Decodable {
+    let progress: [String]
+    let openLoops: [String]
+}
+
+struct ReviewRhythmPayload: Decodable {
+    let body: String
+    let observations: [String]
+}
+
+struct ReviewNotableMomentPayload: Decodable, Identifiable {
+    let title: String
+    let note: String
+    let momentIds: [String]
+
+    var id: String {
+        "\(title)-\(momentIds.joined(separator: ","))"
+    }
+}
+
 struct AISummaryPayload: Decodable {
     let id: String
     let postId: String
@@ -196,6 +338,14 @@ struct AdminAISummaryDiagnosticItem: Decodable, Equatable, Identifiable {
 
 struct AdminSyncDiagnostics: Decodable, Equatable {
     let latestServerChangeVersion: Int
+    let pendingOperations: Int?
+    let rejectedOperations: Int?
+    let failedMediaUploads: Int?
+    let aiNonReady: Int?
+    let lastServerChangeAt: String?
+    let lastSyncOperationAt: String?
+    let lastSuccessfulSyncAt: String?
+    let lastRejectedSyncAt: String?
 }
 
 struct AdminTagDiagnostics: Decodable, Equatable {

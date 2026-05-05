@@ -76,6 +76,10 @@ private-moments/
 
 当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，系统 Share Sheet 导入入口，主时间线单用户私密评论，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、App Language-aware 人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、Calendar Review、详情页、编辑、软删除同步、iOS 本机语言偏好，以及 Mac 后台状态页和 Posts 运维管理。
 
+iOS 还提供本机 `Automatic Sync` 开关。打开时沿用启动、前台、发布/编辑、失败重试和 AI follow-up 的自动同步路径；关闭时进入严格 local-only 模式：发布、编辑、评论、标签和媒体草稿仍写入本地 SQLite/outbox，但不会自动连接 Mac server、上传媒体、拉取远端 AI summary/tag/media 变更或执行后台 retry。Settings 里的显式 `Sync Now` 仍是用户主动联网动作。
+
+v0.1 owner reliability layer 增加 Mac Admin `Archive` 和 Sync Health。Archive 使用 restic 作为底层 deduplicated snapshot 工具，server 通过 durable `maintenance_jobs` 记录备份、检查、恢复和 promote preparation；Sync Health 在 Mac Admin 和 iOS Settings 中展示同步游标、outbox、media upload、missing media 和 AI pipeline 的安全诊断。
+
 当前 UI 设计原则是保持主时间线安静：筛选、Calendar 回看、收藏和管理能力应尽量藏在 toolbar menu、底部 review tab、滑动操作或详情页里，避免把主界面做成后台管理界面。详细原则见 `docs/DESIGN-PRINCIPLES.md`。
 
 iOS 主要模块已经按职责拆分。`TimelineStore` 按 session、mutations、sync、server changes、media、payloads 和 sync retry 拆分；`LocalDatabase` 按 schema、records、timeline、sync、storage stats 和 SQLite helper 拆分；`TimelineView` 拆出 `TimelineRow`、`MomentDateFormatter`、`MediaGalleryView` 和 `ZoomableLocalImage`。设置页存储诊断拆在 `StorageStats.swift` 和 `StorageSettingsView.swift`。后续继续加功能时优先扩展这些小文件，不再把同步、数据库或主界面逻辑塞回单一大文件。
@@ -115,6 +119,10 @@ Day Review 不使用 grouped `List` 或 sheet 的灰色大块背景，而是用 
 媒体模型支持 `image`、`video`、`audio` 三种 `kind`。每条动态只允许一种媒体类型：图片最多 9 张，视频 1 段，语音 1 段。视频从相册导入后在 iOS 端压缩为 720p H.264 MP4，并生成 JPEG poster 写入 `thumbnail` variant；时间线里由单例 muted autoplay center 选择当前最靠近视口中心的视频静音自动播放，滑走、打开详情/全屏/发布页时停止，点击视频仍进入全屏播放。语音通过 AVAudioRecorder 写入 AAC/M4A，主 App 声明 `audio` background mode，录音 session 使用 `playAndRecord` + `spokenAudio`，因此用户从发布页开始录音后可以切到其他 App，回到 Moments 后再停止并生成语音草稿。本地播放进度按 media id 存在 UserDefaults；中途暂停或切走会保存进度，完整播放结束会清除该 media 的进度并让播放条回到初始未播放状态。音频播放在 App 仍 active 的界面切换中自动暂停，例如切换 Timeline/Calendar、进入详情、打开 Settings/Composer/Summary/gallery/video 或退出 Day Review/Detail；进入后台或锁屏不暂停，继续依赖 `audio` background mode 和 `.playback` session。语音条是全局复用的 waveform voice bar：用 deterministic pseudo-waveform 表达可拖动进度，点击播放/暂停，横向拖动 seek，右侧轻量 `1x/1.5x/2x` capsule menu 调倍速；Timeline 和 Day Review 使用紧凑密度，Detail 稍高。语音条不显示重复的 `Audio` 标题，也不使用突兀的整块灰色卡片；正文语境由 moment text 或 comments 承担。iOS 不再使用 Speech framework 做本地转写，也不再上传 `transcriptionText`；语音/视频摘要由 Mac server 在媒体上传后先本地转写，再调用外部 summary API 处理。评论仍然是纯文字，不复用媒体模型。
 
 编辑采用直接覆盖模型：保存后原动态只显示最新文字、发生时间和图片列表，不提供可见历史版本。编辑页支持修改文字、发生时间、新增图片、删除图片和 9 张以内图片的长按拖拽重排。保存时，编辑页里的最终图片列表就是新状态；服务端软删除移除的图片，保留新增图片等待上传，重排后的 `sortOrder` 作为权威顺序。
+
+编辑入口不再等待 moment 完全 synced。`pending`、`partial`、`failed` 和 `synced` 的 moment 都可以编辑正文、时间、媒体顺序和标签；本地最新状态是用户看到的权威状态。同步层通过 outbox operations 和 media upload queue 在 Mac 可达时收敛到最终版本。详情页的正文复制动作复制 `post.text` 的 Markdown source，避免引入另一套富文本导出模型。
+
+Share Extension 仍保持 thin extension 边界：截图、图片、音频、视频、网页 URL、微信文章 URL 或文本分享只会被 staged 到 App Group inbox，主 App Composer 负责最终编辑和发布。文章/URL 类内容不新增服务端抓取链路；iOS 从正文中的 URL 派生轻量 link-card 样式，点击时交给系统打开原 URL，是否回到微信由 iOS/微信的 Universal Link 或 URL 处理能力决定。
 
 iOS New Moment composer 和 Edit Moment 的正文输入使用轻量 Markdown 富文本层，但底层仍保存 `post.text` 为 Markdown source `String`。编辑器只支持行首 H1 和 H2：非当前标题行隐藏 `#` / `##`，光标进入标题行时临时露出 marker；普通 `- ` 或 `• ` 列表只保留既有 plain-text list continuation，不做 Markdown bullet 渲染。键盘上方 accessory toolbar 只放紧凑 H1/H2 segmented control，并只切换当前行前缀；不额外放 `Done` 按钮。编辑器基于 `UITextView` 的 attributed styling 必须避开输入法 marked text：当中文等输入法正在组词时，不重写 `textStorage` 或替换正文，待候选词提交后再恢复 Markdown 样式刷新。Timeline、Detail 和 Day Review 复用 `MomentTextMarkdown` / `MomentTextView` 做同一组 H1/H2 展示渲染，Timeline 标题字号低于 Detail/Edit。
 
@@ -188,6 +196,28 @@ App Language 只影响 iOS 主 App 的 user-visible chrome：Timeline、Calendar
 默认主标签是一组 synced tag identity，而不是两套语言 tag。server 以默认 tag ID 为准保护 canonical 中文名称、`isDefault` 和 `aiUsableAsPrimary`；iOS 也把这些固定 ID 视为默认主标签，即使旧本地数据曾经同步错过 `isDefault`。iOS 在显示层把默认主标签映射为英文 `Diary`、`Thoughts`、`Study`、`Mood`、`Random`、`Review` 或中文 `日记`、`想法`、`学习整理`、`情绪`、`碎碎念`、`复盘`；usage count、assignment、archive/delete rules、AI assignment 和 sync identity 都仍绑定到原 tag ID。Timeline search/filter 对这些默认主标签额外加入中英文 search names；自定义主标签、topic tags 和 aliases 不自动翻译。
 
 AI Language 与 App Language 分离。iOS 在 `/api/v1/media/upload` 和 `/api/v1/ai/media-summary` 请求中传 `aiLanguage=auto|zh|en`；Mac server 将其作为 prompt 指令，用于新生成或重新生成的 summary/title。`Auto` 跟随 transcript/audio 的主导语言；`zh` 或 `en` 只影响 generated content，不改变 iOS UI，也不作为跨设备 synced preference。
+
+### 2.2.5 AI Periodic Reviews 决策
+
+AI Periodic Reviews 是通用回看系统。第一版是 `Weekly Review`，但 schema、API 和服务层不命名为 `weekly_reviews`，而是使用 `reviews.kind`、`rangeMode`、`rangeStart` 和 `rangeEnd`，为后续 monthly/custom review 复用同一基础。
+
+Weekly Review 放在 Calendar 的 `Reviews` 入口下，而不是 Timeline。它是 generated review artifact，不默认成为 moment；用户只能通过显式 `Publish as Moment` 把 ready review 转成一条普通 server post。Settings > Feature Modules 提供 `Auto-generate Weekly Review` 和 `Publish Weekly Review to Moments`，两个默认关闭。自动生成由 Mac server 在本地时间每周日 21:00 后触发，生成 rolling 7 days，不通知、不自动发布。
+
+Review 输入由 server 构建：
+
+- 时间范围内未删除的 post text。
+- 未删除 comments。
+- ready 且未删除的 audio/video AI summary generated metadata。
+- tags、favorite、media kind、occurredAt。
+- 每日/时段节奏统计。
+
+为了避免长范围自定义回顾把过多私密内容一次性送到外部 provider，server 对 Review generation 设置输入预算：生成范围最多 35 天，provider 输入最多 240 条 moments。超过范围的 API 请求直接返回 400；超过 moment 数量预算的生成会保存为 failed review，错误码为 `review_input_too_large`。
+
+图片第一版只作为 image moment/media kind 信号，不做 OCR 或 vision analysis。普通日志和 review memory 不记录 post body、comment body、transcript body 或 summary body。
+
+Review prompt 强制 whole-period reading：主题、关键词、状态回应、进展和节奏不绑定 per-claim evidence。只有 `notableMoments` / `Worth Revisiting` 可以携带 moment IDs 作为低权重 review anchors。iOS 点击 anchor 时在当前 Review 界面内打开 moment preview/detail sheet，不跳 Timeline，也不设置 Timeline day filter。
+
+Review feedback 写入 `review_feedback`，并用粗粒度 counters 更新 `review_memory`。第一版 memory 只保存反馈偏好和最近反馈上下文，不保存私人内容正文。
 
 ## 2.3 Mac Admin Posts 管理决策
 
@@ -275,6 +305,12 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
     thumbnails/
     temp/
   exports/
+  archive/
+    archive-config.json
+    staging/
+    restores/
+    restic-cache/
+    pending-promote.json
   logs/
 ```
 
@@ -288,7 +324,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 {
   "app": "PrivateMoments",
   "dataVersion": 1,
-  "schemaVersion": 9,
+  "schemaVersion": 11,
   "createdAt": "2026-04-28T00:00:00.000Z",
   "mediaLayoutVersion": 1
 }
@@ -459,7 +495,7 @@ failed
 deleted
 ```
 
-服务端通过 `ai_summary_updated` 和 `ai_summary_deleted` server changes 同步结果。失败状态只影响 summary record，不改变 post/media/comment 的同步状态。`/api/v1/admin/status` 暴露轻量 AI summary diagnostics，Settings > Storage & Diagnostics 可查看 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项的错误码，不暴露 transcript 或 summary 正文。
+服务端通过 `ai_summary_updated` 和 `ai_summary_deleted` server changes 同步结果。失败状态只影响 summary record，不改变 post/media/comment 的同步状态。AI media summary job 全局串行执行，避免断网恢复或批量补传后同时启动多个本地 `mlx-whisper` 进程。`/api/v1/admin/status` 暴露轻量 AI summary diagnostics，Settings > Storage & Diagnostics 可查看 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项的错误码，不暴露 transcript 或 summary 正文。
 
 ### SyncOperation
 
@@ -497,6 +533,172 @@ server_change
 ```
 
 `version` 是单调递增的服务端序号。客户端的 `syncCursor` 指向最后已处理的 `version`。
+
+### MaintenanceJob
+
+维护任务用于 backup、restore、check、promote preparation、export、import 和 Sync Health refresh。它是浏览器刷新安全的状态记录，不是私人内容日志。
+
+```text
+maintenance_job
+  id
+  type
+  status
+  stage
+  progress
+  metadataJson
+  artifactPath
+  errorCode
+  errorMessage
+  createdAt
+  startedAt
+  finishedAt
+```
+
+`type` 当前包括：
+
+```text
+backup_create
+backup_check
+backup_restore
+backup_promote
+export_create
+import_restore
+sync_health_refresh
+```
+
+`status` 当前包括：
+
+```text
+queued
+running
+succeeded
+failed
+cancelled
+```
+
+server 启动时会把遗留 `running` jobs 标记为 `failed/server_restarted`，避免旧状态永久卡住。v0.1 使用 process-local serial runner，保证同一时间只执行一个 maintenance job。job metadata 只保存路径、计数、状态和错误码等安全信息，不保存 post/comment/transcript/summary 正文或媒体内容。
+
+### Maintenance Mode
+
+Maintenance mode 是 server 进程内状态，由 restore/promote preparation 进入和退出。它用于暂停 write-heavy routes，避免恢复/切换准备期间继续写入 archive：
+
+- `/api/v1/sync`
+- `/api/v1/media/upload`
+- `/api/v1/ai/media-summary`
+- `/api/v1/ai/media-summary/:summaryId`
+- Admin soft delete / clean posts 等 destructive write
+
+Health、Admin status、maintenance job list/detail 和 archive read state 保持可读。
+
+## 5.1 Archive Backup/Restore Design
+
+Archive backup/restore 面向自用灾难恢复，由 Mac server/Admin UI 管理，CLI/restic 只作为调试底层。
+
+### Repository Config
+
+Admin `Archive` tab 通过 `/api/v1/admin/archive/repository` 保存 repository path。server 在数据目录内保存：
+
+```text
+archive/archive-config.json
+```
+
+repository path 可以是本机目录，也可以是用户明确选择的 iCloud Drive 目录。server 不做云上传集成，只把 iCloud Drive 当作普通文件夹。
+
+项目会在 repository path 下创建或复用：
+
+```text
+.private-moments-restic-key
+```
+
+这个文件作为 restic password file。用户不需要记额外密码，但谁同时拥有 repository 和 key 文件，谁就可以恢复 archive。
+
+### Backup Source
+
+`backup_create` job 会先构造受控 snapshot source：
+
+```text
+archive/staging/<job>/snapshot/
+  app.sqlite
+  manifest.json
+  media/
+  backup-manifest.json
+```
+
+SQLite 优先通过 `sqlite3 .backup` 生成一致副本，失败时才退回文件复制。snapshot 写入 restic 后，staging 目录会被清理。备份不包含依赖目录、build output、Python venv、运行时 temp 文件或普通日志。
+
+### Restore
+
+`backup_restore` job 使用 restic 把指定 snapshot 恢复到：
+
+```text
+archive/restores/<timestamp>-<snapshot>[-label]/
+```
+
+server 会扫描恢复结果中的 data directory，并验证：
+
+- `app.sqlite` 存在且 SQLite 可读。
+- `manifest.json` 存在。
+- `media/` 存在。
+- 未删除 media 的 `compressed_path` / `original_path` / `thumbnail_path` 都仍位于恢复目录内并且文件存在。
+
+验证结果写入 job metadata，恢复目录写入 `artifactPath`。
+
+### Promote Preparation
+
+当前 v0.1 不在运行中直接替换 live SQLite database。`backup_promote` 是 promote preparation：
+
+1. 校验确认短语必须是 `PROMOTE <restored-folder-name>`。
+2. 进入 maintenance mode。
+3. 再次验证 restored data directory。
+4. 创建 `pre-promote` backup。
+5. 写入 `archive/pending-promote.json`。
+6. 退出 maintenance mode。
+
+`pending-promote.json` 包含恢复目录、当前目录、pre-promote backup metadata，以及应写入环境的：
+
+```text
+PRIVATE_MOMENTS_DATA_DIR=<restored-data-dir>
+DATABASE_URL=file:<restored-data-dir>/app.sqlite
+```
+
+Operator 需要停止 server，按该文件切换 env，再重启 server。这样避免在 Prisma 持有 SQLite 连接时热替换数据库。
+
+## 5.2 Export/Import Design
+
+Export/import 是迁移和恢复辅助路径，不替代 restic backup。它同样由 Mac Admin 的 `Archive` tab 管理，并通过 `maintenance_jobs` 运行。
+
+`export_create` job 支持全量或 occurred date range。导出目录写入：
+
+```text
+exports/private-moments-export-<timestamp>/
+  manifest.json
+  archive.json
+  preview.md
+  media/
+```
+
+`manifest.json` 记录包类型、包版本、server/schema version、导出范围和计数。`archive.json` 是权威迁移数据，包含 posts、media metadata、comments、tags、tag aliases、post tag assignments 和 AI summaries。`preview.md` 只用于快速阅读，不作为 import source of truth。导出完成后 server 用 tar 生成：
+
+```text
+exports/private-moments-export-<timestamp>.tar.gz
+```
+
+`import_restore` job 只导入到新的 staged data directory：
+
+```text
+archive/imports/<timestamp>-<label>/data
+```
+
+导入流程会先创建新 data dir 和 SQLite DB，跑 Prisma migrations，再导入内容数据。导入会保留 post/comment/media/tag/summary IDs 和 timestamps，恢复 generated AI/tag metadata，复制媒体 payload，并重建 `server_changes`，让新设备可以从 cursor `0` 拉取内容。导入明确排除 users、devices、sync operations 和 maintenance jobs，因此不会带回旧 token、session、device cursor 或旧维护任务。
+
+导入后会验证：
+
+- imported database 可读。
+- `devices` 为空。
+- `server_changes` 已重建。
+- 未删除 media 引用的文件存在且仍位于 staged data dir 内。
+
+如果要把 imported archive 变成当前运行 archive，仍然走 promote/restart 安全流程，而不是 import job 自动替换 live database。
 
 ## 6. iOS 本地数据模型
 
@@ -675,6 +877,21 @@ GET    /api/v1/admin/posts/:postId
 DELETE /api/v1/admin/posts/:postId
 GET    /api/v1/admin/devices/:deviceId/clean-posts/preview
 POST   /api/v1/admin/devices/:deviceId/clean-posts
+GET    /api/v1/admin/maintenance/state
+GET    /api/v1/admin/maintenance/jobs
+GET    /api/v1/admin/maintenance/jobs/:jobId
+POST   /api/v1/admin/maintenance/jobs/sync-health-refresh
+GET    /api/v1/admin/archive/repository
+POST   /api/v1/admin/archive/repository
+POST   /api/v1/admin/archive/repository/init
+POST   /api/v1/admin/archive/schedule
+GET    /api/v1/admin/archive/snapshots
+POST   /api/v1/admin/archive/jobs/backup
+POST   /api/v1/admin/archive/jobs/check
+POST   /api/v1/admin/archive/jobs/restore
+POST   /api/v1/admin/archive/jobs/promote
+POST   /api/v1/admin/archive/jobs/export
+POST   /api/v1/admin/archive/jobs/import
 ```
 
 说明：
@@ -685,7 +902,7 @@ POST   /api/v1/admin/devices/:deviceId/clean-posts
 - AI 摘要由 Mac server 在完整 audio/video 上传后后台触发：先用本地 `mlx-whisper` 转写，再调用外部 summary provider；`/api/v1/ai/media-summary` 仍可用于 regenerate。iOS 只拿到 summary metadata 和轻量错误状态。新摘要使用 `media-summary-v3` document block 模型：`documentTitle`、`oneLiner`、`documentBlocks` 是主要渲染字段，旧 `overview`、`keyPoints`、`sections` 保留作兼容。
 - iOS 拉取远端图片缩略图和视频 poster 时优先使用 `/api/v1/media/batch-download` 获取 base64 JSON，避免真机/Tailscale 场景下多次二进制下载超时。
 - Mac Admin 路由复用 Bearer device token，普通内容发布仍然只在 iOS 端进行。
-- `/api/v1/admin/status` 同时给 Mac Admin 和 iOS Settings > Storage & Diagnostics 使用；storage 字段包含 `totalBytes`、`databaseBytes`、`mediaBytes`、`logsBytes`、`availableBytes`，`sync.latestServerChangeVersion` 用于和 iPhone `lastSyncCursor` 对比，`aiSummaries` 字段包含 summary 状态计数和非 ready 项的安全错误 metadata，`tags` 字段包含安全的标签计数和 AI/manual assignment 计数。
+- `/api/v1/admin/status` 同时给 Mac Admin 和 iOS Settings > Storage & Diagnostics 使用；storage 字段包含 `totalBytes`、`databaseBytes`、`mediaBytes`、`logsBytes`、`availableBytes`，`sync.latestServerChangeVersion` 用于和 iPhone `lastSyncCursor` 对比，`sync.pendingOperations`、`sync.rejectedOperations`、`sync.failedMediaUploads`、`sync.aiNonReady` 和 last-sync timestamps 用于 Sync Health，`aiSummaries` 字段包含 summary 状态计数和非 ready 项的安全错误 metadata，`tags` 字段包含安全的标签计数和 AI/manual assignment 计数。
 
 ## 8. Sync Endpoint
 
@@ -729,7 +946,7 @@ POST   /api/v1/admin/devices/:deviceId/clean-posts
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 9,
+  "schemaVersion": 11,
   "acceptedOps": ["op-uuid-1", "op-uuid-2"],
   "rejectedOps": [],
   "serverChanges": [
@@ -790,7 +1007,7 @@ POST   /api/v1/admin/devices/:deviceId/clean-posts
 
 iOS 在保存展示图和上传文件前都会压缩图片。当前压缩展示策略是最大边 `1600px`、JPEG 质量 `0.72`，并移除 EXIF/GPS 等隐私元数据。上传时再次走压缩路径，因此旧版本遗留的 pending 大图也会在下一次上传前被压缩。
 
-媒体上传逐项执行；任意媒体失败不会阻塞本地时间线展示。失败后本地状态保持可重试，并由 sync retry 调度器按 5s、20s、60s、120s、300s 间隔自动重试。
+媒体上传逐项执行；任意媒体失败不会阻塞本地时间线展示。失败后本地状态保持可重试，并由 sync retry 调度器按 5s、20s、60s、120s、300s 间隔自动重试。iOS 端上传队列优先处理新鲜 `pending` media，再处理旧 `failed` retry，避免一个早期超时音频挡住后面的语音。audio/video 上传会先写入临时 multipart 文件，再用 file-backed upload 发送，降低断网恢复和较大媒体上传时的内存压力。Settings > Storage & Diagnostics 提供 `Retry Uploads`，用于把 failed media 重新排为 pending 并立即触发同步。
 
 远端媒体回填：
 
@@ -837,11 +1054,12 @@ MVP 页面：
 - Sync：同步状态和失败概览。
 - Logs：文件日志。
 - Posts：内容运维列表、筛选、详情抽屉、图片预览、语音/视频转写查看、软删除和按设备清理测试数据。
+- Archive：restic repository 配置、key 文件说明、manual backup、daily schedule、snapshot list/check、staged restore、promote preparation 和 recent maintenance jobs。
+- Sync Health：最新 server change version、pending/rejected sync operations、failed media uploads、AI non-ready count 和 last sync timestamps。
 
 后续页面：
 
 - Trash：回收站和恢复。
-- Backup：导出 zip 备份。
 - Search：独立搜索增强；当前 Posts 页已有文本搜索。
 
 ## 12. 日志

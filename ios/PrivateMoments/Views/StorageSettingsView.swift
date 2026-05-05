@@ -39,7 +39,7 @@ struct StorageSummaryLink: View {
 
     private func refresh() async {
         localStats = try? LocalStorageStatsLoader.load(database: store.database)
-        serverStats = await loadServerStats()
+        serverStats = store.automaticSyncEnabled ? await loadServerStats() : nil
     }
 
     private func loadServerStats() async -> ServerStorageStats? {
@@ -49,8 +49,9 @@ struct StorageSummaryLink: View {
         }
 
         do {
-            let client = APIClient(baseURL: try store.normalizeServerURL(store.serverURLString), token: token)
-            return try await client.adminStatus().storage
+            return try await store.withAvailableAPIClient(token: token) { client in
+                try await client.adminStatus().storage
+            }
         } catch {
             return nil
         }
@@ -154,6 +155,10 @@ struct StorageDetailsView: View {
             LabeledContent(L10n.t("Failed uploads", appLanguage), value: "\(stats.failedUploads)")
             LabeledContent(L10n.t("This iPhone cursor", appLanguage), value: "\(AppSettings.lastSyncCursor)")
 
+            if !store.automaticSyncEnabled {
+                LabeledContent(L10n.t("Automatic Sync", appLanguage), value: L10n.t("Off", appLanguage))
+            }
+
             if let serverVersion = serverStatus?.sync?.latestServerChangeVersion {
                 LabeledContent(L10n.t("Mac change version", appLanguage), value: "\(serverVersion)")
 
@@ -162,6 +167,65 @@ struct StorageDetailsView: View {
                     LabeledContent(L10n.t("Remote changes", appLanguage), value: "\(changesBehind) \(L10n.t("behind", appLanguage))")
                 }
             }
+
+            if let sync = serverStatus?.sync {
+                LabeledContent(L10n.t("Mac reachability", appLanguage), value: L10n.t("Reachable", appLanguage))
+                LabeledContent(L10n.t("Server pending ops", appLanguage), value: "\(sync.pendingOperations ?? 0)")
+                LabeledContent(L10n.t("Server rejected ops", appLanguage), value: "\(sync.rejectedOperations ?? 0)")
+                LabeledContent(L10n.t("Server failed media", appLanguage), value: "\(sync.failedMediaUploads ?? 0)")
+                LabeledContent(L10n.t("AI not ready", appLanguage), value: "\(sync.aiNonReady ?? 0)")
+
+                if let lastSuccessfulSyncAt = sync.lastSuccessfulSyncAt {
+                    LabeledContent(L10n.t("Last successful sync", appLanguage), value: shortTimestamp(lastSuccessfulSyncAt))
+                }
+                if let lastRejectedSyncAt = sync.lastRejectedSyncAt {
+                    LabeledContent(L10n.t("Last rejected sync", appLanguage), value: shortTimestamp(lastRejectedSyncAt))
+                }
+            } else if store.automaticSyncEnabled {
+                LabeledContent(L10n.t("Mac reachability", appLanguage), value: L10n.t("Unavailable", appLanguage))
+            } else {
+                LabeledContent(L10n.t("Mac reachability", appLanguage), value: L10n.t("Local-only", appLanguage))
+            }
+
+            if stats.missingMediaDownloads > 0 {
+                LabeledContent(L10n.t("Missing media", appLanguage), value: "\(stats.missingMediaDownloads)")
+            }
+
+            Button {
+                Task {
+                    await syncNowFromDiagnostics()
+                }
+            } label: {
+                Text(L10n.t(store.isSyncing ? "Syncing" : "Sync Now", appLanguage))
+            }
+            .disabled(!store.isAuthenticated || store.isSyncing)
+
+            Button {
+                Task {
+                    await pullServerChanges()
+                }
+            } label: {
+                Text(L10n.t("Pull Server Changes", appLanguage))
+            }
+            .disabled(!store.isAuthenticated || store.isSyncing)
+
+            Button {
+                Task {
+                    await retryMediaUploads()
+                }
+            } label: {
+                Text(L10n.t("Retry Uploads", appLanguage))
+            }
+            .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || store.isSyncing || (stats.pendingUploads + stats.failedUploads) == 0)
+
+            Button {
+                Task {
+                    await retryMediaDownloads()
+                }
+            } label: {
+                Text(L10n.t("Re-download Missing Media", appLanguage))
+            }
+            .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || stats.missingMediaDownloads == 0)
         }
     }
 
@@ -295,12 +359,32 @@ struct StorageDetailsView: View {
             isRefreshing = false
         }
 
-        if store.isAuthenticated {
+        if store.isAuthenticated && store.automaticSyncEnabled {
             await store.syncPendingWorkIfNeeded(showErrors: false)
         }
 
         localStats = try? LocalStorageStatsLoader.load(database: store.database)
-        serverStatus = await loadServerStatus()
+        serverStatus = store.automaticSyncEnabled ? await loadServerStatus() : nil
+    }
+
+    private func syncNowFromDiagnostics() async {
+        await store.syncNow(showErrors: true)
+        await refresh()
+    }
+
+    private func pullServerChanges() async {
+        await store.syncNow(showErrors: true, scheduleRetryOnFailure: false)
+        await refresh()
+    }
+
+    private func retryMediaUploads() async {
+        await store.retryMediaUploadsNow(showErrors: true)
+        await refresh()
+    }
+
+    private func retryMediaDownloads() async {
+        await store.downloadMissingRemoteMediaIfNeeded(showErrors: true)
+        await refresh()
     }
 
     private func clearDownloadedCache() async {
@@ -329,8 +413,9 @@ struct StorageDetailsView: View {
         }
 
         do {
-            let client = APIClient(baseURL: try store.normalizeServerURL(store.serverURLString), token: token)
-            return try await client.adminStatus()
+            return try await store.withAvailableAPIClient(token: token) { client in
+                try await client.adminStatus()
+            }
         } catch {
             return nil
         }

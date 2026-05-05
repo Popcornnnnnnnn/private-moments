@@ -272,14 +272,19 @@ extension TimelineStore {
             return URL(fileURLWithPath: media.localCompressedPath)
         }
 
+        guard automaticSyncEnabled else {
+            throw StoreError.localOnlyModeEnabled
+        }
+
         guard let database,
               let token = try KeychainStore.deviceToken() else {
             throw StoreError.notReady
         }
 
-        let client = APIClient(baseURL: try normalizeServerURL(AppSettings.serverURLString), token: token)
         let downloadedURL = try await withMediaDownloadTimeout(seconds: media.isVideo ? 180 : 120) {
-            try await client.downloadMediaFile(mediaId: media.id, variant: "compressed")
+            try await self.withAvailableAPIClient(token: token) { client in
+                try await client.downloadMediaFile(mediaId: media.id, variant: "compressed")
+            }
         }
         let localURL = try localURLForDownloadedMedia(media, variant: "compressed")
 

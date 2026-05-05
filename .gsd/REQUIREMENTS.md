@@ -4,6 +4,69 @@ This file is the explicit capability and coverage contract for the project.
 
 ## Active
 
+### R040 — AI Periodic Reviews must be generic review artifacts, with Weekly Review as the first period kind.
+- Class: functional
+- Status: active
+- Description: The system stores and renders AI-generated Review artifacts using generic kind/range fields instead of a weekly-only model. Weekly Review is the first implementation and must leave room for monthly/custom range reviews.
+- Why it matters: The user expects future monthly or longer-range summaries; hard-coding week semantics into the data model would force a later rewrite.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S01
+- Validation: Schema/API use `reviews.kind`, `rangeMode`, `rangeStart`, and `rangeEnd`; iOS copy can say Weekly Review while server data remains period-generic.
+
+### R041 — Weekly Review generation uses rolling seven-day ranges for both manual and scheduled generation.
+- Class: functional
+- Status: active
+- Description: Manual generation summarizes the seven days before trigger time. Scheduled generation is optional, default off, runs Sunday evening on the Mac server, summarizes the previous seven days, and does not notify or publish.
+- Why it matters: The user wants manual review at arbitrary points and a quiet automatic background option.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S04
+- Validation: API accepts explicit ranges but defaults to rolling seven days; scheduler checks Sunday evening and `autoWeeklyEnabled`; settings default off.
+
+### R042 — Review input uses text, comments, ready media summaries, and metadata while keeping image analysis out of v1.
+- Class: functional
+- Status: active
+- Description: Weekly Review input includes post text, comments, ready audio/video AI Summary metadata, tags, favorite, media kind, occurred time, and rhythm statistics. Image content is not visually analyzed in v1.
+- Why it matters: The first useful input set is already available and privacy/logging risk stays lower without image understanding.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S02
+- Validation: Server input builder includes these fields and does not call image OCR/vision APIs.
+
+### R043 — Review content should read the week as a whole and avoid per-claim evidence binding.
+- Class: constraint
+- Status: active
+- Description: Themes, keywords, state response, progress, and rhythm should be generated from whole-period understanding. Only the `Worth Revisiting` section may include moment IDs as low-weight review anchors.
+- Why it matters: Per-claim evidence would encourage over-reading isolated moments and make the review feel like an audit.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S03
+- Validation: Prompt/schema only exposes `momentIds` under `notableMoments`; iOS only renders anchors in `Worth Revisiting`.
+
+### R044 — Review settings and feedback must be explicit, visible, and non-invasive.
+- Class: functional
+- Status: active
+- Description: Auto-generation and publish-to-moments controls default off. Feedback can mark a review useful, too inferential, too dry, missing the point, or hiding a theme, and updates review memory without changing original moments.
+- Why it matters: Self-learning should remain under user control and not feel like hidden surveillance.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S06
+- Validation: Settings toggles default false; feedback writes review feedback/memory records and does not mutate posts/comments.
+
+### R045 — Weekly Review belongs in Calendar Reviews and keeps interactions inside the review context.
+- Class: functional
+- Status: active
+- Description: Calendar exposes Reviews as a quiet review/navigation surface. Moment anchors open in a local preview/detail sheet within the Review flow rather than jumping to Timeline or applying Timeline filters.
+- Why it matters: Weekly Review is a review artifact, not a feed item or Timeline filter mode.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S05
+- Validation: Calendar has a Reviews entry; anchors in review detail present local moment preview and do not call the Calendar-to-Timeline route.
+
+### R046 — Publish-as-moment must be explicit and never automatic by default.
+- Class: constraint
+- Status: active
+- Description: A ready review may be published as a normal moment only through explicit user action or a future enabled setting. Default behavior is hidden/unpublished review artifacts.
+- Why it matters: AI-generated weekly writing should not silently enter the user's personal timeline.
+- Source: M010 discussion 2026-05-05
+- Primary owning slice: M010/S04,M010/S06
+- Validation: Settings default off; publish action creates a normal server post only when called explicitly.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active
@@ -111,7 +174,7 @@ This file is the explicit capability and coverage contract for the project.
 ### R016 — AI summary implementation must preserve privacy, sync safety, and failure isolation.
 - Class: operational
 - Status: active
-- Description: AI summary implementation must preserve privacy, sync safety, and failure isolation.
+- Description: AI summary implementation must preserve privacy, sync safety, and failure isolation. Server-side media summary jobs should run through a serialized local transcription queue so offline recovery or batch media upload does not start multiple competing `mlx-whisper` processes.
 - Why it matters: External AI calls touch private transcript content and new generated metadata, so failures must not leak content, poison sync, or block normal media usage.
 - Source: M005 AI media summaries discussion 2026-04-30
 - Primary owning slice: M005/S04
@@ -151,12 +214,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R021 — Media upload must be atomic, retryable, and diagnosable under iPhone/Tailscale disconnects.
 - Class: operational
 - Status: active
-- Description: Server media upload must write multipart streams to hidden temp files, commit by atomic rename only after complete receipt, remove only temp files on failure, and log safe staged upload metadata/error codes without media bodies.
+- Description: Server media upload must write multipart streams to hidden temp files, commit by atomic rename only after complete receipt, remove only temp files on failure, and log safe staged upload metadata/error codes without media bodies. iOS media retry must keep interrupted audio/video uploadable after offline periods, prioritize fresh `pending` media before older `failed` retries, and avoid holding full audio/video multipart bodies in memory.
 - Why it matters: Real-device uploads can disconnect mid-stream. A created post with missing media should remain retryable from the iPhone local queue instead of producing committed partial files or opaque failures.
 - Source: media upload failure investigation 2026-05-03
 - Primary owning slice: maintenance
 - Supporting slices: R003,R014,R020
-- Validation: Server typecheck/build pass; restarting the Mac server leaves no stale media write fds; media directory has no leftover `.tmp` files; logs expose `media.upload_started`, `media.upload_received`, `media.upload_completed`, and `media.upload_failed` with `client_premature_close` or `upload_timeout` when applicable.
+- Validation: Server typecheck/build pass; restarting the Mac server leaves no stale media write fds; media directory has no leftover `.tmp` files; logs expose `media.upload_started`, `media.upload_received`, `media.upload_completed`, and `media.upload_failed` with `client_premature_close` or `upload_timeout` when applicable. iOS build verifies file-backed multipart upload, pending-before-failed queue ordering, and explicit retry wiring.
 
 ### R022 — Smart Tags must use a small stable primary-tag taxonomy plus dynamic canonical topic tags.
 - Class: functional
@@ -216,7 +279,77 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S06
 - Supporting slices: M006/S01,M006/S02,M006/S03,M006/S04,M006/S05
-- Validation: Completion evidence includes server/iOS/admin builds as applicable, migration/sync/search/filter tests, no-private-body log inspection, Settings diagnostics shape checks, OpenAPI/sync-protocol updates, and real iPhone UAT for new audio AI tags plus manual tag search/filter/edit flows.
+- Validation: Completion evidence includes server/iOS/admin builds as applicable, migration/sync/search/filter tests, no-private-body log inspection, serialized local transcription queue review, Settings diagnostics shape checks, OpenAPI/sync-protocol updates, and real iPhone UAT for new audio AI tags plus manual tag search/filter/edit flows.
+
+### R033 — v0.1 archive work is scoped to the current self-use iPhone + Mac server loop, not public distribution or iOS standalone.
+- Class: constraint
+- Status: active
+- Description: v0.1 archive/recovery work targets the current architecture where iPhone is the capture/browsing client and Mac server is the authoritative archive. iOS standalone mode, App Store/TestFlight distribution, public marketing, and open-source launch polish are out of scope for M009.
+- Why it matters: Market research showed strong adjacent competition and high distribution cost. The immediate value is making the owner's private daily-use archive stable and recoverable.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009
+- Supporting slices: M009/S01,M009/S02,M009/S03,M009/S04,M009/S05,M009/S06
+- Validation: M009 artifacts and implementation avoid App Store/TestFlight/iOS standalone scope and focus on Mac-server archive, restore, and sync-health reliability.
+
+### R034 — Backup/restore must be Admin-managed, restic-backed, deduplicated, staged, and recoverable without user-managed passwords.
+- Class: functional
+- Status: active
+- Description: Mac Admin must manage backup repository initialization, immediate backup, daily scheduled backup, snapshot list/check, restore to new directory, verification, and strong-confirm promote. The underlying repository uses restic for deduplicated snapshots. The project auto-generates and stores a fixed key file next to the repository so the user does not need to remember a backup password.
+- Why it matters: Raw CLI is too primitive for long-term self-use, but repeating full media backups wastes space. Restic gives mature snapshot/check/restore behavior while the project UI keeps routine operation understandable.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009/S02
+- Supporting slices: M009/S01,M009/S03,M009/S06
+- Validation: Admin can initialize a repo, run backup now, configure daily fixed-time backup, list/check snapshots, restore a snapshot into a new directory, verify it, and promote it only after strong confirmation and pre-promote backup.
+
+### R035 — Restore/promote must protect current data through maintenance mode, pre-promote snapshot, verification, and restart-safe switching.
+- Class: operational
+- Status: active
+- Description: Restore never directly overwrites the current data directory. It restores into a candidate directory, verifies database/media/config consistency, then promote enters maintenance mode, makes a pre-promote snapshot, and writes restart instructions for switching `PRIVATE_MOMENTS_DATA_DIR` / `DATABASE_URL` to the restored directory. Runtime SQLite replacement is intentionally avoided while Prisma has an open connection.
+- Why it matters: A restore feature that can accidentally destroy the only working archive is worse than no restore feature. The recovery path must be safe under wrong snapshot selection, partial restore, and server failure.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009/S02
+- Supporting slices: M009/S01,M009/S03,M009/S06
+- Validation: Restore and promote smoke tests use a staged directory, verify before switch, block ordinary writes during promote preparation, create a pre-promote backup, and write `pending-promote.json` with rollback-aware restart instructions.
+
+### R036 — Sync Health must explain stale or failing sync in Mac Admin and iOS Settings without adding noise to Timeline.
+- Class: functional
+- Status: active
+- Description: Mac Admin and iOS Settings must expose comparable Sync Health categories covering server reachability, authentication, iPhone cursor vs Mac latest change version, pending/failed outbox operations, failed media uploads, missing media recovery, AI summary pipeline state, and last successful sync.
+- Why it matters: The project has repeatedly had real-device issues where the root cause was not visible from the Timeline, such as remote-only server changes, media upload failures, or AI summary pipeline state. The owner needs to know where the system is stuck.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009/S04
+- Supporting slices: M009/S01,M009/S06
+- Validation: Admin and iOS Settings show the same high-level health model; stale cursor, pending outbox, failed upload, missing media, server unreachable, auth failure, and AI non-ready states are distinguishable without showing private content bodies.
+
+### R037 — Sync Health may offer only safe, idempotent repair actions in v0.1.
+- Class: constraint
+- Status: active
+- Description: Sync Health may expose safe repair actions such as Sync Now, retry uploads, pull server changes, and re-download missing media. It must not expose destructive defaults such as reset cursor, clear database, or rebuild local storage.
+- Why it matters: Diagnostics should help the owner recover everyday failures without turning Settings into a dangerous maintenance console.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009/S04
+- Supporting slices: M009/S06
+- Validation: UI review confirms all repair actions are idempotent/low-risk; destructive actions are absent from default Sync Health.
+
+### R038 — Export/import is migration-first: JSON manifest is authoritative, Markdown is preview, and import targets only a clean archive.
+- Class: functional
+- Status: active
+- Description: Export packages must prioritize restore/import fidelity over human reading. They include authoritative JSON manifest/metadata plus media and optional Markdown preview. Import from export is in scope for M009 Phase B, but only into a new/empty data directory. Import preserves archive IDs/timestamps/generated metadata and reinitializes auth/device/outbox/sync runtime state.
+- Why it matters: The owner cares more about future recovery and migration than reading exported files directly. A migration-first format avoids relying on lossy Markdown while still allowing manual inspection.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009/S05
+- Supporting slices: M009/S01,M009/S03,M009/S06
+- Validation: Export all/date range produces a package with manifest, metadata, media, and preview; import into an empty directory restores active, soft-deleted, archived, comment, tag, and generated summary state without bringing back auth/session/device tokens or re-running AI.
+
+### R039 — Maintenance jobs must be durable, serial, privacy-safe, and able to place the server in maintenance mode for recovery operations.
+- Class: operational
+- Status: active
+- Description: Backup, restore, check, promote, export, import, and sync health work must run through a durable `maintenance_jobs` model with persisted status, progress, stage, safe metadata, artifact path, error details, timestamps, serial execution, and maintenance mode support.
+- Why it matters: Backup/restore/export/import are long-running and data-sensitive. Browser refresh, server restart, concurrent jobs, or private content leakage in logs must not make recovery unsafe or opaque.
+- Source: v0.1 archive grill-me discussion 2026-05-05
+- Primary owning slice: M009/S01
+- Supporting slices: M009/S02,M009/S03,M009/S04,M009/S05,M009/S06
+- Validation: Server migration/build pass; job list/detail APIs expose safe job state; a no-op/test job persists status transitions; stale running jobs are recoverable after restart; maintenance mode blocks representative write routes while health/job reads stay available; no private post/comment/transcript/summary/media body is stored in job metadata.
 
 ### R028 — New audio AI summaries may insert only a generated title into moment text, without turning Moments into a Markdown editor.
 - Class: functional
@@ -338,7 +471,7 @@ This file is the explicit capability and coverage contract for the project.
 | R016 | operational | active | M005/S04 | M005/S01,M005/S02,M005/S03 | Verification proves server-only API keys, no private body logging, failure isolation, summary delete/regenerate behavior, and sync recovery for generated AI metadata. |
 | R017 | functional | validated | M005/S04 | M005/S02,M005/S03 | 2026-05-01 paired iPhone container advanced to `lastSyncCursor=196` with `local_ai_summaries ready=10 failed=0` after server-only summary changes; admin status exposes `sync.latestServerChangeVersion=196` for diagnosis. |
 | R018 | functional | active | maintenance | M003/S03,M005/S03 | iPhone Timeline search covers text, comments, AI summary metadata, and historical transcript metadata with lightweight fuzzy matching plus composable local filters and active chips. |
-| R019 | operational | active | maintenance | none | `npm run setup:local` plus release/open-source/security docs provide the current setup and publication gate; public release still requires license, Git history secret scan, and backup/restore/export closure. |
+| R019 | operational | active | maintenance | none | `npm run setup:local` plus release/open-source/security docs provide the current setup and publication gate; public release still requires license, Git history secret scan, and release-grade backup/restore/export/import validation. |
 | R020 | functional | active | maintenance | R003,R013,R014 | `Save to Moments` stages supported Share Sheet content into an App Group inbox and opens the main app composer for final editing and publish; real-device UAT remains required when the paired phone is available. |
 | R021 | operational | active | maintenance | R003,R014,R020 | Media upload uses temp-file atomic finalization and staged logs; verification checks server build, health, no stale write fds, no leftover temp files, and real-device retry behavior when feasible. |
 | R022 | functional | active | M006/S01 | M006/S02,M006/S04,M006/S06 | Default primary tags, topic canonicalization, aliases, uniqueness, archive behavior, and custom-primary constraints are verified by schema/seed checks and Settings/Edit UAT. |
@@ -352,10 +485,24 @@ This file is the explicit capability and coverage contract for the project.
 | R030 | functional | active | M007 | R022,R023,R025,R026 | Default primary tags display localized names without changing synced identity, and local search/filter matches both Chinese and English default names. |
 | R031 | functional | active | M007 | R014,R015,R016,R024,R028 | AI Language is local and independent from App Language; iOS passes `auto`/`zh`/`en` to upload-triggered and regenerated summary generation. |
 | R032 | functional | active | M008 | R003,R018,R029 | Calendar Review provides a local bottom-tab month grid, Day Review first navigation, Timeline handoff, and per-day scroll memory; CalendarReviewModelsTests and iOS build/test evidence passed, while real-device UAT remains pending. |
+| R033 | constraint | active | M009 | M009/S01,M009/S02,M009/S03,M009/S04,M009/S05,M009/S06 | M009 stays scoped to the current iPhone + Mac owner-use loop and excludes public distribution/App Store/iOS standalone work. |
+| R034 | functional | active | M009/S02 | M009/S01,M009/S03,M009/S06 | Admin can configure a restic repository, create a project-managed key file, run/list/check backups, schedule daily backups, and restore staged snapshots without user-managed passwords. |
+| R035 | operational | active | M009/S02 | M009/S01,M009/S03,M009/S06 | Restore writes to a new directory and promote preparation verifies the restore, enters maintenance mode, creates a pre-promote backup, and writes restart instructions instead of hot-swapping an open SQLite database. |
+| R036 | functional | active | M009/S04 | M009/S01,M009/S06 | Mac Admin and iOS Settings show Sync Health categories for reachability/auth/cursor/outbox/upload/missing-media/AI/last-success without putting diagnostics in Timeline. |
+| R037 | constraint | active | M009/S04 | M009/S06 | Sync Health exposes safe repair actions only: sync, pull server changes, retry/re-download media; destructive reset/rebuild actions stay out of default v0.1 UI. |
+| R038 | functional | active | M009/S05 | M009/S01,M009/S03,M009/S06 | Phase B export/import creates migration-first packages where JSON manifest is authoritative, Markdown is preview, import targets only a new staged archive, and runtime auth/device state is excluded. |
+| R039 | operational | active | M009/S01 | M009/S02,M009/S03,M009/S04,M009/S05,M009/S06 | Durable serial `maintenance_jobs` store safe job state, recover stale running jobs after restart, and support maintenance mode for recovery operations without private content body leakage. |
+| R040 | functional | active | maintenance | R003,R014,R020,R036 | iOS `Automatic Sync` can be disabled as a local-only mode that suppresses automatic bootstrap/foreground/retry/follow-up sync, media uploads/downloads, and AI summary network requests while preserving local outbox data and explicit `Sync Now`. |
+| R041 | functional | active | maintenance | R003,R020,R026 | Pending, partial, failed, and synced moments remain editable for text/date/media ordering and tags; edits apply locally immediately and later sync as normal outbox operations. |
+| R042 | functional | active | maintenance | R028 | Moment Detail provides a copy action for non-empty moment body text and copies the stored Markdown source string. |
+| R043 | functional | active | maintenance | R020 | `Save to Moments` supports screenshot/photo sharing and web URL/text sharing paths, including WeChat article URLs when the host app exposes them through the system Share Sheet; imported URL moments render a tappable link-card style preview. |
+| R044 | functional | active | maintenance | R013 | Audio recording should coexist with music/navigation audio when iOS allows it by using a mixing-capable recording session. |
+| R045 | functional | active | maintenance | R028 | Composer/Edit Markdown editor keeps H1/H2 controls but avoids repeated live text-storage rewrites that cause long-text flashing, focus loss, or automatic scroll jumps. |
+| R046 | functional | active | maintenance | R003,R020,R036 | iOS private builds can include a bundled fallback server URL through ignored local config; network-level failures on the primary Server URL fall back for login, sync, media transfer, AI summary, and storage diagnostics, while public project config remains Tailscale/private-VPN-first and contains no owner personal endpoint. |
 
 ## Coverage Summary
 
-- Active requirements: 27
-- Mapped to slices: 24 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032)
+- Active requirements: 40
+- Mapped to slices: 37 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045)
 - Validated: 5 (R004, R005, R006, R007, R017)
 - Unmapped active requirements: 3 global operational requirements (R001, R002, R003)

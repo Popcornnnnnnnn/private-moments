@@ -129,6 +129,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MediaSummaryResponse"
+  /api/v1/reviews:
+    get:
+      summary: List generated periodic reviews.
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - weekly
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Reviews.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - reviews
+                properties:
+                  reviews:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Review"
+  /api/v1/reviews/{reviewId}:
+    get:
+      summary: Read one generated periodic review.
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Review.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - review
+                properties:
+                  review:
+                    $ref: "#/components/schemas/Review"
+  /api/v1/reviews/generate:
+    post:
+      summary: Generate a periodic review.
+      description: >
+        The first supported kind is `weekly`. `rolling_7_days` uses the request
+        time as the range end unless an explicit range is supplied. Explicit
+        generation ranges must be 35 days or less; provider input is capped at
+        240 moments to bound private-data exposure, latency, and cost.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateReviewRequest"
+      responses:
+        "200":
+          description: Generated review artifact.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - review
+                properties:
+                  review:
+                    $ref: "#/components/schemas/Review"
+  /api/v1/reviews/{reviewId}/regenerate:
+    post:
+      summary: Regenerate a periodic review as a new artifact.
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: New generated review artifact.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - review
+                properties:
+                  review:
+                    $ref: "#/components/schemas/Review"
+  /api/v1/reviews/{reviewId}/feedback:
+    post:
+      summary: Save lightweight feedback for a generated review.
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewFeedbackRequest"
+      responses:
+        "200":
+          description: Feedback saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                properties:
+                  ok:
+                    type: boolean
+  /api/v1/reviews/{reviewId}/publish:
+    post:
+      summary: Publish one ready review as an explicit moment.
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Published post.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - postId
+                properties:
+                  postId:
+                    type: string
+  /api/v1/reviews/settings:
+    get:
+      summary: Read periodic review settings.
+      responses:
+        "200":
+          description: Review settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewSettings"
+    put:
+      summary: Update periodic review settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewSettings"
+      responses:
+        "200":
+          description: Review settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewSettings"
   /api/v1/media/upload:
     post:
       summary: Upload a media file for a post.
@@ -396,6 +569,331 @@ paths:
                     items:
                       type: object
                       additionalProperties: true
+  /api/v1/admin/maintenance/state:
+    get:
+      summary: Read current maintenance mode state and the running maintenance job.
+      responses:
+        "200":
+          description: Maintenance state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMaintenanceStateResponse"
+  /api/v1/admin/maintenance/jobs:
+    get:
+      summary: List recent maintenance jobs.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 25
+            minimum: 1
+            maximum: 100
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaintenanceJobType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaintenanceJobStatus"
+      responses:
+        "200":
+          description: Maintenance jobs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - jobs
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/maintenance/jobs/{jobId}:
+    get:
+      summary: Read one maintenance job.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Maintenance job.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/maintenance/jobs/sync-health-refresh:
+    post:
+      summary: Create and run a safe sync-health refresh job.
+      responses:
+        "200":
+          description: Completed sync-health refresh job.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/archive/repository:
+    get:
+      summary: Read restic backup repository state.
+      responses:
+        "200":
+          description: Archive repository state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - repository
+                properties:
+                  repository:
+                    $ref: "#/components/schemas/ArchiveRepositoryState"
+    post:
+      summary: Configure the backup repository path.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - repositoryPath
+              properties:
+                repositoryPath:
+                  type: string
+      responses:
+        "200":
+          description: Updated archive repository state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - repository
+                properties:
+                  repository:
+                    $ref: "#/components/schemas/ArchiveRepositoryState"
+  /api/v1/admin/archive/repository/init:
+    post:
+      summary: Initialize the configured restic repository.
+      responses:
+        "200":
+          description: Initialized archive repository state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - repository
+                properties:
+                  repository:
+                    $ref: "#/components/schemas/ArchiveRepositoryState"
+  /api/v1/admin/archive/schedule:
+    post:
+      summary: Configure daily backup schedule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enabled
+                - timeOfDay
+              properties:
+                enabled:
+                  type: boolean
+                timeOfDay:
+                  type: string
+                  pattern: "^([01]\\d|2[0-3]):([0-5]\\d)$"
+      responses:
+        "200":
+          description: Updated archive repository state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - repository
+                properties:
+                  repository:
+                    $ref: "#/components/schemas/ArchiveRepositoryState"
+  /api/v1/admin/archive/snapshots:
+    get:
+      summary: List restic backup snapshots.
+      responses:
+        "200":
+          description: Archive snapshots.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - snapshots
+                properties:
+                  snapshots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArchiveSnapshot"
+  /api/v1/admin/archive/jobs/backup:
+    post:
+      summary: Start a manual backup job.
+      responses:
+        "202":
+          description: Backup job started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/archive/jobs/check:
+    post:
+      summary: Start a repository check job.
+      responses:
+        "202":
+          description: Repository check job started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/archive/jobs/restore:
+    post:
+      summary: Restore one snapshot into a new data directory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - snapshotId
+              properties:
+                snapshotId:
+                  type: string
+                restoreName:
+                  type: string
+      responses:
+        "202":
+          description: Restore job started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/archive/jobs/promote:
+    post:
+      summary: Prepare a verified restored archive for promotion after strong confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - restoredDataDir
+                - confirmation
+              properties:
+                restoredDataDir:
+                  type: string
+                confirmation:
+                  type: string
+      responses:
+        "202":
+          description: Promote preparation job started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/archive/jobs/export:
+    post:
+      summary: Create a migration-first export package.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                  format: date-time
+                to:
+                  type: string
+                  format: date-time
+      responses:
+        "202":
+          description: Export job started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
+  /api/v1/admin/archive/jobs/import:
+    post:
+      summary: Import an export package into a new staged data directory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - packagePath
+              properties:
+                packagePath:
+                  type: string
+                importName:
+                  type: string
+      responses:
+        "202":
+          description: Import job started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/MaintenanceJob"
   /api/v1/admin/posts:
     get:
       summary: List posts for the Mac Admin Posts page.
@@ -1162,9 +1660,246 @@ components:
       type: object
       required:
         - latestServerChangeVersion
+        - pendingOperations
+        - rejectedOperations
+        - failedMediaUploads
+        - aiNonReady
+        - lastServerChangeAt
+        - lastSyncOperationAt
+        - lastSuccessfulSyncAt
+        - lastRejectedSyncAt
       properties:
         latestServerChangeVersion:
           type: integer
+        pendingOperations:
+          type: integer
+        rejectedOperations:
+          type: integer
+        failedMediaUploads:
+          type: integer
+        aiNonReady:
+          type: integer
+        lastServerChangeAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        lastSyncOperationAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        lastSuccessfulSyncAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        lastRejectedSyncAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    MaintenanceJobType:
+      type: string
+      enum:
+        - backup_create
+        - backup_check
+        - backup_restore
+        - backup_promote
+        - export_create
+        - import_restore
+        - sync_health_refresh
+    MaintenanceJobStatus:
+      type: string
+      enum:
+        - queued
+        - running
+        - succeeded
+        - failed
+        - cancelled
+    MaintenanceModeState:
+      type: object
+      required:
+        - active
+        - jobId
+        - reason
+        - startedAt
+      properties:
+        active:
+          type: boolean
+        jobId:
+          type:
+            - string
+            - "null"
+          format: uuid
+        reason:
+          type:
+            - string
+            - "null"
+        startedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    MaintenanceJob:
+      type: object
+      required:
+        - id
+        - type
+        - status
+        - stage
+        - progress
+        - metadata
+        - artifactPath
+        - errorCode
+        - errorMessage
+        - createdAt
+        - startedAt
+        - finishedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/MaintenanceJobType"
+        status:
+          $ref: "#/components/schemas/MaintenanceJobStatus"
+        stage:
+          type:
+            - string
+            - "null"
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        metadata:
+          type: object
+          additionalProperties: true
+        artifactPath:
+          type:
+            - string
+            - "null"
+        errorCode:
+          type:
+            - string
+            - "null"
+        errorMessage:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        finishedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    AdminMaintenanceStateResponse:
+      type: object
+      required:
+        - maintenance
+        - runningJob
+      properties:
+        maintenance:
+          $ref: "#/components/schemas/MaintenanceModeState"
+        runningJob:
+          anyOf:
+            - $ref: "#/components/schemas/MaintenanceJob"
+            - type: "null"
+    ArchiveScheduleState:
+      type: object
+      required:
+        - enabled
+        - timeOfDay
+        - lastRunAt
+        - nextRunAt
+      properties:
+        enabled:
+          type: boolean
+        timeOfDay:
+          type: string
+        lastRunAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        nextRunAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    ArchiveRepositoryState:
+      type: object
+      required:
+        - configured
+        - repositoryPath
+        - keyFilePath
+        - resticAvailable
+        - resticVersion
+        - initialized
+        - schedule
+        - updatedAt
+      properties:
+        configured:
+          type: boolean
+        repositoryPath:
+          type:
+            - string
+            - "null"
+        keyFilePath:
+          type:
+            - string
+            - "null"
+        resticAvailable:
+          type: boolean
+        resticVersion:
+          type:
+            - string
+            - "null"
+        initialized:
+          type: boolean
+        schedule:
+          $ref: "#/components/schemas/ArchiveScheduleState"
+        updatedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+    ArchiveSnapshot:
+      type: object
+      required:
+        - id
+        - shortId
+        - time
+        - hostname
+        - paths
+        - tags
+      properties:
+        id:
+          type: string
+        shortId:
+          type: string
+        time:
+          type: string
+          format: date-time
+        hostname:
+          type:
+            - string
+            - "null"
+        paths:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
     AdminTagDiagnostics:
       type: object
       required:
@@ -1316,6 +2051,185 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Media"
+    GenerateReviewRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - weekly
+          default: weekly
+        rangeMode:
+          type: string
+          enum:
+            - rolling_7_days
+            - custom
+          default: rolling_7_days
+        rangeStart:
+          type: string
+          format: date-time
+        rangeEnd:
+          type: string
+          format: date-time
+      description: >
+        Explicit ranges must be no longer than 35 days. If the selected period
+        contains more than 240 moments, the generated review is saved as failed
+        with `review_input_too_large` before any provider call is made.
+    ReviewFeedbackRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - useful
+            - too_much_inference
+            - too_dry
+            - missed_point
+            - hide_theme
+        note:
+          type: string
+          maxLength: 1000
+        targetKey:
+          type: string
+          maxLength: 100
+    ReviewSettings:
+      type: object
+      required:
+        - autoWeeklyEnabled
+        - publishWeeklyToMoments
+        - lastAutoWeeklyDate
+        - updatedAt
+      properties:
+        autoWeeklyEnabled:
+          type: boolean
+        publishWeeklyToMoments:
+          type: boolean
+        lastAutoWeeklyDate:
+          type:
+            - string
+            - "null"
+        updatedAt:
+          type: string
+          format: date-time
+    Review:
+      type: object
+      required:
+        - id
+        - kind
+        - rangeMode
+        - rangeStart
+        - rangeEnd
+        - status
+        - title
+        - content
+        - promptVersion
+        - inputDigest
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - weekly
+        rangeMode:
+          type: string
+        rangeStart:
+          type: string
+          format: date-time
+        rangeEnd:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - ready
+            - failed
+        title:
+          type:
+            - string
+            - "null"
+        content:
+          $ref: "#/components/schemas/ReviewContent"
+        promptVersion:
+          type: string
+        inputDigest:
+          type: string
+        generatedBy:
+          type:
+            - string
+            - "null"
+        model:
+          type:
+            - string
+            - "null"
+        publishedPostId:
+          type:
+            - string
+            - "null"
+        errorCode:
+          type:
+            - string
+            - "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReviewContent:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+        summary:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        themes:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        emotionalReflection:
+          type: object
+          additionalProperties: true
+        progress:
+          type: object
+          additionalProperties: true
+        rhythm:
+          type: object
+          additionalProperties: true
+        notableMoments:
+          type: array
+          items:
+            type: object
+            required:
+              - postId
+              - label
+            properties:
+              postId:
+                type: string
+              label:
+                type: string
+              reason:
+                type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        uncertainty:
+          type: array
+          items:
+            type: string
     SyncRequest:
       type: object
       required:

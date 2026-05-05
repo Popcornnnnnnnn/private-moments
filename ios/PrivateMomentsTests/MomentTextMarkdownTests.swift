@@ -38,6 +38,23 @@ final class MomentTextMarkdownTests: XCTestCase {
         )
     }
 
+    func testParsesStandaloneHTTPURLsAsLinks() {
+        let lines = MomentTextMarkdown.parse("微信文章\nhttps://mp.weixin.qq.com/s/example\nnot https://example.com inline")
+
+        XCTAssertEqual(
+            lines.map(\.kind),
+            [
+                .paragraph("微信文章"),
+                .link(URL(string: "https://mp.weixin.qq.com/s/example")!),
+                .paragraph("not https://example.com inline")
+            ]
+        )
+        XCTAssertEqual(
+            MomentTextMarkdown.searchableText("https://mp.weixin.qq.com/s/example"),
+            "https://mp.weixin.qq.com/s/example"
+        )
+    }
+
     func testTogglesHeadingOnCurrentLine() {
         let text = "first\nsecond"
         let selection = NSRange(location: 7, length: 0)

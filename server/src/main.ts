@@ -4,6 +4,13 @@ import { loadConfig } from "./config/app-config.js";
 import { loadEnvFile } from "./config/env-file.js";
 import { createPrismaClient } from "./db/prisma.js";
 import { FileLogger } from "./logging/file-logger.js";
+import { ArchiveScheduler } from "./maintenance/archive-scheduler.js";
+import { ExportImportService } from "./maintenance/export-import-service.js";
+import { MaintenanceJobService } from "./maintenance/maintenance-jobs.js";
+import { MaintenanceModeService } from "./maintenance/maintenance-mode.js";
+import { ResticService } from "./maintenance/restic-service.js";
+import { ReviewScheduler } from "./reviews/review-scheduler.js";
+import { ReviewService } from "./reviews/review-service.js";
 import { cleanupExpiredDeletedContent } from "./storage/cleanup.js";
 import { ensureDataDir } from "./storage/data-dir.js";
 import { ensureDefaultTags } from "./tags/tagging.js";
@@ -17,6 +24,13 @@ async function main(): Promise<void> {
   const paths = await ensureDataDir(config.dataDir);
   const fileLogger = new FileLogger(paths.logsDir);
   const prisma = createPrismaClient(config);
+  const maintenanceMode = new MaintenanceModeService();
+  const maintenanceJobs = new MaintenanceJobService(prisma, fileLogger);
+  const restic = new ResticService(config, paths, prisma, fileLogger);
+  const exportImport = new ExportImportService(config, paths, prisma, fileLogger);
+  const archiveScheduler = new ArchiveScheduler(maintenanceJobs, restic, fileLogger);
+  const reviews = new ReviewService({ config, prisma, fileLogger });
+  const reviewScheduler = new ReviewScheduler(reviews, fileLogger);
 
   await fileLogger.info("server.starting", {
     host: config.host,
@@ -26,21 +40,31 @@ async function main(): Promise<void> {
 
   await ensureSingleUser(prisma, config.initialPassword, fileLogger);
   await ensureDefaultTags(prisma, fileLogger);
+  await maintenanceJobs.markStaleRunningJobsFailed();
   await runCleanup(prisma, paths, fileLogger);
 
   const app = await buildApp({
     config,
     paths,
     fileLogger,
+    exportImport,
+    maintenanceJobs,
+    maintenanceMode,
+    restic,
+    reviews,
     prisma,
   });
   const cleanupTimer = setInterval(() => {
     void runCleanup(prisma, paths, fileLogger);
   }, CLEANUP_INTERVAL_MS);
   cleanupTimer.unref();
+  archiveScheduler.start();
+  reviewScheduler.start();
 
   app.addHook("onClose", async () => {
     clearInterval(cleanupTimer);
+    archiveScheduler.stop();
+    reviewScheduler.stop();
   });
 
   await app.listen({

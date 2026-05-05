@@ -96,7 +96,7 @@ The paired phone is commonly named `wwz 的 iphone`; the real-device script can 
 - Development server port: `3210`.
 - Bundle id: `com.popcornnnnnn.privatemoments`.
 - App display name: `Moments`.
-- Current schema version: `9`.
+- Current schema version: `11`.
 - Read the development password from `server/.env`; do not hard-code it into reusable docs or code.
 - Get the current Mac Tailscale IP with `tailscale ip -4`.
 - iOS Settings server URL may be `http://<mac-tailscale-ip>:3210` or a Tailscale Serve HTTPS URL.

@@ -36,9 +36,8 @@ struct MarkdownTextEditor: UIViewRepresentable {
         if uiView.text != text,
            !context.coordinator.hasMarkedText(in: uiView) {
             uiView.text = text
+            context.coordinator.applyMarkdownStyling(to: uiView, force: true)
         }
-
-        context.coordinator.applyMarkdownStyling(to: uiView)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -66,6 +65,8 @@ struct MarkdownTextEditor: UIViewRepresentable {
         weak var textView: UITextView?
 
         private var isApplyingMarkdownStyling = false
+        private var lastStyledText: String?
+        private var lastStyledSelectionLineRange: NSRange?
 
         init(text: Binding<String>, onPasteImages: (([Data]) -> Void)?) {
             self.text = text
@@ -136,7 +137,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
 
             text.wrappedValue = textView.text ?? ""
             if !hasMarkedText(in: textView) {
-                applyMarkdownStyling(to: textView)
+                applyMarkdownStyling(to: textView, force: true)
             }
         }
 
@@ -150,25 +151,42 @@ struct MarkdownTextEditor: UIViewRepresentable {
             }
         }
 
-        func applyMarkdownStyling(to textView: UITextView) {
+        func applyMarkdownStyling(to textView: UITextView, force: Bool = false) {
             guard !hasMarkedText(in: textView) else {
                 return
             }
 
             let currentText = textView.text ?? ""
             let selectedRange = clamped(range: textView.selectedRange, textLength: currentText.utf16.count)
+            let selectedLineRange = lineRange(in: currentText, selectedRange: selectedRange)
+            if !force,
+               currentText == lastStyledText,
+               let previousLineRange = lastStyledSelectionLineRange,
+               NSEqualRanges(previousLineRange, selectedLineRange) {
+                textView.typingAttributes = MarkdownEditorStyler.typingAttributes(
+                    for: currentText,
+                    selectedRange: selectedRange
+                )
+                return
+            }
 
             isApplyingMarkdownStyling = true
-            let attributed = MarkdownEditorStyler.attributedText(
-                for: currentText,
-                selectedRange: selectedRange
-            )
-            textView.textStorage.setAttributedString(attributed)
-            textView.selectedRange = selectedRange
-            textView.typingAttributes = MarkdownEditorStyler.typingAttributes(
-                for: currentText,
-                selectedRange: selectedRange
-            )
+            let contentOffset = textView.contentOffset
+            UIView.performWithoutAnimation {
+                let attributed = MarkdownEditorStyler.attributedText(
+                    for: currentText,
+                    selectedRange: selectedRange
+                )
+                textView.textStorage.setAttributedString(attributed)
+                textView.selectedRange = selectedRange
+                textView.typingAttributes = MarkdownEditorStyler.typingAttributes(
+                    for: currentText,
+                    selectedRange: selectedRange
+                )
+                textView.setContentOffset(contentOffset, animated: false)
+            }
+            lastStyledText = currentText
+            lastStyledSelectionLineRange = selectedLineRange
             isApplyingMarkdownStyling = false
         }
 
@@ -212,7 +230,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
             textView.text = updatedText
             text.wrappedValue = updatedText
             textView.selectedRange = clamped(range: edit.selectedRange, textLength: updatedText.utf16.count)
-            applyMarkdownStyling(to: textView)
+            applyMarkdownStyling(to: textView, force: true)
         }
 
         private func applyListContinuation(_ edit: PlainTextListContinuation.Edit, to textView: UITextView) {
@@ -225,7 +243,7 @@ struct MarkdownTextEditor: UIViewRepresentable {
             textView.text = updatedText
             text.wrappedValue = updatedText
             textView.selectedRange = clamped(range: edit.selectedRange, textLength: updatedText.utf16.count)
-            applyMarkdownStyling(to: textView)
+            applyMarkdownStyling(to: textView, force: true)
         }
 
         private func clamped(range: NSRange, textLength: Int) -> NSRange {
@@ -240,6 +258,16 @@ struct MarkdownTextEditor: UIViewRepresentable {
             }
 
             return textView.offset(from: markedRange.start, to: markedRange.end) > 0
+        }
+
+        private func lineRange(in text: String, selectedRange: NSRange) -> NSRange {
+            guard !text.isEmpty else {
+                return NSRange(location: 0, length: 0)
+            }
+
+            let nsText = text as NSString
+            let location = min(max(0, selectedRange.location), text.utf16.count)
+            return nsText.lineRange(for: NSRange(location: location, length: 0))
         }
     }
 }

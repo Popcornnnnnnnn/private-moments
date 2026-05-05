@@ -34,6 +34,7 @@ export interface MediaSummaryJobInput {
 }
 
 const inFlightMediaSummaries = new Set<string>();
+let mediaSummaryQueueTail: Promise<void> = Promise.resolve();
 const MAX_GENERATION_ATTEMPTS = 2;
 const SUMMARY_RETRY_DELAY_MS = 2_000;
 const RETRYABLE_ERROR_CODES = new Set([
@@ -56,17 +57,24 @@ export function enqueueMediaSummaryJob(
   }
 
   inFlightMediaSummaries.add(input.mediaId);
-  void generateAndSaveMediaSummary(context, input)
-    .catch(async (error: unknown) => {
+  const runJob = async () => {
+    try {
+      await generateAndSaveMediaSummary(context, input);
+    } catch (error: unknown) {
       await context.fileLogger.warn("ai.summary_job_failed", {
         postId: input.postId,
         mediaId: input.mediaId,
         message: error instanceof Error ? error.message : String(error),
       });
-    })
-    .finally(() => {
+    } finally {
       inFlightMediaSummaries.delete(input.mediaId);
-    });
+    }
+  };
+
+  mediaSummaryQueueTail = mediaSummaryQueueTail
+    .catch(() => undefined)
+    .then(runJob);
+  void mediaSummaryQueueTail;
 }
 
 export async function generateAndSaveMediaSummary(

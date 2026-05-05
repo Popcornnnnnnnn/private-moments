@@ -7,6 +7,10 @@ import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
 import { SCHEMA_VERSION, SERVER_VERSION } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
 import {
+  blockWritesDuringMaintenance,
+  type MaintenanceModeService,
+} from "../maintenance/maintenance-mode.js";
+import {
   cleanedTagName,
   canonicalDefaultPrimaryTagForId,
   emitPostTagChange,
@@ -30,6 +34,7 @@ const MAX_AI_TITLE_LENGTH = 40;
 interface SyncRouteContext {
   prisma: PrismaClient;
   fileLogger: FileLogger;
+  maintenanceMode: MaintenanceModeService;
 }
 
 interface SyncRequestBody {
@@ -87,6 +92,10 @@ export async function registerSyncRoutes(
 
     if (body.deviceId !== device.id) {
       return sendForbidden(reply, "Request deviceId does not match bearer token");
+    }
+    const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+    if (maintenanceReply) {
+      return maintenanceReply;
     }
 
     const acceptedOps: string[] = [];

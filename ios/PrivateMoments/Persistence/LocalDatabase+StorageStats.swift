@@ -17,6 +17,32 @@ extension LocalDatabase {
         }
     }
 
+    func retryFailedMediaUploads() throws -> Int {
+        let statement = try prepare(
+            """
+            UPDATE local_media
+            SET uploadStatus = 'pending',
+                uploadError = NULL,
+                updatedAt = ?
+            WHERE uploadStatus = 'failed'
+              AND deletedAt IS NULL
+              AND EXISTS (
+                SELECT 1
+                FROM local_posts p
+                WHERE p.id = local_media.postId
+                  AND p.deletedAt IS NULL
+              )
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(Date(), to: 1, in: statement)
+        try stepDone(statement)
+        return Int(sqlite3_changes(handle))
+    }
+
     func downloadedAudioVideoCacheBytes() throws -> Int64 {
         try downloadedAudioVideoCachePaths().reduce(Int64(0)) { total, path in
             let localPath = (try? AppDirectories.localFilePath(fromStoredPath: path)) ?? path

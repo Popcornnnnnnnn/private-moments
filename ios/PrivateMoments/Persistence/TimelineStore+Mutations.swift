@@ -62,12 +62,7 @@ extension TimelineStore {
             try database.insertPost(post, media: media, operation: operation, primaryTagId: primaryTagId)
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
 
             return true
         } catch {
@@ -102,10 +97,7 @@ extension TimelineStore {
             try database.softDeletePost(postId: item.post.id, deletedAt: now, operation: operation)
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                await syncNow()
-            }
+            syncSoonIfAuthenticated()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -143,12 +135,7 @@ extension TimelineStore {
             )
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -209,12 +196,7 @@ extension TimelineStore {
             )
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
 
             return true
         } catch {
@@ -273,12 +255,7 @@ extension TimelineStore {
             try database.insertComment(comment, operation: operation)
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
 
             return comment
         } catch {
@@ -313,12 +290,7 @@ extension TimelineStore {
             try database.softDeleteComment(comment: comment, deletedAt: deletedAt, operation: operation)
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -365,12 +337,7 @@ extension TimelineStore {
             )
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
 
             return true
         } catch {
@@ -436,12 +403,7 @@ extension TimelineStore {
             try database.saveTag(tag, operation: operation)
             try await reload()
             try refreshPendingCounts()
-
-            if isAuthenticated {
-                Task {
-                    await syncNow()
-                }
-            }
+            syncSoonIfAuthenticated()
 
             return tag
         } catch {
@@ -761,9 +723,9 @@ extension TimelineStore {
     }
 
     private func syncSoonIfAuthenticated() {
-        if isAuthenticated {
+        if isAuthenticated && automaticSyncEnabled {
             Task {
-                await syncNow()
+                await syncNow(userInitiated: false)
             }
         }
     }

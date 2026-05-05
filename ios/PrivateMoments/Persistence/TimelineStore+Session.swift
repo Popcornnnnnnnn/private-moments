@@ -5,12 +5,13 @@ extension TimelineStore {
     func login(serverURLString: String, password: String) async -> Bool {
         do {
             let normalizedServerURL = try normalizeServerURL(serverURLString)
-            let client = APIClient(baseURL: normalizedServerURL, token: nil)
-            let response = try await client.login(
-                password: password,
-                deviceName: UIDevice.current.name,
-                deviceKey: AppSettings.deviceKey(preferred: UIDevice.current.identifierForVendor?.uuidString)
-            )
+            let response = try await withAvailableAPIClient(token: nil, primaryServerURLString: serverURLString) { client in
+                try await client.login(
+                    password: password,
+                    deviceName: UIDevice.current.name,
+                    deviceKey: AppSettings.deviceKey(preferred: UIDevice.current.identifierForVendor?.uuidString)
+                )
+            }
 
             AppSettings.serverURLString = normalizedServerURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             AppSettings.deviceId = response.deviceId
@@ -64,6 +65,62 @@ extension TimelineStore {
         }
 
         return url
+    }
+
+    func withAvailableAPIClient<T>(
+        token: String?,
+        primaryServerURLString: String = AppSettings.serverURLString,
+        operation: (APIClient) async throws -> T
+    ) async throws -> T {
+        let clients = try apiClientCandidates(token: token, primaryServerURLString: primaryServerURLString)
+        var lastError: Error?
+
+        for (index, client) in clients.enumerated() {
+            do {
+                return try await operation(client)
+            } catch {
+                lastError = error
+                let hasFallback = index < clients.count - 1
+                guard hasFallback, shouldTryFallback(after: error) else {
+                    throw error
+                }
+            }
+        }
+
+        throw lastError ?? APIError.invalidURL
+    }
+
+    private func apiClientCandidates(
+        token: String?,
+        primaryServerURLString: String
+    ) throws -> [APIClient] {
+        var clients: [APIClient] = []
+        for candidate in AppSettings.serverURLCandidateStrings(primary: primaryServerURLString) {
+            let url = try normalizeServerURL(candidate)
+            clients.append(APIClient(baseURL: url, token: token))
+        }
+
+        guard !clients.isEmpty else {
+            throw APIError.invalidURL
+        }
+
+        return clients
+    }
+
+    private func shouldTryFallback(after error: Error) -> Bool {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .invalidResponse:
+                return true
+            case .invalidURL, .missingToken, .missingUploadFile, .httpStatus:
+                return false
+            }
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain
+            || nsError.domain == "kCFErrorDomainCFNetwork"
+            || nsError.domain == NSPOSIXErrorDomain
     }
 
     func handleSyncError(_ error: Error, showErrors: Bool) {

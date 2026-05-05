@@ -21,20 +21,26 @@ extension TimelineStore {
             guard let database else {
                 throw StoreError.notReady
             }
+            guard automaticSyncEnabled else {
+                throw StoreError.localOnlyModeEnabled
+            }
             guard isAuthenticated,
                   let token = try KeychainStore.deviceToken() else {
                 throw StoreError.notAuthenticated
             }
 
-            let client = APIClient(baseURL: try normalizeServerURL(AppSettings.serverURLString), token: token)
-            let payload = try await client.requestMediaSummary(
-                postId: media.postId,
-                mediaId: media.id,
-                forceRegenerate: forceRegenerate,
-                aiLanguage: aiLanguageMode
-            )
+            let payload = try await withAvailableAPIClient(token: token) { client in
+                try await client.requestMediaSummary(
+                    postId: media.postId,
+                    mediaId: media.id,
+                    forceRegenerate: forceRegenerate,
+                    aiLanguage: aiLanguageMode
+                )
+            }
             try database.upsertAISummary(payload.timelineSummary())
             try await reload()
+        } catch StoreError.localOnlyModeEnabled {
+            errorMessage = StoreError.localOnlyModeEnabled.localizedDescription
         } catch {
             await markAISummaryRequestFailed(media: media, error: error)
         }
@@ -45,15 +51,21 @@ extension TimelineStore {
             guard let database else {
                 throw StoreError.notReady
             }
+            guard automaticSyncEnabled else {
+                throw StoreError.localOnlyModeEnabled
+            }
             guard isAuthenticated,
                   let token = try KeychainStore.deviceToken() else {
                 throw StoreError.notAuthenticated
             }
 
-            let client = APIClient(baseURL: try normalizeServerURL(AppSettings.serverURLString), token: token)
-            let payload = try await client.deleteMediaSummary(summaryId: summary.id)
+            let payload = try await withAvailableAPIClient(token: token) { client in
+                try await client.deleteMediaSummary(summaryId: summary.id)
+            }
             try database.upsertAISummary(payload.timelineSummary())
             try await reload()
+        } catch StoreError.localOnlyModeEnabled {
+            errorMessage = StoreError.localOnlyModeEnabled.localizedDescription
         } catch {
             errorMessage = error.localizedDescription
         }

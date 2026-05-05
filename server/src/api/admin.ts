@@ -7,6 +7,10 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
 import { SCHEMA_VERSION, SERVER_VERSION } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
+import {
+  blockWritesDuringMaintenance,
+  type MaintenanceModeService,
+} from "../maintenance/maintenance-mode.js";
 import type { DataPaths } from "../storage/data-dir.js";
 import { collectServerStorageStats } from "../storage/stats.js";
 import { sendBadRequest, sendNotFound, sendUnauthorized } from "./http-errors.js";
@@ -29,6 +33,7 @@ interface AdminRouteContext {
   prisma: PrismaClient;
   paths: DataPaths;
   fileLogger: FileLogger;
+  maintenanceMode: MaintenanceModeService;
 }
 
 interface TimelineCursor {
@@ -123,6 +128,10 @@ export async function registerAdminRoutes(
       if (!adminDevice) {
         return reply;
       }
+      const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+      if (maintenanceReply) {
+        return maintenanceReply;
+      }
 
       const existing = await context.prisma.post.findUnique({
         where: {
@@ -192,6 +201,10 @@ export async function registerAdminRoutes(
       const adminDevice = await authenticateOrReply(request, reply, context.prisma);
       if (!adminDevice) {
         return reply;
+      }
+      const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+      if (maintenanceReply) {
+        return maintenanceReply;
       }
 
       const body = parseBody(request.body);
@@ -285,7 +298,7 @@ export async function registerAdminRoutes(
       storage,
       aiSummaries,
       tags,
-      serverChangeVersion,
+      sync,
     ] =
       await Promise.all([
         context.prisma.device.count({
@@ -316,7 +329,7 @@ export async function registerAdminRoutes(
         collectServerStorageStats(context.paths),
         collectAISummaryDiagnostics(context.prisma),
         collectTagDiagnostics(context.prisma),
-        latestServerChangeVersion(context.prisma),
+        collectSyncDiagnostics(context.prisma),
       ]);
 
     return reply.send({
@@ -334,9 +347,7 @@ export async function registerAdminRoutes(
       storage,
       aiSummaries,
       tags,
-      sync: {
-        latestServerChangeVersion: serverChangeVersion,
-      },
+      sync,
     });
   });
 
@@ -446,14 +457,79 @@ function aiSummaryRetryHint(status: string): string {
   return "No action needed.";
 }
 
-async function latestServerChangeVersion(prisma: PrismaClient): Promise<number> {
-  const result = await prisma.serverChange.aggregate({
-    _max: {
-      version: true,
-    },
-  });
+async function collectSyncDiagnostics(prisma: PrismaClient): Promise<Record<string, unknown>> {
+  const [
+    serverChange,
+    pendingOperations,
+    rejectedOperations,
+    failedMediaUploads,
+    aiNonReady,
+    lastServerChange,
+    lastOperation,
+  ] = await Promise.all([
+    prisma.serverChange.aggregate({
+      _max: {
+        version: true,
+      },
+    }),
+    prisma.syncOperation.count({
+      where: {
+        appliedAt: null,
+        rejectedAt: null,
+      },
+    }),
+    prisma.syncOperation.count({
+      where: {
+        rejectedAt: {
+          not: null,
+        },
+      },
+    }),
+    prisma.media.count({
+      where: {
+        status: "failed",
+        deletedAt: null,
+      },
+    }),
+    prisma.aiSummary.count({
+      where: {
+        deletedAt: null,
+        status: {
+          in: ["transcribing", "summarizing", "failed"],
+        },
+      },
+    }),
+    prisma.serverChange.findFirst({
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        createdAt: true,
+      },
+    }),
+    prisma.syncOperation.findFirst({
+      orderBy: {
+        receivedAt: "desc",
+      },
+      select: {
+        receivedAt: true,
+        appliedAt: true,
+        rejectedAt: true,
+      },
+    }),
+  ]);
 
-  return result._max.version ?? 0;
+  return {
+    latestServerChangeVersion: serverChange._max.version ?? 0,
+    pendingOperations,
+    rejectedOperations,
+    failedMediaUploads,
+    aiNonReady,
+    lastServerChangeAt: lastServerChange?.createdAt.toISOString() ?? null,
+    lastSyncOperationAt: lastOperation?.receivedAt.toISOString() ?? null,
+    lastSuccessfulSyncAt: lastOperation?.appliedAt?.toISOString() ?? null,
+    lastRejectedSyncAt: lastOperation?.rejectedAt?.toISOString() ?? null,
+  };
 }
 
 async function authenticateOrReply(

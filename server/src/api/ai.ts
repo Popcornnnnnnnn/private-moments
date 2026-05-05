@@ -9,6 +9,10 @@ import {
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
 import type { AppConfig } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
+import {
+  blockWritesDuringMaintenance,
+  type MaintenanceModeService,
+} from "../maintenance/maintenance-mode.js";
 import type { DataPaths } from "../storage/data-dir.js";
 import { sendBadRequest, sendNotFound, sendUnauthorized } from "./http-errors.js";
 
@@ -17,6 +21,7 @@ interface AIRouteContext {
   paths: DataPaths;
   prisma: PrismaClient;
   fileLogger: FileLogger;
+  maintenanceMode: MaintenanceModeService;
 }
 
 interface SummaryRequestBody {
@@ -34,6 +39,10 @@ export async function registerAIRoutes(
     const device = await authenticateOrReply(request, reply, context.prisma);
     if (!device) {
       return reply;
+    }
+    const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+    if (maintenanceReply) {
+      return maintenanceReply;
     }
 
     const body = parseSummaryRequestBody(request.body, reply);
@@ -72,6 +81,10 @@ export async function registerAIRoutes(
       const device = await authenticateOrReply(request, reply, context.prisma);
       if (!device) {
         return reply;
+      }
+      const maintenanceReply = blockWritesDuringMaintenance(reply, context.maintenanceMode);
+      if (maintenanceReply) {
+        return maintenanceReply;
       }
 
       const existing = await context.prisma.aiSummary.findUnique({

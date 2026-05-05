@@ -1,4 +1,4 @@
-import { appendFile } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
@@ -34,6 +34,7 @@ export class FileLogger {
       ...fields,
     };
 
+    await mkdir(this.logsDir, { recursive: true });
     await appendFile(this.logPath(), `${JSON.stringify(entry)}\n`, "utf8");
   }
 
@@ -42,4 +43,3 @@ export class FileLogger {
     return path.join(this.logsDir, `app-${date}.jsonl`);
   }
 }
-

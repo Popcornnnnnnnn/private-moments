@@ -10,6 +10,7 @@
 - `xcodegen`，用于重新生成 `ios/PrivateMoments.xcodeproj`。只运行 Mac server 时不是必需项。
 - Tailscale，用于真实 iPhone 访问 simulator localhost 之外的 Mac server。
 - 已配对的 iPhone 需要解锁，并信任当前 Mac，才能通过命令行安装。
+- `restic`，用于 Mac Admin 的 Archive backup/restore 功能。可通过 `brew install restic` 安装。
 
 ## 环境变量
 
@@ -39,6 +40,158 @@
 | `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS` | `600000` | 本地转写超时。长语音可调大。 |
 | `AI_SUMMARY_TIMEOUT_MS` | `60000` | AI summary provider request timeout。 |
 
+## Runtime Truth Check
+
+每次 server schema、API route 或 Admin UI 改完后，不只看 build 成功，还要确认 3210 上的实际进程已经加载当前 build：
+
+```bash
+npm run server:prisma:deploy
+npm run server:build
+launchctl kickstart -k "gui/$(id -u)/${PRIVATE_MOMENTS_LAUNCHD_LABEL:-com.private-moments.server}"
+curl -fsS http://127.0.0.1:3210/api/v1/health
+```
+
+`/api/v1/health` 的 `schemaVersion` 必须和 `server/src/config/app-config.ts` 中的 `SCHEMA_VERSION` 一致。若 build 通过但 health 仍返回旧 schema，说明 LaunchAgent 或当前 server 进程仍在运行旧代码，先重启服务再继续验证。
+
+## Archive / Backup / Restore
+
+Archive 功能用于自用灾难恢复，入口在 Mac Admin 的 `Archive` tab。日常备份/恢复不需要直接运行 restic 命令，但 Mac 上必须安装 restic：
+
+```bash
+brew install restic
+restic version
+```
+
+### 备份仓库和 key 文件
+
+在 Admin `Archive > Backup Repository` 中填写 repository path。它可以是普通本机目录，也可以是用户自己明确选择的 iCloud Drive 目录，例如：
+
+```text
+/Users/<you>/Library/Mobile Documents/com~apple~CloudDocs/PrivateMomentsBackup
+```
+
+保存路径后，项目会在 repository 目录旁边创建或复用：
+
+```text
+.private-moments-restic-key
+```
+
+这个 key 文件就是 restic repository 的密码来源。用户不需要记一个额外的备份密码，但要理解安全语义：谁同时拿到 repository 内容和 `.private-moments-restic-key`，谁就可以恢复这个 archive。这是面向本人长期使用的恢复工具，不是额外的加密保险箱。
+
+### 初始化和备份
+
+常规流程：
+
+1. 打开 `http://127.0.0.1:3210/admin/` 并登录。
+2. 进入 `Archive` tab。
+3. 填写 `Repository path`，点 `Save path`。
+4. 点 `Initialize` 初始化 restic repository。
+5. 点 `Backup now` 立即创建快照。
+6. 在 `Snapshots` 和 `Recent Jobs` 区域确认结果。
+
+手动备份会创建一个受控 snapshot source，而不是直接 zip 当前运行中的目录。当前 snapshot 包含：
+
+- `app.sqlite`
+- `manifest.json`
+- `media/`
+- `backup-manifest.json`
+
+运行时依赖和临时文件，例如 `node_modules`、`.venv`、build output、media temp 文件，不作为恢复数据源。
+
+### 每日定时备份
+
+在 `Daily Backup` 中打开 `Enable daily backup` 并设置时间。server 进程每分钟检查一次 schedule；到点时如果没有其他 maintenance job 正在运行，就创建 `backup_create` job。如果当时已有 job 在跑，本次 scheduled backup 会跳过并写安全日志。
+
+### Snapshot check
+
+点 `Check repository` 会运行 restic repository check，并把结果记录为 `backup_check` maintenance job。建议在首次设置、换 repository 位置、或者怀疑 iCloud Drive 同步不完整时运行一次。
+
+### Restore 到新目录
+
+在 `Snapshots` 中选择某个 snapshot 点 `Restore`。restore job 会把 snapshot 恢复到：
+
+```text
+<dataDir>/archive/restores/<timestamp>-<snapshot>
+```
+
+恢复完成后，job metadata 和 `artifactPath` 会显示恢复出的数据目录。server 会自动做基本验证：
+
+- `app.sqlite` 存在且可读。
+- `manifest.json` 存在。
+- `media/` 目录存在。
+- 未删除 media 的文件引用仍在恢复目录内，且文件存在。
+
+验证通过时，job stage 会进入 `completed`，metadata 里的 `verification.ok` 为 `true`，`missingMediaFiles` 应为 `0`。
+
+### Promote preparation
+
+当前 v0.1 不在运行中直接替换 live SQLite database。原因是 server 的 Prisma 连接已经打开，热替换数据目录风险比收益大。
+
+Promote 的正确流程是：
+
+1. 先完成 restore，并确认 Recent Jobs 里的 restore `artifactPath`。
+2. 在 `Promote Restore` 填入 `Restored data directory`。
+3. 在 `Confirmation` 中输入：
+
+```text
+PROMOTE <restored-folder-name>
+```
+
+4. 点 `Prepare promote`。
+
+Promote preparation 会：
+
+- 进入 maintenance mode，暂停普通 sync/media/AI/admin destructive writes。
+- 重新验证 restored data directory。
+- 为当前数据创建一份 `pre-promote` backup。
+- 写入：
+
+```text
+<dataDir>/archive/pending-promote.json
+```
+
+这个文件包含恢复目录、当前目录、pre-promote backup metadata，以及需要切换的 env：
+
+```text
+PRIVATE_MOMENTS_DATA_DIR=<restored-data-dir>
+DATABASE_URL=file:<restored-data-dir>/app.sqlite
+```
+
+真正切换时，停止 server，按 `pending-promote.json` 更新 `server/.env` 或 launchd 环境，再重新启动 server。不要在 server 仍运行时手动替换当前 `app.sqlite` 或整个 data directory。
+
+### Maintenance jobs
+
+Archive 操作会写入 `maintenance_jobs`，Admin `Recent Jobs` 显示最近 job。可通过 API 排查：
+
+```bash
+curl -fsS http://127.0.0.1:3210/api/v1/admin/maintenance/jobs \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+job metadata 只允许保存路径、状态、计数、错误码等安全信息；不要把 post 正文、comment、transcript、summary 正文或媒体内容写进 job metadata 或日志。
+
+### Export / Import 迁移包
+
+Export/import 是迁移和恢复辅助路径，不替代 restic backup。入口同样在 Mac Admin 的 `Archive` tab。
+
+Export 会生成：
+
+- `manifest.json`：包格式、schema/server 版本、导出范围和计数。
+- `archive.json`：权威迁移数据，包含 posts、media metadata、comments、tags、tag aliases、post tag assignments 和 AI summaries。
+- `media/`：导出范围内引用到的媒体文件。
+- `preview.md`：仅供快速阅读预览，不作为导入依据。
+- `private-moments-export-<timestamp>.tar.gz`：可移动的导出包。
+
+在 `Exports` 区域点击 `Create export` 时，如果 `From` / `To` 留空就是全量导出；填写日期则按 occurred date 做半开区间导出。导出完成后，在 `Recent Jobs` 查看 `export_create` job 的 `artifactPath`，它就是 `.tar.gz` 包路径。
+
+Import 只会导入到新的 staged data directory：
+
+```text
+<dataDir>/archive/imports/<timestamp>-<label>/data
+```
+
+导入不会覆盖当前 archive，也不会恢复旧的 device token、session、sync operations 或 maintenance jobs。导入会保留内容 ID、时间戳、tag/AI generated metadata，并重建新的 `server_changes`，方便后续作为一个干净 archive 被新设备同步。导入完成后，`import_restore` job 的 `artifactPath` 是 staged data directory；如果要切换使用，后续仍走 `Promote Restore` 的强确认流程。
+
 ## 本地开发启动
 
 推荐一键初始化：
@@ -51,7 +204,7 @@ npm run setup:local
 
 - 保留已有的 `server/.env`，只在缺失时从 `server/.env.example` 创建。
 - 生成 Prisma client。
-- 使用 `server:prisma:deploy` 应用已有数据库迁移。
+- 如果 `DATABASE_URL` 指向 SQLite `file:` 且数据库文件还不存在，先创建一个空 SQLite 文件，再使用 `server:prisma:deploy` 应用已有数据库迁移。
 - 构建 Admin UI 和 Server。
 - 不自动覆盖真实密码、真实数据或媒体文件。
 
@@ -75,6 +228,14 @@ npm run admin:build
 npm run server:build
 npm run server:dev
 ```
+
+如果是全新的 SQLite 文件，当前 Prisma SQLite engine 在某些机器上会要求文件先存在。推荐优先用 `npm run setup:local`，它会自动处理这个步骤。手动 fallback 时，如果 `server/.env` 仍使用默认 `DATABASE_URL="file:./dev.db"`，可在 deploy 前执行：
+
+```bash
+sqlite3 server/prisma/dev.db 'PRAGMA user_version=0;'
+```
+
+如果 `DATABASE_URL` 是绝对路径，例如 `file:/path/to/app.sqlite`，则在对应路径创建空 SQLite 文件即可；不要对已有真实数据库执行删除或重建。
 
 第一次启动前，需要在 `server/.env` 里设置真实的 `PRIVATE_MOMENTS_INITIAL_PASSWORD`。Agent 应使用安全 secret 收集机制处理这个值，不要在聊天或文档中要求用户粘贴密码。
 
@@ -200,6 +361,27 @@ curl -fsS --resolve <tailscale-host>:443:<tailscale-ip> https://<tailscale-host>
 
 真实 iPhone 的 Server URL 可以填 `https://<tailscale-host>`；如果继续使用 `http://<tailscale-ip>:3210`，Debug app 的 `NSAppTransportSecurity` 当前通过 `NSAllowsArbitraryLoads` 允许开发期明文 HTTP。
 
+### Private fallback endpoint
+
+公开项目默认只记录 Tailscale/private VPN 路径。个人本机如果还有一个额外 HTTPS endpoint，例如 Cloudflare Tunnel，可以通过 ignored 的 `.env.local` 注入到本机 iOS build 里作为 fallback；不要把个人域名、tunnel id 或 DNS 目标提交到仓库。
+
+```bash
+PRIVATE_MOMENTS_FALLBACK_SERVER_URL=https://your-private-fallback.example
+```
+
+`npm run ios:device` 和 `npm run ios:simulator` 会读取 `.env.local`，并把 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL` 写入 app bundle 的 `PrivateMomentsFallbackServerURL`。运行时仍以 Settings 中的 Server URL 为 primary；当 primary 出现网络级连接失败时，app 会自动尝试 bundled fallback。HTTP 401/403/404 等认证或服务端错误不会触发 fallback。
+
+如果使用 Cloudflare Tunnel，建议只放行 iOS 同步所需 API，避免把完整 Mac Admin UI 暴露到公网：
+
+```text
+/api/v1/health
+/api/v1/auth/login
+/api/v1/sync
+/api/v1/media/*
+/api/v1/ai/media-summary
+/api/v1/admin/status
+```
+
 Admin build 和 server typecheck：
 
 ```bash
@@ -215,6 +397,8 @@ curl -fsS http://127.0.0.1:3210/api/v1/admin/status \
 ```
 
 响应应包含 `counts`，以及 `storage.totalBytes`、`storage.databaseBytes`、`storage.mediaBytes`、`storage.logsBytes`、`storage.availableBytes`、`sync.latestServerChangeVersion` 和 `aiSummaries`。`aiSummaries` 只暴露计数、状态、错误码、duration、transcript length、卡住时长和排查提示，不暴露 transcript 或 summary 正文。
+
+Sync Health 还应包含 server-side `pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady`、`lastServerChangeAt`、`lastSyncOperationAt`、`lastSuccessfulSyncAt` 和 `lastRejectedSyncAt`。iOS Settings > Storage & Diagnostics 会把这些 Mac 侧计数和本机 cursor、outbox、pending upload、failed upload、missing media download 状态合并展示，并提供安全动作：`Sync Now`、`Pull Server Changes`、`Retry Uploads`、`Re-download Missing Media`。
 
 iOS 无签名编译检查：
 
@@ -392,14 +576,16 @@ tailscale serve status
 
 ### Uploads Stay Pending
 
-iOS 会逐个上传 media，并在上传前压缩图片。如果大文件上传失败或 Tailscale 连接中断，item 会留在本地 queue，并由 sync retry 调度器按 backoff 延迟重试。先看 Settings > Storage & Diagnostics > Sync Health 里的 pending 或 failed counts，再检查 server logs 里的分阶段上传日志：
+iOS 会逐个上传 media，并在上传前压缩图片。如果大文件上传失败或 Tailscale 连接中断，item 会留在本地 queue，并由 sync retry 调度器按 backoff 延迟重试。上传队列优先处理 `pending`，再处理 `failed`，避免一个旧失败项挡住新语音。iOS 上传 audio/video 时会先写临时 multipart 文件，再用 file upload 交给 `URLSession`，避免把完整音视频 body 常驻内存。
+
+先看 Settings > Storage & Diagnostics > Sync Health 里的 pending 或 failed counts。`Retry Uploads` 会把本机 failed media 重新排为 pending，并立即触发一次同步；`Sync Now` 也会处理当前 pending/failed media。然后检查 server logs 里的分阶段上传日志：
 
 - `media.upload_started`: server 已收到 multipart request，并记录 `mediaId`、`postId`、`kind`、`variant` 和预期 body size。
 - `media.upload_received`: server 已完整写入临时文件，并完成 size/checksum 统计。
 - `media.upload_completed`: server 已把临时文件原子 rename 到最终 media path，并写入 SQLite media record。
 - `media.upload_failed`: 上传中断或超时。常见 `errorCode` 是 `client_premature_close` 或 `upload_timeout`。
 
-Server 会先写入同目录隐藏 `.tmp` 文件，只有完整收完后才原子 rename 成最终 media 文件；失败时只删除 `.tmp`，不把半截文件当成已上传内容。如果日志里反复出现 `client_premature_close`，通常是 iPhone/Tailscale 连接中断或旧 server 进程卡着上传流。可以重启 Mac server，打开 iPhone app 或 Settings > Sync > Sync Now，让本地 queue 重新上传。
+Server 会先写入同目录隐藏 `.tmp` 文件，只有完整收完后才原子 rename 成最终 media 文件；失败时只删除 `.tmp`，不把半截文件当成已上传内容。如果日志里反复出现 `client_premature_close`，通常是 iPhone/Tailscale 连接中断或旧 server 进程卡着上传流。可以重启 Mac server，打开 iPhone app，或在 Settings > Storage & Diagnostics 使用 `Retry Uploads` 让本地 queue 重新上传。
 
 ### Comments Do Not Appear After Sync
 

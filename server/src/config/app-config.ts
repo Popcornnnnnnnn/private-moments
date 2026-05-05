@@ -2,7 +2,7 @@ import path from "node:path";
 import { homedir } from "node:os";
 
 export const SERVER_VERSION = "0.1.0";
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 11;
 
 export interface AppConfig {
   host: string;

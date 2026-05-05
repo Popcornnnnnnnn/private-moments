@@ -34,13 +34,18 @@ struct APIClient: Sendable {
     func uploadMedia(_ media: TimelineMedia, variant: String = "compressed") async throws -> UploadedMedia {
         var request = try authorizedRequest(url: endpoint("api/v1/media/upload"))
         let boundary = "Boundary-\(UUID().uuidString)"
-        let body = try multipartBody(for: media, variant: variant, boundary: boundary)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 180
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.setValue("\(body.count)", forHTTPHeaderField: "Content-Length")
+        let body = try multipartBodyFile(for: media, variant: variant, boundary: boundary)
+        defer {
+            try? FileManager.default.removeItem(at: body.url)
+        }
 
-        let response: MediaUploadResponse = try await upload(request, body: body)
+        request.httpMethod = "POST"
+        request.timeoutInterval = uploadTimeout(for: media, bodyBytes: body.sizeBytes)
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("\(body.sizeBytes)", forHTTPHeaderField: "Content-Length")
+        request.setValue("close", forHTTPHeaderField: "Connection")
+
+        let response: MediaUploadResponse = try await upload(request, fileURL: body.url)
         return response.media
     }
 
@@ -136,6 +141,85 @@ struct APIClient: Sendable {
         return response.summary
     }
 
+    func listReviews(kind: String = "weekly") async throws -> [ReviewPayload] {
+        var components = URLComponents(url: endpoint("api/v1/reviews"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "kind", value: kind),
+            URLQueryItem(name: "limit", value: "20")
+        ]
+
+        guard let url = components?.url else {
+            throw APIError.invalidURL
+        }
+
+        var request = try authorizedRequest(url: url)
+        request.httpMethod = "GET"
+        let response: ReviewListResponse = try await send(request)
+        return response.reviews
+    }
+
+    func generateWeeklyReview(rangeStart: Date? = nil, rangeEnd: Date? = nil) async throws -> ReviewPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/generate"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(
+            GenerateReviewRequest(
+                kind: "weekly",
+                rangeMode: "rolling_7_days",
+                rangeStart: rangeStart,
+                rangeEnd: rangeEnd
+            )
+        )
+
+        let response: ReviewResponse = try await send(request)
+        return response.review
+    }
+
+    func regenerateReview(reviewId: String) async throws -> ReviewPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/\(reviewId)/regenerate"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        let response: ReviewResponse = try await send(request)
+        return response.review
+    }
+
+    func sendReviewFeedback(reviewId: String, type: String, note: String? = nil) async throws {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/\(reviewId)/feedback"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(ReviewFeedbackRequest(type: type, note: note))
+        let _: ReviewFeedbackResponse = try await send(request)
+    }
+
+    func publishReviewAsMoment(reviewId: String) async throws -> ReviewPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/\(reviewId)/publish"))
+        request.httpMethod = "POST"
+        let response: ReviewPublishResponse = try await send(request)
+        return response.review
+    }
+
+    func reviewSettings() async throws -> ReviewSettingsPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/settings"))
+        request.httpMethod = "GET"
+        let response: ReviewSettingsResponse = try await send(request)
+        return response.settings
+    }
+
+    func updateReviewSettings(autoWeeklyEnabled: Bool, publishWeeklyToMoments: Bool) async throws -> ReviewSettingsPayload {
+        var request = try authorizedRequest(url: endpoint("api/v1/reviews/settings"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(
+            ReviewSettingsRequest(
+                autoWeeklyEnabled: autoWeeklyEnabled,
+                publishWeeklyToMoments: publishWeeklyToMoments
+            )
+        )
+        let response: ReviewSettingsResponse = try await send(request)
+        return response.settings
+    }
+
     private func endpoint(_ path: String) -> URL {
         baseURL.appending(path: path)
     }
@@ -156,8 +240,8 @@ struct APIClient: Sendable {
         return try decoder.decode(T.self, from: data)
     }
 
-    private func upload<T: Decodable>(_ request: URLRequest, body: Data) async throws -> T {
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+    private func upload<T: Decodable>(_ request: URLRequest, fileURL: URL) async throws -> T {
+        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: fileURL)
         try validate(response: response, data: data)
         return try decoder.decode(T.self, from: data)
     }
@@ -173,31 +257,50 @@ struct APIClient: Sendable {
         }
     }
 
-    private func multipartBody(for media: TimelineMedia, variant: String, boundary: String) throws -> Data {
+    private func multipartBodyFile(
+        for media: TimelineMedia,
+        variant: String,
+        boundary: String
+    ) throws -> (url: URL, sizeBytes: Int64) {
         let upload = try uploadFile(for: media, variant: variant)
-        let fileData = try uploadData(from: upload.url, media: media, variant: variant)
-        var body = Data()
+        let bodyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-moments-upload-\(UUID().uuidString).multipart")
+        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
 
-        body.appendMultipartField("mediaId", value: media.id, boundary: boundary)
-        body.appendMultipartField("postId", value: media.postId, boundary: boundary)
-        body.appendMultipartField("variant", value: variant, boundary: boundary)
-        body.appendMultipartField("kind", value: media.kind, boundary: boundary)
-        body.appendMultipartField("mimeType", value: upload.mimeType, boundary: boundary)
-        if let durationSeconds = media.durationSeconds {
-            body.appendMultipartField("durationSeconds", value: "\(durationSeconds)", boundary: boundary)
+        do {
+            let handle = try FileHandle(forWritingTo: bodyURL)
+            defer {
+                try? handle.close()
+            }
+
+            try writeMultipartField("mediaId", value: media.id, boundary: boundary, to: handle)
+            try writeMultipartField("postId", value: media.postId, boundary: boundary, to: handle)
+            try writeMultipartField("variant", value: variant, boundary: boundary, to: handle)
+            try writeMultipartField("kind", value: media.kind, boundary: boundary, to: handle)
+            try writeMultipartField("mimeType", value: upload.mimeType, boundary: boundary, to: handle)
+            if let durationSeconds = media.durationSeconds {
+                try writeMultipartField("durationSeconds", value: "\(durationSeconds)", boundary: boundary, to: handle)
+            }
+            try writeMultipartField("aiLanguage", value: AppSettings.aiLanguageMode.requestValue, boundary: boundary, to: handle)
+            try writeMultipartField("originalPreserved", value: media.originalPreserved ? "true" : "false", boundary: boundary, to: handle)
+            try writeMultipartField("sortOrder", value: "\(media.sortOrder)", boundary: boundary, to: handle)
+            try writeMultipartFileHeader(
+                "file",
+                filename: upload.filename,
+                mimeType: upload.mimeType,
+                boundary: boundary,
+                to: handle
+            )
+            try writeUploadFileData(from: upload.url, media: media, variant: variant, to: handle)
+            try handle.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
+
+            let size = try FileManager.default
+                .attributesOfItem(atPath: bodyURL.path)[.size] as? NSNumber
+            return (bodyURL, size?.int64Value ?? 0)
+        } catch {
+            try? FileManager.default.removeItem(at: bodyURL)
+            throw error
         }
-        body.appendMultipartField("aiLanguage", value: AppSettings.aiLanguageMode.requestValue, boundary: boundary)
-        body.appendMultipartField("originalPreserved", value: media.originalPreserved ? "true" : "false", boundary: boundary)
-        body.appendMultipartField("sortOrder", value: "\(media.sortOrder)", boundary: boundary)
-        body.appendMultipartFile(
-            "file",
-            filename: upload.filename,
-            mimeType: upload.mimeType,
-            data: fileData,
-            boundary: boundary
-        )
-        body.appendString("--\(boundary)--\r\n")
-        return body
     }
 
     private func uploadFile(for media: TimelineMedia, variant: String) throws -> (url: URL, filename: String, mimeType: String) {
@@ -234,6 +337,68 @@ struct APIClient: Sendable {
         }
 
         return compressedData
+    }
+
+    private func writeMultipartField(
+        _ name: String,
+        value: String,
+        boundary: String,
+        to handle: FileHandle
+    ) throws {
+        try handle.write(contentsOf: Data("--\(boundary)\r\n".utf8))
+        try handle.write(contentsOf: Data("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8))
+        try handle.write(contentsOf: Data("\(value)\r\n".utf8))
+    }
+
+    private func writeMultipartFileHeader(
+        _ name: String,
+        filename: String,
+        mimeType: String,
+        boundary: String,
+        to handle: FileHandle
+    ) throws {
+        try handle.write(contentsOf: Data("--\(boundary)\r\n".utf8))
+        try handle.write(contentsOf: Data("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".utf8))
+        try handle.write(contentsOf: Data("Content-Type: \(mimeType)\r\n\r\n".utf8))
+    }
+
+    private func writeUploadFileData(
+        from fileURL: URL,
+        media: TimelineMedia,
+        variant: String,
+        to handle: FileHandle
+    ) throws {
+        if media.isImage && variant == "compressed" {
+            try handle.write(contentsOf: uploadData(from: fileURL, media: media, variant: variant))
+            return
+        }
+
+        let input = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            try? input.close()
+        }
+
+        while true {
+            let chunk = input.readData(ofLength: 1_048_576)
+            guard !chunk.isEmpty else {
+                break
+            }
+            try handle.write(contentsOf: chunk)
+        }
+    }
+
+    private func uploadTimeout(for media: TimelineMedia, bodyBytes: Int64) -> TimeInterval {
+        let megabytes = max(1.0, Double(bodyBytes) / 1_000_000.0)
+
+        if media.isVideo {
+            return min(900, max(240, 120 + megabytes * 30))
+        }
+
+        if media.isAudio {
+            return min(300, max(120, 60 + megabytes * 30))
+        }
+
+        return min(180, max(60, 30 + megabytes * 20))
     }
 
     private func defaultMimeType(for media: TimelineMedia) -> String {
@@ -297,30 +462,4 @@ struct DownloadedMediaPayload: Decodable {
     let contentType: String
     let fileName: String
     let base64: String
-}
-
-private extension Data {
-    mutating func appendMultipartField(_ name: String, value: String, boundary: String) {
-        appendString("--\(boundary)\r\n")
-        appendString("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
-        appendString("\(value)\r\n")
-    }
-
-    mutating func appendMultipartFile(
-        _ name: String,
-        filename: String,
-        mimeType: String,
-        data: Data,
-        boundary: String
-    ) {
-        appendString("--\(boundary)\r\n")
-        appendString("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n")
-        appendString("Content-Type: \(mimeType)\r\n\r\n")
-        append(data)
-        appendString("\r\n")
-    }
-
-    mutating func appendString(_ value: String) {
-        append(Data(value.utf8))
-    }
 }

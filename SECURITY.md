@@ -22,18 +22,30 @@ Never commit these files or values:
 
 Use `server/.env.example` as the only committed environment template.
 
-## AI Media Summaries
+## AI Generated Metadata
 
-AI media summaries are optional. The Mac server runs local transcription first, then sends the transcript to the configured external summary API.
+AI media summaries and periodic reviews are optional generated metadata. For audio/video summaries, the Mac server runs local transcription first, then sends the transcript to the configured external summary API. For periodic reviews, the Mac server builds a bounded review input pack from the selected period, including moment text, comments, safe metadata, tags, and ready audio/video summary metadata, then sends that pack to the configured external review API.
 
 This means:
 
 - The external provider credential stays in `server/.env`.
 - Raw media files are intended to stay on the Mac server.
 - Transcript text can be sent to the configured AI provider when summary generation is enabled.
-- Disable summary-related environment variables if you do not want external AI calls.
+- Moment text, comments, and ready summary metadata can be sent to the configured AI provider when periodic review generation is enabled.
+- Disable summary/review-related environment variables if you do not want external AI calls.
 
-Operational logs should record IDs, status, provider/model names, error codes, and input lengths only. They should not include transcript or summary bodies.
+Operational logs should record IDs, status, provider/model names, error codes, and input lengths only. They should not include transcript, summary, review, post, or comment bodies.
+
+## Backup And Restore
+
+Mac Admin Archive uses restic snapshots for owner recovery. The project creates a `.private-moments-restic-key` next to the configured repository so the owner does not need to remember a separate backup password.
+
+Security implication:
+
+- The repository and `.private-moments-restic-key` together are enough to restore the archive.
+- iCloud Drive can be used as a user-selected folder, but the app does not provide a separate encrypted cloud-backup product.
+- Do not publish or share the repository, key file, restored data directories, `archive/pending-promote.json`, or maintenance job artifacts if they include local paths.
+- Backup/restore logs and job metadata should contain paths, IDs, counts, statuses, and error codes only, not private post text, comments, transcripts, summaries, or media bodies.
 
 ## Reporting Issues
 

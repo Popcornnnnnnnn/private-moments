@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IOS_DIR="$ROOT_DIR/ios"
+if [[ -f "$ROOT_DIR/.env.local" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT_DIR/.env.local"
+  set +a
+fi
 SERVER_URL="${PRIVATE_MOMENTS_SERVER_URL:-http://127.0.0.1:3210}"
 SIM_NAME="${PRIVATE_MOMENTS_SIM_NAME:-Private Moments iPhone 13 Pro}"
 DEVICE_TYPE="${PRIVATE_MOMENTS_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro}"
@@ -54,6 +60,10 @@ fi
 
 xcrun simctl boot "$sim_udid" >/dev/null 2>&1 || true
 open -a Simulator
+xcodebuild_overrides=()
+if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
+  xcodebuild_overrides+=("PRIVATE_MOMENTS_FALLBACK_SERVER_URL=$PRIVATE_MOMENTS_FALLBACK_SERVER_URL")
+fi
 
 xcodebuild \
   -project PrivateMoments.xcodeproj \
@@ -62,7 +72,8 @@ xcodebuild \
   -configuration Debug \
   -derivedDataPath "$IOS_DIR/build" \
   build \
-  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_ALLOWED=NO \
+  "${xcodebuild_overrides[@]}"
 
 app_path="$(find "$IOS_DIR/build/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name "*.app" -print -quit)"
 if [[ -z "$app_path" ]]; then
@@ -76,4 +87,7 @@ xcrun simctl launch "$sim_udid" "$BUNDLE_ID"
 echo
 echo "Moments is running in Simulator."
 echo "Server: $SERVER_URL"
+if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
+  echo "Fallback server: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+fi
 echo "Password: use PRIVATE_MOMENTS_INITIAL_PASSWORD from server/.env"
