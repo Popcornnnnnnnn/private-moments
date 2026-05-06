@@ -439,6 +439,16 @@ PRIVATE_MOMENTS_FALLBACK_SERVER_URL=https://your-private-fallback.example
 /api/v1/admin/status
 ```
 
+如果 fallback 域名返回 Cloudflare `530` / `error code: 1033`，通常表示 tunnel connector 没有连上 Cloudflare edge，iOS 端会表现为所有公网 fallback 同步失败。先在 Mac 上确认：
+
+```bash
+curl -i https://your-private-fallback.example/api/v1/health
+tail -n 80 ~/Library/Logs/cloudflared-blog.err.log
+dig +short region1.v2.argotunnel.com A
+```
+
+健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`region*.v2.argotunnel.com` 解析为真实 Cloudflare edge IP。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 会让 tunnel 断开。把 Cloudflare Tunnel 相关域名和个人 fallback 域名加入 `fake-ip-filter` 并设置直连规则后，reload Clash 配置、刷新 DNS cache，再重启 cloudflared LaunchAgent。
+
 Admin build 和 server typecheck：
 
 ```bash
