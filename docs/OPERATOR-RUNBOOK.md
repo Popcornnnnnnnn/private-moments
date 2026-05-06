@@ -447,7 +447,18 @@ tail -n 80 ~/Library/Logs/cloudflared-blog.err.log
 dig +short region1.v2.argotunnel.com A
 ```
 
-健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`region*.v2.argotunnel.com` 解析为真实 Cloudflare edge IP。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 会让 tunnel 断开。把 Cloudflare Tunnel 相关域名和个人 fallback 域名加入 `fake-ip-filter` 并设置直连规则后，reload Clash 配置、刷新 DNS cache，再重启 cloudflared LaunchAgent。
+健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 会让 tunnel 断开；但不要把 Cloudflare Tunnel 相关域名设成 `DIRECT`。当前公网 fallback 依赖这些 edge 连接走稳定代理组：把 Cloudflare Tunnel 相关域名和个人 fallback 域名加入 `fake-ip-filter`，并把 `cloudflare.com`、`argotunnel.com`、`cfargotunnel.com`、`cftunnel.com`、个人 fallback 域名路由到当前可用代理组。reload Clash 配置后重启 cloudflared LaunchAgent，再用连续 health check 验证：
+
+```bash
+for i in {1..30}; do
+  date '+%H:%M:%S'
+  curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' --max-time 12 \
+    https://your-private-fallback.example/api/v1/health
+  sleep 10
+done
+```
+
+Cloudflare `530` / `1033` 表示没有 active connector；`502` 且本机 health 正常时，通常表示 edge 连接刚掉线或 connector 卡在假活状态。先用 `cloudflared tunnel info <tunnel-id>` 确认控制面是否仍显示 active connector；如果没有，重启 LaunchAgent 并检查 Clash 规则是否仍把 Tunnel 域名误设为 `DIRECT`。
 
 Admin build 和 server typecheck：
 
