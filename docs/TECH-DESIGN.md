@@ -1027,7 +1027,7 @@ POST   /api/v1/admin/archive/jobs/import
 5. iOS 创建 `create_post` outbox operation。
 6. 同步时先通过 `/api/v1/media/upload` 上传媒体文件；视频额外上传 poster 作为 `thumbnail` variant。
 7. 完整 audio/video 上传成功后，Mac server 异步启动 AI summary job。
-8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、Storage & Diagnostics 刷新或手动 Sync Now 仍会拉取这种 server-originated metadata。
+8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、手动 `Sync Now` 或 `Pull Server Changes` 仍会拉取这种 server-originated metadata。Storage & Diagnostics refresh 只做只读状态检查和 cursor 对比，避免进入诊断页就启动隐藏同步。
 9. 媒体可以逐项成功或失败。
 10. iOS 通过 `/api/v1/sync` 同步帖子、媒体元数据和 AI summary metadata。
 11. 服务端记录部分同步状态。

@@ -383,6 +383,7 @@ enum L10n {
         "Busiest day": "最多的一天",
         "Cancel comment": "取消评论",
         "Cached input": "缓存输入",
+        "Checking": "检查中",
         "Checking storage": "正在检查存储",
         "Change Color Selected...": "修改所选颜色...",
         "Clear downloaded media cache?": "清除已下载媒体缓存？",

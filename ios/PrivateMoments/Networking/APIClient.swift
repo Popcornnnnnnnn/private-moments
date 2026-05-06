@@ -102,10 +102,13 @@ struct APIClient: Sendable {
         return response.media
     }
 
-    func adminStatus() async throws -> AdminStatusResponse {
+    func adminStatus(timeoutInterval: TimeInterval? = nil) async throws -> AdminStatusResponse {
         var request = try authorizedRequest(url: endpoint("api/v1/admin/status"))
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
         return try await send(request)
     }
 

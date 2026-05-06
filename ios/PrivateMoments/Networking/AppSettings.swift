@@ -50,6 +50,7 @@ enum AppSettings {
         static let automaticSyncEnabled = "automaticSyncEnabled"
         static let autoWeeklyReviewEnabled = "autoWeeklyReviewEnabled"
         static let publishWeeklyReviewToMoments = "publishWeeklyReviewToMoments"
+        static let lastReachableServerURLString = "lastReachableServerURLString"
     }
 
     private static let fallbackServerURLInfoKey = "PrivateMomentsFallbackServerURL"
@@ -76,9 +77,33 @@ enum AppSettings {
         return trimmed
     }
 
-    static func serverURLCandidateStrings(primary: String = AppSettings.serverURLString) -> [String] {
+    static var lastReachableServerURLString: String? {
+        get {
+            UserDefaults.standard.string(forKey: Keys.lastReachableServerURLString)
+        }
+        set {
+            if let newValue, !newValue.isEmpty {
+                UserDefaults.standard.set(newValue, forKey: Keys.lastReachableServerURLString)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.lastReachableServerURLString)
+            }
+        }
+    }
+
+    static func rememberReachableServerURL(_ url: URL) {
+        lastReachableServerURLString = url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    static func serverURLCandidateStrings(
+        primary: String = AppSettings.serverURLString,
+        preferLastReachable: Bool = false
+    ) -> [String] {
         var candidates: [String] = []
-        for value in [primary, bundledFallbackServerURLString].compactMap({ $0 }) {
+        let orderedValues: [String?] = preferLastReachable
+            ? [lastReachableServerURLString, primary, bundledFallbackServerURLString]
+            : [primary, bundledFallbackServerURLString]
+
+        for value in orderedValues.compactMap({ $0 }) {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
                 continue
@@ -275,6 +300,7 @@ enum AppSettings {
     static func clearSession() {
         UserDefaults.standard.removeObject(forKey: Keys.deviceId)
         UserDefaults.standard.removeObject(forKey: Keys.lastSyncCursor)
+        UserDefaults.standard.removeObject(forKey: Keys.lastReachableServerURLString)
     }
 
     private static var hasExistingInstallSignals: Bool {

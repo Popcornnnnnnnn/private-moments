@@ -49,8 +49,8 @@ struct StorageSummaryLink: View {
         }
 
         do {
-            return try await store.withAvailableAPIClient(token: token) { client in
-                try await client.adminStatus().storage
+            return try await store.withAvailableAPIClient(token: token, preferLastReachable: true) { client in
+                try await client.adminStatus(timeoutInterval: 5).storage
             }
         } catch {
             return nil
@@ -65,6 +65,10 @@ struct StorageDetailsView: View {
     @State private var serverStatus: AdminStatusResponse?
     @State private var isRefreshing = false
     @State private var isClearingCache = false
+    @State private var isSyncNowInFlight = false
+    @State private var isPullingServerChanges = false
+    @State private var isRetryingUploads = false
+    @State private var isRetryingDownloads = false
     @State private var confirmClearCache = false
 
     var body: some View {
@@ -96,18 +100,15 @@ struct StorageDetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if isRefreshing {
-                    ProgressView()
-                } else {
-                    Button {
-                        Task {
-                            await refresh()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+                Button {
+                    Task {
+                        await refresh()
                     }
-                    .accessibilityLabel(L10n.t("Refresh diagnostics", appLanguage))
+                } label: {
+                    Image(systemName: "arrow.clockwise")
                 }
+                .accessibilityLabel(L10n.t("Refresh diagnostics", appLanguage))
+                .disabled(isRefreshing)
             }
         }
         .task {
@@ -184,6 +185,8 @@ struct StorageDetailsView: View {
                 if let lastRejectedSyncAt = sync.lastRejectedSyncAt {
                     LabeledContent(L10n.t("Last rejected sync", appLanguage), value: shortTimestamp(lastRejectedSyncAt))
                 }
+            } else if store.automaticSyncEnabled && isRefreshing {
+                LabeledContent(L10n.t("Mac reachability", appLanguage), value: L10n.t("Checking", appLanguage))
             } else if store.automaticSyncEnabled {
                 LabeledContent(L10n.t("Mac reachability", appLanguage), value: L10n.t("Unavailable", appLanguage))
             } else {
@@ -199,9 +202,9 @@ struct StorageDetailsView: View {
                     await syncNowFromDiagnostics()
                 }
             } label: {
-                Text(L10n.t(store.isSyncing ? "Syncing" : "Sync Now", appLanguage))
+                Text(L10n.t(isSyncNowInFlight ? "Syncing" : "Sync Now", appLanguage))
             }
-            .disabled(!store.isAuthenticated || store.isSyncing)
+            .disabled(!store.isAuthenticated || store.isSyncing || isSyncNowInFlight)
 
             Button {
                 Task {
@@ -210,7 +213,7 @@ struct StorageDetailsView: View {
             } label: {
                 Text(L10n.t("Pull Server Changes", appLanguage))
             }
-            .disabled(!store.isAuthenticated || store.isSyncing)
+            .disabled(!store.isAuthenticated || store.isSyncing || isPullingServerChanges)
 
             Button {
                 Task {
@@ -219,7 +222,7 @@ struct StorageDetailsView: View {
             } label: {
                 Text(L10n.t("Retry Uploads", appLanguage))
             }
-            .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || store.isSyncing || (stats.pendingUploads + stats.failedUploads) == 0)
+            .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || store.isSyncing || isRetryingUploads || (stats.pendingUploads + stats.failedUploads) == 0)
 
             Button {
                 Task {
@@ -228,7 +231,7 @@ struct StorageDetailsView: View {
             } label: {
                 Text(L10n.t("Re-download Missing Media", appLanguage))
             }
-            .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || stats.missingMediaDownloads == 0)
+            .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || isRetryingDownloads || stats.missingMediaDownloads == 0)
         }
     }
 
@@ -421,30 +424,62 @@ struct StorageDetailsView: View {
             isRefreshing = false
         }
 
-        if store.isAuthenticated && store.automaticSyncEnabled {
-            await store.syncPendingWorkIfNeeded(showErrors: false)
-        }
-
         localStats = try? LocalStorageStatsLoader.load(database: store.database)
         serverStatus = store.automaticSyncEnabled ? await loadServerStatus() : nil
     }
 
     private func syncNowFromDiagnostics() async {
+        guard !isSyncNowInFlight else {
+            return
+        }
+
+        isSyncNowInFlight = true
+        defer {
+            isSyncNowInFlight = false
+        }
+
         await store.syncNow(showErrors: true)
         await refresh()
     }
 
     private func pullServerChanges() async {
+        guard !isPullingServerChanges else {
+            return
+        }
+
+        isPullingServerChanges = true
+        defer {
+            isPullingServerChanges = false
+        }
+
         await store.syncNow(showErrors: true, scheduleRetryOnFailure: false)
         await refresh()
     }
 
     private func retryMediaUploads() async {
+        guard !isRetryingUploads else {
+            return
+        }
+
+        isRetryingUploads = true
+        defer {
+            isRetryingUploads = false
+        }
+
         await store.retryMediaUploadsNow(showErrors: true)
         await refresh()
     }
 
     private func retryMediaDownloads() async {
+        guard !isRetryingDownloads else {
+            return
+        }
+
+        isRetryingDownloads = true
+        defer {
+            isRetryingDownloads = false
+        }
+
         await store.downloadMissingRemoteMediaIfNeeded(showErrors: true)
         await refresh()
     }
@@ -475,8 +510,8 @@ struct StorageDetailsView: View {
         }
 
         do {
-            return try await store.withAvailableAPIClient(token: token) { client in
-                try await client.adminStatus()
+            return try await store.withAvailableAPIClient(token: token, preferLastReachable: true) { client in
+                try await client.adminStatus(timeoutInterval: 5)
             }
         } catch {
             return nil

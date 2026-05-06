@@ -33,6 +33,7 @@ extension TimelineStore {
             cancelScheduledSyncRetry()
             try KeychainStore.clearDeviceToken()
             AppSettings.clearSession()
+            AppSettings.lastReachableServerURLString = nil
             loadSessionState()
             syncMessage = nil
         } catch {
@@ -43,6 +44,7 @@ extension TimelineStore {
     func updateServerURL(_ value: String) {
         do {
             let normalizedServerURL = try normalizeServerURL(value)
+            AppSettings.lastReachableServerURLString = nil
             AppSettings.serverURLString = normalizedServerURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             loadSessionState()
             syncMessage = "Server updated"
@@ -70,14 +72,21 @@ extension TimelineStore {
     func withAvailableAPIClient<T>(
         token: String?,
         primaryServerURLString: String = AppSettings.serverURLString,
+        preferLastReachable: Bool = true,
         operation: (APIClient) async throws -> T
     ) async throws -> T {
-        let clients = try apiClientCandidates(token: token, primaryServerURLString: primaryServerURLString)
+        let clients = try apiClientCandidates(
+            token: token,
+            primaryServerURLString: primaryServerURLString,
+            preferLastReachable: preferLastReachable
+        )
         var lastError: Error?
 
         for (index, client) in clients.enumerated() {
             do {
-                return try await operation(client)
+                let value = try await operation(client)
+                AppSettings.rememberReachableServerURL(client.baseURL)
+                return value
             } catch {
                 lastError = error
                 let hasFallback = index < clients.count - 1
@@ -92,10 +101,14 @@ extension TimelineStore {
 
     private func apiClientCandidates(
         token: String?,
-        primaryServerURLString: String
+        primaryServerURLString: String,
+        preferLastReachable: Bool
     ) throws -> [APIClient] {
         var clients: [APIClient] = []
-        for candidate in AppSettings.serverURLCandidateStrings(primary: primaryServerURLString) {
+        for candidate in AppSettings.serverURLCandidateStrings(
+            primary: primaryServerURLString,
+            preferLastReachable: preferLastReachable
+        ) {
             let url = try normalizeServerURL(candidate)
             clients.append(APIClient(baseURL: url, token: token))
         }
@@ -112,7 +125,9 @@ extension TimelineStore {
             switch apiError {
             case .invalidResponse:
                 return true
-            case .invalidURL, .missingToken, .missingUploadFile, .httpStatus:
+            case .httpStatus(let status, _):
+                return status >= 500
+            case .invalidURL, .missingToken, .missingUploadFile:
                 return false
             }
         }
