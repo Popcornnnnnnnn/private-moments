@@ -198,23 +198,12 @@ struct SettingsView: View {
     }
 
     private var syncButtonState: SyncButtonState {
-        if !store.isAuthenticated {
-            return .notLoggedIn
-        }
-
-        if store.isSyncing {
-            return .syncing
-        }
-
-        if !store.automaticSyncEnabled {
-            return .localOnly
-        }
-
-        if hasPendingSyncWork {
-            return .needsSync
-        }
-
-        return .synced
+        SyncButtonState.resolve(
+            isAuthenticated: store.isAuthenticated,
+            isSyncing: store.isSyncing,
+            automaticSyncEnabled: store.automaticSyncEnabled,
+            hasPendingSyncWork: hasPendingSyncWork
+        )
     }
 }
 
@@ -352,12 +341,37 @@ private struct SyncButtonLabel: View {
     }
 }
 
-private enum SyncButtonState {
+enum SyncButtonState: Equatable {
     case notLoggedIn
     case localOnly
     case needsSync
     case syncing
     case synced
+
+    static func resolve(
+        isAuthenticated: Bool,
+        isSyncing: Bool,
+        automaticSyncEnabled: Bool,
+        hasPendingSyncWork: Bool
+    ) -> SyncButtonState {
+        if !isAuthenticated {
+            return .notLoggedIn
+        }
+
+        if !automaticSyncEnabled {
+            return .localOnly
+        }
+
+        if isSyncing {
+            return .syncing
+        }
+
+        if hasPendingSyncWork {
+            return .needsSync
+        }
+
+        return .synced
+    }
 
     func title(language: AppResolvedLanguage) -> String {
         switch self {

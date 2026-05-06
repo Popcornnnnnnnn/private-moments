@@ -1,6 +1,6 @@
 # Private Moments 交接说明
 
-Last reconciled: 2026-05-05
+Last reconciled: 2026-05-06
 
 ## 当前工作状态
 
@@ -13,6 +13,7 @@ Last reconciled: 2026-05-05
 - 2026-05-05 市场调研后，v0.1 方向调整为优先服务作者本人长期稳定自用，而不是马上做公开宣传或 App Store/TestFlight。新增 M009 `v0.1 Archive, Restore, And Sync Health`：Phase A 做 Mac Admin 管理的 restic backup/restore、每日定时备份、恢复到新目录、验证后强确认 promote preparation、durable maintenance jobs、maintenance mode，以及 Mac Admin + iOS Settings 的 Sync Health；Phase B 做迁移优先的 export/import，JSON manifest 是权威，Markdown 只是预览。
 - 2026-05-05 M009 Phase A 代码主路径已落地：schema version 10 新增 `maintenance_jobs`，server 有 durable serial job runner、stale running job cleanup、maintenance mode guards；Admin 新增 `Archive` tab，可配置 restic repository、自动生成 `.private-moments-restic-key`、初始化 repository、手动备份、每日定时备份、snapshot list/check、staged restore 和 promote preparation；`/api/v1/admin/status.sync` 扩展了 Sync Health 计数和 timestamps；iOS Settings > Storage & Diagnostics 显示本机和 Mac 侧 Sync Health，并提供 `Sync Now`、`Pull Server Changes`、`Re-download Missing Media` 三个安全动作。
 - 2026-05-05 下午断网后语音卡在 `partial` 的根因已定位并修复到 iOS 上传链路：文字 outbox 后来已同步到 Mac，但多条 audio media 仍停在本机 `pending/failed`，server 日志显示 `/api/v1/media/upload` 中途 `ERR_STREAM_PREMATURE_CLOSE`。修复后 iOS 上传 audio/video 不再把完整 multipart body 常驻内存，而是写临时 multipart 文件后用 file upload；本地上传队列优先处理 `pending` 再处理 `failed`，避免旧失败项挡住新语音；Settings > Storage & Diagnostics 新增 `Retry Uploads`，可把 failed media 重新排为 pending 并立即同步。Mac server 的 AI media summary job 也改为全局串行执行，避免断网恢复后多条音频补传同时启动多个本地 `mlx-whisper` 进程。
+- 2026-05-06 修复 Settings > Sync 中 `Automatic Sync` 关闭后的状态反馈：按钮状态现在以 local-only/offline 优先于仍在收尾的 `isSyncing`，所以关闭开关后不再继续显示旋转 syncing 图标；关闭时也会清掉已排队的 follow-up sync 标记，避免旧触发在当前 sync pass 后追加一轮自动同步。
 - 2026-05-05 为 iPhone 使用其他 VPN 时无法同时连接 Tailscale 的场景，已支持本机私有 HTTPS fallback endpoint：公开代码默认不内置个人域名，`npm run ios:device` / `npm run ios:simulator` 会从 ignored 的 `.env.local` 读取 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL` 并写入 app bundle。运行时 Settings 中的 Server URL 仍是 primary；当 primary 出现网络级连接失败时，app 会自动尝试 bundled fallback。个人 Cloudflare Tunnel 配置不应提交到仓库；tunnel ingress 应只放行 iOS 同步所需 API，避免暴露完整 Admin UI。
 - 2026-05-05 Promote 当前是 restart-safe preparation，不是 live DB hot swap：它验证 restored data directory，进入 maintenance mode，创建 `pre-promote` backup，然后写 `<dataDir>/archive/pending-promote.json`，里面包含要切换的 `PRIVATE_MOMENTS_DATA_DIR` 和 `DATABASE_URL`。真正切换需要停止 server、更新 env、再重启，避免 Prisma 持有 SQLite 连接时热替换数据库。
 - 2026-05-05 M009 Phase B 代码主路径已落地：Admin `Archive` tab 增加 `Exports` 区域；server 新增 `export_create` / `import_restore` maintenance jobs；导出包包含 `manifest.json`、权威 `archive.json`、`preview.md`、`media/` 和 `.tar.gz` artifact；导入会在 `<dataDir>/archive/imports/<timestamp>-<label>/data` 新建 staged data directory，跑 Prisma migrations，导入 posts/media/comments/tags/aliases/post-tags/AI summaries，排除 user/device/sync operation/maintenance job runtime state，重建 server changes 并验证 missing media。

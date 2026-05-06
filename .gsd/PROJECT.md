@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## What This Project Is
 
@@ -37,7 +37,7 @@ Implemented capabilities include:
 - Lightweight Markdown body editing in New Moment and Edit Moment: stored text remains Markdown source `String`, while H1/H2 render in a Typora/Obsidian-like editor with a compact H1/H2-only keyboard accessory toolbar and no Done/list buttons. Timeline, Detail, and Day Review render H1/H2 consistently.
 - Plain-text list continuation in New Moment and Edit Moment for `- `, `• `, and numbered prefixes, including numbered auto-increment and empty-item exit.
 - Offline outbox sync with delayed retry.
-- Strict local-only mode through an iOS `Automatic Sync` setting: local create/edit/comment/tag/media work stays durable while automatic Mac server sync/upload/download/AI follow-up is suppressed until explicit `Sync Now` or re-enable.
+- Strict local-only mode through an iOS `Automatic Sync` setting: local create/edit/comment/tag/media work stays durable while automatic Mac server sync/upload/download/AI follow-up is suppressed until explicit `Sync Now` or re-enable. Settings reflects this mode immediately when the toggle is turned off, even if an earlier sync pass is still winding down.
 - Media upload, compression, thumbnail recovery, and local cache recovery. Server media uploads write to hidden temp files first, then atomically rename only after full receipt, with stage logs for upload diagnosis.
 - Timeline browsing with App Language-aware human-friendly dates and temporary floating month hint.
 - Single-user private feed comments with a quiet comment action, bottom input bar, latest-two preview, in-place expand/collapse, long-press delete confirmation, and comment-aware search.

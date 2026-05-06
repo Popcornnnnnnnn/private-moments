@@ -157,6 +157,7 @@ final class TimelineStore: ObservableObject {
                 await syncPendingWorkIfNeeded(showErrors: false)
             }
         } else {
+            needsFollowUpSync = false
             cancelScheduledSyncRetry()
             aiSummaryFollowUpSyncTask?.cancel()
             aiSummaryFollowUpSyncTask = nil
