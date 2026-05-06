@@ -22,11 +22,14 @@ struct APIClient: Sendable {
         return try await send(request)
     }
 
-    func sync(_ body: SyncRequestBody) async throws -> SyncResponseBody {
+    func sync(_ body: SyncRequestBody, timeoutInterval: TimeInterval? = nil) async throws -> SyncResponseBody {
         var request = try authorizedRequest(url: endpoint("api/v1/sync"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
 
         return try await send(request)
     }

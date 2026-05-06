@@ -222,9 +222,10 @@ extension TimelineStore {
             lastSyncCursor: requestedCursor,
             localChanges: try operations.map { try $0.syncLocalChange() }
         )
+        let syncTimeout: TimeInterval = operations.isEmpty && requestedCursor > 0 ? 6 : 30
 
         let firstSync = try await withAvailableAPIClient(token: token) { client in
-            try await client.sync(request)
+            try await client.sync(request, timeoutInterval: syncTimeout)
         }
         try apply(sync: firstSync, database: database)
 
@@ -269,7 +270,7 @@ extension TimelineStore {
                     localChanges: try followUpOperations.map { try $0.syncLocalChange() }
                 )
             let secondSync = try await withAvailableAPIClient(token: token) { client in
-                try await client.sync(followUpRequest)
+                try await client.sync(followUpRequest, timeoutInterval: 30)
             }
             try apply(sync: secondSync, database: database)
         }

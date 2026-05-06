@@ -517,7 +517,7 @@ sqlite3 '.tmp/device-app-library-check/Application Support/PrivateMoments/privat
   'SELECT COUNT(*) FROM local_comments WHERE deletedAt IS NULL;'
 ```
 
-如果怀疑 iPhone 没拉到 Mac 上已经生成的 server changes，先在 iPhone 打开 Settings > Storage & Diagnostics 并点右上角 refresh。这个页面只做只读诊断：加载本机状态和 Mac `/api/v1/admin/status`，显示 `This iPhone cursor`、`Mac change version` 和落后数量；它不会隐式启动完整同步。若显示明显落后，再点 `Pull Server Changes` 或 `Sync Now` 明确拉取。也可以复制 container 后手动比较两端 cursor：
+如果怀疑 iPhone 没拉到 Mac 上已经生成的 server changes，先在 iPhone 打开 Settings > Storage & Diagnostics 并点右上角 refresh。这个页面只做只读诊断：加载本机状态和 Mac `/api/v1/admin/status`，显示 `This iPhone cursor`、`Mac change version` 和落后数量；它不会隐式启动完整同步。若显示明显落后，再点 `Pull Server Changes` 或 `Sync Now` 明确拉取。Settings 根页的 `Sync Now` 转圈只表示用户手动触发的同步；后台空闲同步不应该让它一直显示 `Syncing`。也可以复制 container 后手动比较两端 cursor：
 
 ```bash
 plutil -p .tmp/device-app-library-check/Preferences/com.popcornnnnnn.privatemoments.plist | grep lastSyncCursor
@@ -689,7 +689,7 @@ python3 -m venv .venv
 - 如果 `status` 是 `transcribing` 且长时间不变，优先检查 `.venv/bin/python`、`server/scripts/local-transcribe.py`、`mlx-whisper` 安装和 `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS`。
 - 如果 `error_code` 是 `media_file_missing`，先修复媒体上传/存储路径；如果是 `empty_transcript`、`local_transcription_timeout`、`local_transcription_failed` 或 `local_transcription_invalid_output`，优先检查本地转写环境、模型下载和源文件可读性；如果是 `provider_*`、`invalid_json` 或 `invalid_output`，再检查 summary model/base URL/API key。
 - iOS 上传 audio/video 后会安排几次延迟 follow-up sync；如果 server 已有 ready summary 但手机没显示，手动触发一次 sync 并检查 `local_ai_summaries` 是否收到了 `ready` 记录。
-- Server 端生成的 `ai_summary_updated` 可能发生在 iPhone 已经没有 pending outbox/media work 之后。如果 server `ai_summaries.status='ready'`、server 最新 `server_changes.version` 高于 iPhone `lastSyncCursor`，但 iPhone 仍显示旧 failed 或没有 `Summary ready`，优先判断为客户端没有拉取 remote-only changes，而不是 summary job 失败。当前 iOS 会在 app 回到前台、手动 `Sync Now` 和 `Pull Server Changes` 时拉取这种 remote-only changes；Storage & Diagnostics refresh 只负责显示 cursor 差异和 Mac 状态。
+- Server 端生成的 `ai_summary_updated` 可能发生在 iPhone 已经没有 pending outbox/media work 之后。如果 server `ai_summaries.status='ready'`、server 最新 `server_changes.version` 高于 iPhone `lastSyncCursor`，但 iPhone 仍显示旧 failed 或没有 `Summary ready`，优先判断为客户端没有拉取 remote-only changes，而不是 summary job 失败。当前 iOS 会在 app 回到前台、手动 `Sync Now` 和 `Pull Server Changes` 时拉取这种 remote-only changes；Storage & Diagnostics refresh 只负责显示 cursor 差异和 Mac 状态。前台空闲拉取会使用短 `/sync` timeout，以便 Tailscale 主地址不可达时快速尝试 fallback endpoint。
 
 ### AI Summary Is Missing Or Failed
 

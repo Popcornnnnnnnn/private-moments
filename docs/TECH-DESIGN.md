@@ -76,7 +76,7 @@ private-moments/
 
 当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，系统 Share Sheet 导入入口，主时间线单用户私密评论，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、App Language-aware 人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、Calendar Review、详情页、编辑、软删除同步、iOS 本机语言偏好，以及 Mac 后台状态页和 Posts 运维管理。
 
-iOS 还提供本机 `Automatic Sync` 开关。打开时沿用启动、前台、发布/编辑、失败重试和 AI follow-up 的自动同步路径；关闭时进入严格 local-only 模式：发布、编辑、评论、标签和媒体草稿仍写入本地 SQLite/outbox，但不会自动连接 Mac server、上传媒体、拉取远端 AI summary/tag/media 变更或执行后台 retry。Settings 里的显式 `Sync Now` 仍是用户主动联网动作。
+iOS 还提供本机 `Automatic Sync` 开关。打开时沿用启动、前台、发布/编辑、失败重试和 AI follow-up 的自动同步路径；关闭时进入严格 local-only 模式：发布、编辑、评论、标签和媒体草稿仍写入本地 SQLite/outbox，但不会自动连接 Mac server、上传媒体、拉取远端 AI summary/tag/media 变更或执行后台 retry。Settings 里的显式 `Sync Now` 仍是用户主动联网动作；Settings 根页的同步转圈只表示这类用户主动动作，不表示后台空闲检查。
 
 v0.1 owner reliability layer 增加 Mac Admin `Archive` 和 Sync Health。Archive 使用 restic 作为底层 deduplicated snapshot 工具，server 通过 durable `maintenance_jobs` 记录备份、检查、恢复和 promote preparation；Sync Health 在 Mac Admin 和 iOS Settings 中展示同步游标、outbox、media upload、missing media 和 AI pipeline 的安全诊断。
 
@@ -1027,7 +1027,7 @@ POST   /api/v1/admin/archive/jobs/import
 5. iOS 创建 `create_post` outbox operation。
 6. 同步时先通过 `/api/v1/media/upload` 上传媒体文件；视频额外上传 poster 作为 `thumbnail` variant。
 7. 完整 audio/video 上传成功后，Mac server 异步启动 AI summary job。
-8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、手动 `Sync Now` 或 `Pull Server Changes` 仍会拉取这种 server-originated metadata。Storage & Diagnostics refresh 只做只读状态检查和 cursor 对比，避免进入诊断页就启动隐藏同步。
+8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、手动 `Sync Now` 或 `Pull Server Changes` 仍会拉取这种 server-originated metadata。空闲 `/sync` 检查使用短 timeout 以便私有主地址不可达时快速尝试 fallback；恢复/本地变更同步保留更长 timeout。Storage & Diagnostics refresh 只做只读状态检查和 cursor 对比，避免进入诊断页就启动隐藏同步。
 9. 媒体可以逐项成功或失败。
 10. iOS 通过 `/api/v1/sync` 同步帖子、媒体元数据和 AI summary metadata。
 11. 服务端记录部分同步状态。

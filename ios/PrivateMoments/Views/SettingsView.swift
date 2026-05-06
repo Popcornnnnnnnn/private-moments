@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: TimelineStore
     @Environment(\.appLanguage) private var appLanguage
+    @State private var isSyncNowInFlight = false
 
     var body: some View {
         NavigationStack {
@@ -43,12 +44,12 @@ struct SettingsView: View {
 
                     Button {
                         Task {
-                            await store.syncNow()
+                            await syncNowFromSettings()
                         }
                     } label: {
                         SyncButtonLabel(state: syncButtonState)
                     }
-                    .disabled(!store.isAuthenticated || store.isSyncing)
+                    .disabled(!store.isAuthenticated || isSyncNowInFlight)
                     .accessibilityLabel(syncButtonState.accessibilityLabel)
 
                     NavigationLink(L10n.t("Advanced Sync", appLanguage)) {
@@ -200,10 +201,23 @@ struct SettingsView: View {
     private var syncButtonState: SyncButtonState {
         SyncButtonState.resolve(
             isAuthenticated: store.isAuthenticated,
-            isSyncing: store.isSyncing,
+            isSyncing: isSyncNowInFlight,
             automaticSyncEnabled: store.automaticSyncEnabled,
             hasPendingSyncWork: hasPendingSyncWork
         )
+    }
+
+    private func syncNowFromSettings() async {
+        guard !isSyncNowInFlight else {
+            return
+        }
+
+        isSyncNowInFlight = true
+        defer {
+            isSyncNowInFlight = false
+        }
+
+        await store.syncNow()
     }
 }
 
