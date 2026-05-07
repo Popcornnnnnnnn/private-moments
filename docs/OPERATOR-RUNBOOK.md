@@ -724,7 +724,7 @@ python3 -m venv .venv
 
 AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示 `Summary ready`；底部 sheet 只显示 ready AI summary。没有 ready summary、处理中、失败或 provider 未配置时，主时间线保持静默，不显示 transcript、`Needs transcript`、`No speech detected` 或 `Summary failed`。
 
-新 audio moment 还有一个可选的标题写回：Settings > Feature Modules > `AI Title Auto-Insert` 默认打开。若首次 ready summary 有有效 `documentTitle`，且该 audio/post 是开启功能之后新建、当前正文没有行首 `# ` 或 `## ` 标题，iOS 会把 `## <title>` 插入正文顶部，并通过 `insert_ai_title` 同步到 Mac。这个过程只写标题，不写 summary 正文；如果没有出现标题，优先检查该开关、summary 是否 ready、音频是否是旧内容、`document_title` 是否为空/超过 40 字符、正文是否已有标题，以及 outbox 是否存在失败的 `insert_ai_title`。`media-summary-v3` 会要求可识别非空音频有短标题，并在 server 侧从 `one_liner` 做 fallback；如果 `document_title` 仍为空，通常表示该音频被判定为内容为空、无法识别、静音或噪音。
+新 audio moment 还有一个可选的标题写回：Settings > Feature Modules > `AI Title Auto-Insert` 默认打开。若首次 ready summary 有有效 `documentTitle`，且该 audio/post 是开启功能之后新建、当前正文没有行首 `# ` 或 `## ` 标题，iOS 会把 `## <title>` 插入正文顶部，并通过 `insert_ai_title` 同步到 Mac。这个过程只写标题，不写 summary 正文；如果没有出现标题，优先检查该开关、summary 是否 ready、音频是否是旧内容、`document_title` 是否为空/超过 40 字符、正文是否已有标题，以及 outbox 是否存在失败的 `insert_ai_title`。`media-summary-v4` 会要求可识别非空音频有短标题，并在 server 侧从 `one_liner` 做 fallback；如果 `document_title` 仍为空，通常表示该音频被判定为内容为空、无法识别、静音或噪音。v4 还会把 active topic tag/alias 词表发给 provider，并在 server 落库前复用现有 topic，排查重复 AI topic tag 时先检查 tags/aliases 是否已经存在可复用项。
 
 先确认目标 audio/video media 的完整文件已经在 Mac server 上可读。新流程不依赖 `media.transcription_text`；server 会先在 Mac 本地转写媒体文件，并把内部 transcript 继续交给 summary provider。ready 记录通常应该有非空 `input_transcript_length`。
 
@@ -734,7 +734,7 @@ AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示
 
 删除 summary 只会软删除 generated metadata，不会删除 post、media、legacy transcript metadata 或 comments。重新生成会覆盖同一个 media 当前 summary record。
 
-新生成的 `media-summary-v3` ready 记录应有 `document_title` / `one_liner` 或非空 `document_blocks_json`。如果旧 summary 没有这些字段但仍有 `overview` / `key_points_json` / `sections_json`，iOS 会走 legacy 渲染；只有重新生成后才会变成 v3 document blocks。
+新生成的 `media-summary-v4` ready 记录应有 `document_title` / `one_liner` 或非空 `document_blocks_json`。如果旧 summary 没有这些字段但仍有 `overview` / `key_points_json` / `sections_json`，iOS 会走 legacy 渲染；只有重新生成后才会变成 v4 document blocks。
 
 ### Storage Mac Server Section Is Missing
 

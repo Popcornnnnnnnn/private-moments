@@ -1492,12 +1492,12 @@ components:
           type:
             - string
             - "null"
-          description: Optional generated display title for v3 document-style summaries.
+          description: Optional generated display title for document-style summaries.
         oneLiner:
           type:
             - string
             - "null"
-          description: Short top-level summary for v3 document-style summaries.
+          description: Short top-level summary for document-style summaries.
         documentBlocks:
           type: array
           description: Native block model rendered by iOS as a Markdown-like summary document. Empty for legacy summaries.

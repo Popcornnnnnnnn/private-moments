@@ -211,7 +211,7 @@ This file is the explicit capability and coverage contract for the project.
 ### R015 — AI summary UI keeps the main timeline quiet: only button/status appears inline, while full adaptive document summaries are shown in a bottom sheet.
 - Class: functional
 - Status: active
-- Description: AI summary UI keeps the main timeline quiet: only lightweight summary states appear inline, while full adaptive `media-summary-v3` document summaries are shown in a bottom sheet.
+- Description: AI summary UI keeps the main timeline quiet: only lightweight summary states appear inline, while full adaptive `media-summary-v4` document summaries are shown in a bottom sheet.
 - Why it matters: AI should be available as a useful organizing tool without crowding the feed or breaking the product's no-audience feel.
 - Source: M005 AI media summaries discussion 2026-04-30
 - Primary owning slice: M005/S03
@@ -271,12 +271,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R022 — Smart Tags must use a small stable primary-tag taxonomy plus dynamic canonical topic tags.
 - Class: functional
 - Status: active
-- Description: Tags must distinguish primary expression-type tags from topic tags. Default primary tags are `日记`, `想法`, `学习整理`, `情绪`, `碎碎念`, and `复盘`; topic tags are dynamic, flat, canonicalized, alias-aware, and default to Chinese canonical names when possible.
+- Description: Tags must distinguish primary expression-type tags from topic tags. Default primary tags are `日记`, `想法`, `学习整理`, `情绪`, `碎碎念`, and `复盘`; topic tags are dynamic, flat, canonicalized, alias-aware, and default to Chinese canonical names when possible. AI-generated topic creation must prefer existing active topic tags and aliases before creating new vocabulary.
 - Why it matters: The user wants lightweight retrieval, not a taxonomy wall. Stable primary tags keep the organizing spine small, while topic tags capture concrete concepts such as `大语言模型`, `强化学习`, or `高斯概率分布`.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S01
 - Supporting slices: M006/S02,M006/S04,M006/S06
-- Validation: Schema/seed checks prove default primary tags exist, names are globally unique, aliases match case-insensitively, topic tags are flat, default primary tags cannot be renamed/hidden, and custom primary/topic lifecycle rules behave as documented.
+- Validation: Schema/seed checks prove default primary tags exist, names are globally unique, aliases match case-insensitively, topic tags are flat, default primary tags cannot be renamed/hidden, and custom primary/topic lifecycle rules behave as documented. AI topic reuse tests prove obvious narrow variants resolve to existing canonical topics.
 
 ### R023 — Manual tagging must work for all moment types while keeping Composer and Timeline low-noise.
 - Class: functional
@@ -291,12 +291,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R024 — AI automatic tags must be audio-only, sparse for short audio, and reuse the ready summary pipeline.
 - Class: functional
 - Status: active
-- Description: New audio moments may receive AI tags once when their first server-side audio summary becomes ready. Short audio/transcripts should prefer one topic tag and keep multiple topics only when the content clearly has separate high-confidence themes. Video, image, text-only moments, historical audio backfill, old-summary open events, and `Regenerate tags` are out of scope. Summary regeneration must not regenerate or overwrite tags.
+- Description: New audio moments may receive AI tags once when their first server-side audio summary becomes ready. Short audio/transcripts should prefer one topic tag and keep multiple topics only when the content clearly has separate high-confidence themes. Summary/tag prompts receive the active topic tag and alias vocabulary, and server application reuses existing topics by exact name, alias, or obvious narrow/broad containment before creating a new topic. Video, image, text-only moments, historical audio backfill, old-summary open events, and `Regenerate tags` are out of scope. Summary regeneration must not regenerate or overwrite tags.
 - Why it matters: The useful first AI tagging path is voice-note organization. Keeping it tied to first ready audio summary avoids extra background jobs, weird confirmation popups, and unintended tag churn.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S05
 - Supporting slices: M005/S02,M005/S03,M006/S01,M006/S06
-- Validation: Real iPhone UAT publishes clear-speech short and multi-topic audio moments and confirms summary ready applies sparse topic tags; video/image/text moments do not receive AI tags; summary regeneration leaves existing tags unchanged; summary failure leaves AI tags absent without extra timeline state.
+- Validation: Real iPhone UAT publishes clear-speech short and multi-topic audio moments and confirms summary ready applies sparse topic tags; focused server tests prove existing-topic reuse for near-duplicate AI suggestions; video/image/text moments do not receive AI tags; summary regeneration leaves existing tags unchanged; summary failure leaves AI tags absent without extra timeline state.
 
 ### R025 — Tags must participate in iPhone local search/filter and be manageable in iPhone Settings.
 - Class: functional
@@ -524,7 +524,7 @@ This file is the explicit capability and coverage contract for the project.
 | R012 | operational | active | M003/S04 | M003/S01,M003/S02,M003/S03 | Completion evidence includes server migration/build, iOS schema/build, sync smoke checks, SQLite aggregate inspection or equivalent recovery proof, Advanced Sync/outbox operation counts without comment bodies, and real iPhone UAT when feasible. |
 | R013 | functional | active | M004 | none | iOS build no longer links Speech framework or contains local transcription services; creating audio/video moments uploads media without `transcriptionText`; timeline shows no transcript fallback/status when no ready AI summary exists. |
 | R014 | functional | active | M005/S02 | M005/S01,M005/S03,M005/S04 | Real iPhone UAT confirms uploaded audio/video triggers Mac-local transcription plus external summary generation and syncs ready summary records back to iOS; only the narrow R028 audio title insert may mutate `post.text`. |
-| R015 | functional | active | M005/S03 | M005/S01,M005/S04 | Timeline rows expose only `Summary ready`; bottom sheet renders ready v3 document summaries with copy/regenerate/delete controls and no transcript fallback. |
+| R015 | functional | active | M005/S03 | M005/S01,M005/S04 | Timeline rows expose only `Summary ready`; bottom sheet renders ready v4 document summaries with copy/regenerate/delete controls and no transcript fallback. |
 | R016 | operational | active | M005/S04 | M005/S01,M005/S02,M005/S03 | Verification proves server-only API keys, no private body logging, failure isolation, summary delete/regenerate behavior, and sync recovery for generated AI metadata. |
 | R017 | functional | validated | M005/S04 | M005/S02,M005/S03 | 2026-05-01 paired iPhone container advanced to `lastSyncCursor=196` with `local_ai_summaries ready=10 failed=0` after server-only summary changes; 2026-05-06 follow-ups keep diagnostics refresh read-only, use explicit `Sync Now` / `Pull Server Changes` for manual pull, and prevent background idle sync from appearing as an endless Settings spinner. |
 | R018 | functional | active | maintenance | M003/S03,M005/S03 | iPhone Timeline search covers text, comments, AI summary metadata, and historical transcript metadata with lightweight fuzzy matching plus composable local filters and active chips. |

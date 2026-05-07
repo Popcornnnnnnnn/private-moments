@@ -8,15 +8,21 @@ import { promisify } from "node:util";
 import type { AISummaryConfig } from "../config/app-config.js";
 import { recordCompletionUsage, type AIUsageContext } from "./usage.js";
 
-export const MEDIA_SUMMARY_PROMPT_VERSION = "media-summary-v3";
+export const MEDIA_SUMMARY_PROMPT_VERSION = "media-summary-v4";
 const execFileAsync = promisify(execFile);
 const LOCAL_TRANSCRIPTION_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const SHORT_TOPIC_AUDIO_SECONDS = 3 * 60;
 const SHORT_TOPIC_TRANSCRIPT_CHARACTERS = 600;
 const STRONG_ADDITIONAL_TOPIC_CONFIDENCE = 0.78;
 const MAX_DOCUMENT_TITLE_CHARS = 40;
+const MAX_TOPIC_ALIASES_IN_PROMPT = 6;
 
 export type AILanguagePreference = "auto" | "zh" | "en";
+
+export interface MediaSummaryTopicTagHint {
+  name: string;
+  aliases: string[];
+}
 
 export interface MediaSummarySection {
   heading: string;
@@ -63,6 +69,7 @@ export interface MediaSummaryInput {
   transcriptText: string;
   durationSeconds: number | null;
   aiLanguage?: AILanguagePreference;
+  existingTopicTags?: MediaSummaryTopicTagHint[];
 }
 
 export interface MediaFileSummaryInput {
@@ -71,6 +78,7 @@ export interface MediaFileSummaryInput {
   mimeType: string | null;
   durationSeconds: number | null;
   aiLanguage?: AILanguagePreference;
+  existingTopicTags?: MediaSummaryTopicTagHint[];
 }
 
 export interface MediaFileSummaryOutput {
@@ -87,6 +95,7 @@ export interface MediaSummaryGenerationHooks {
 interface TopicTagContext {
   transcriptText?: string;
   durationSeconds: number | null;
+  existingTopicTags?: MediaSummaryTopicTagHint[];
 }
 
 export class AISummaryProviderError extends Error {
@@ -261,6 +270,7 @@ export async function generateMediaSummaryFromFile(
       transcriptText: trimmedTranscript,
       durationSeconds: input.durationSeconds,
       aiLanguage: input.aiLanguage ?? "auto",
+      existingTopicTags: input.existingTopicTags,
     }, hooks.usageContext),
   };
 }
@@ -612,6 +622,7 @@ async function callTagCompletions(
       "Use primary 想法 for product ideas, feature requests, app/UI design thoughts, opinions, plans, and design discussions.",
       "Use primary 学习整理 for learning notes, primary 日记 for day recaps, primary 情绪 for explicit emotional venting, primary 复盘 for after-event reflection, and primary 碎碎念 for pure casual/test notes.",
       "topics must be concrete reusable subjects from the transcript, at most 3 items. Use Chinese canonical names when natural.",
+      "When existing active topic tags are provided, prefer those canonical names and aliases before creating a new topic. Return the exact existing canonical name when it fits, even if the transcript contains a more specific wording.",
       "Be conservative with topic count: one clear subject should produce one topic. Multiple topics are only for clearly separate themes, not details under the same theme.",
       "For short notes, prefer exactly one topic unless the transcript explicitly covers multiple unrelated subjects with high confidence.",
       "Return confidence numbers from 0 to 1. For recognizable content, primary confidence should normally be at least 0.6.",
@@ -620,6 +631,8 @@ async function callTagCompletions(
       `Media duration seconds: ${input.durationSeconds ?? "unknown"}`,
       `Transcript characters: ${transcript.length}`,
       `Suggested topic count: ${topicCountHint(input)}`,
+      "",
+      topicVocabularyPrompt(input.existingTopicTags),
       "",
       "Transcript:",
       transcript,
@@ -913,6 +926,7 @@ function systemPrompt(aiLanguage: AILanguagePreference = "auto"): string {
     "For primary, choose the best expression type for every non-empty note with recognizable words; return null only when the transcript is content-free, unintelligible, or only silence/noise. Use confidence to express uncertainty.",
     "Primary mapping: 日记 = day recap/life log; 想法 = product idea, feature thought, opinion, plan, or design discussion; 学习整理 = learning notes or concept review; 情绪 = explicit emotion/venting; 碎碎念 = casual low-purpose note or test note; 复盘 = reflection after an event, interview, workout, meeting, or decision.",
     "Topics should be concrete reusable subjects from the transcript, such as LLM, 面试, 运动康复, 高斯分布, 标签系统, or 颜色设置, with at most 3 items. Do not leave topics empty when clear reusable subjects are present.",
+    "When existing active topic tags are provided, prefer those canonical names and aliases before creating a new topic. Return the exact existing canonical name when it fits, even if the transcript contains a more specific wording.",
     "Topic count should be conservative: one clear subject should produce one topic. For short notes under about 3 minutes or 600 transcript characters, return more than one topic only when there are clearly separate themes.",
     "Returning { primary: null, topics: [] } for a recognizable spoken note is a failure. For a short app/product feature note, use primary 想法 and topic tags like 标签系统 or 颜色设置 when present. For a pure test note, use primary 碎碎念.",
     "Return structured JSON only. Do not return Markdown text; the app renders the JSON as a Markdown-like document.",
@@ -932,6 +946,7 @@ function audioSystemPrompt(aiLanguage: AILanguagePreference = "auto"): string {
     "For primary, choose the best expression type for every non-empty note with recognizable words; return null only when the audio is content-free, unintelligible, or only silence/noise. Use confidence to express uncertainty.",
     "Primary mapping: 日记 = day recap/life log; 想法 = product idea, feature thought, opinion, plan, or design discussion; 学习整理 = learning notes or concept review; 情绪 = explicit emotion/venting; 碎碎念 = casual low-purpose note or test note; 复盘 = reflection after an event, interview, workout, meeting, or decision.",
     "Topics should be concrete reusable subjects from the audio, such as LLM, 面试, 运动康复, 高斯分布, 标签系统, or 颜色设置, with at most 3 items. Do not leave topics empty when clear reusable subjects are present.",
+    "When existing active topic tags are provided, prefer those canonical names and aliases before creating a new topic. Return the exact existing canonical name when it fits, even if the audio uses a more specific wording.",
     "Topic count should be conservative: one clear subject should produce one topic. For short notes under about 3 minutes, return more than one topic only when there are clearly separate themes.",
     "Returning { primary: null, topics: [] } for a recognizable spoken note is a failure. For a short app/product feature note, use primary 想法 and topic tags like 标签系统 or 颜色设置 when present. For a pure test note, use primary 碎碎念.",
     "Return structured JSON only. Do not return Markdown text; the app renders the JSON as a Markdown-like document.",
@@ -970,6 +985,9 @@ function userPrompt(input: MediaSummaryInput): string {
     "- If this is a casual observation, keep it compact and concrete instead of forcing a lecture-like structure.",
     "- Suggested tags: choose one primary for any note with recognizable content. Use topics for concrete reusable subjects, not broad expression types. Tag suggestions are still required even when the summary is oneLiner-only. Do not return primary null and empty topics unless the transcript is content-free.",
     "- Topic tags should be sparse. Prefer one topic for one subject; use multiple only for genuinely separate themes.",
+    "- Topic vocabulary reuse: if an existing active topic tag or alias fits the transcript, return that exact canonical topic name. Create a new topic only when no existing tag fits.",
+    "",
+    topicVocabularyPrompt(input.existingTopicTags),
     "",
     "Transcript:",
     transcript,
@@ -989,7 +1007,69 @@ function audioUserPrompt(input: MediaFileSummaryInput): string {
     "Use ai_suggested blocks only for AI-inferred lightweight next steps; explicit next actions from the audio belong in normal content blocks.",
     "Suggested tags: choose one primary for any note with recognizable content. Use topics for concrete reusable subjects, not broad expression types. Tag suggestions are still required even when the summary is oneLiner-only. Do not return primary null and empty topics unless the audio is content-free.",
     "Topic tags should be sparse. Prefer one topic for one subject; use multiple only for genuinely separate themes.",
+    "Topic vocabulary reuse: if an existing active topic tag or alias fits the audio, return that exact canonical topic name. Create a new topic only when no existing tag fits.",
+    "",
+    topicVocabularyPrompt(input.existingTopicTags),
   ].join("\n");
+}
+
+function topicVocabularyPrompt(topicTags: MediaSummaryTopicTagHint[] | undefined): string {
+  const cleanedTopicTags = cleanTopicTagHints(topicTags);
+  if (cleanedTopicTags.length === 0) {
+    return "Existing active topic tags: none yet.";
+  }
+
+  return [
+    "Existing active topic tags. Reuse the exact canonical name before inventing a new topic:",
+    ...cleanedTopicTags.map((tag) => {
+      const aliases = tag.aliases.slice(0, MAX_TOPIC_ALIASES_IN_PROMPT);
+      return aliases.length > 0
+        ? `- ${tag.name} (aliases: ${aliases.join(", ")})`
+        : `- ${tag.name}`;
+    }),
+  ].join("\n");
+}
+
+function cleanTopicTagHints(topicTags: MediaSummaryTopicTagHint[] | undefined): MediaSummaryTopicTagHint[] {
+  if (!topicTags) {
+    return [];
+  }
+
+  const seenNames = new Set<string>();
+  const cleaned: MediaSummaryTopicTagHint[] = [];
+  for (const tag of topicTags) {
+    const name = tag.name.normalize("NFKC").trim().replace(/\s+/g, " ");
+    if (!name) {
+      continue;
+    }
+
+    const normalizedName = name.toLocaleLowerCase("zh-Hans-CN");
+    if (seenNames.has(normalizedName)) {
+      continue;
+    }
+    seenNames.add(normalizedName);
+
+    const seenAliases = new Set<string>();
+    const aliases = tag.aliases
+      .map((alias) => alias.normalize("NFKC").trim().replace(/\s+/g, " "))
+      .filter((alias) => {
+        if (!alias) {
+          return false;
+        }
+
+        const normalizedAlias = alias.toLocaleLowerCase("zh-Hans-CN");
+        if (normalizedAlias === normalizedName || seenAliases.has(normalizedAlias)) {
+          return false;
+        }
+
+        seenAliases.add(normalizedAlias);
+        return true;
+      });
+
+    cleaned.push({ name, aliases });
+  }
+
+  return cleaned;
 }
 
 function normalizeSummaryTagsForContext(

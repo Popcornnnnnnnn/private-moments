@@ -12,6 +12,7 @@ import {
   summaryText,
   type AILanguagePreference,
   type MediaSummaryOutput,
+  type MediaSummaryTopicTagHint,
 } from "./media-summary.js";
 import { recordAIUsageEvent } from "./usage-ledger.js";
 import type { AppConfig } from "../config/app-config.js";
@@ -165,6 +166,7 @@ export async function generateAndSaveMediaSummary(
 
   let transcriptReadyAt: number | null = null;
   try {
+    const existingTopicTags = await loadExistingTopicTagHints(context.prisma);
     const output = await generateMediaSummaryFromFileWithRetry(context, {
       summaryId: transcribing.id,
       postId: media.postId,
@@ -188,6 +190,7 @@ export async function generateAndSaveMediaSummary(
       mimeType: media.mimeType,
       durationSeconds: media.durationSeconds,
       aiLanguage: input.aiLanguage ?? "auto",
+      existingTopicTags,
     });
     const readyResult = await saveSummaryReady(
       context.prisma,
@@ -268,6 +271,7 @@ interface GenerateMediaSummaryRetryInput {
   mimeType: string | null;
   durationSeconds: number | null;
   aiLanguage: AILanguagePreference;
+  existingTopicTags: MediaSummaryTopicTagHint[];
 }
 
 async function generateMediaSummaryFromFileWithRetry(
@@ -294,6 +298,7 @@ async function generateMediaSummaryFromFileWithRetry(
           mimeType: input.mimeType,
           durationSeconds: input.durationSeconds,
           aiLanguage: input.aiLanguage,
+          existingTopicTags: input.existingTopicTags,
         },
         {
           onTranscriptReady: input.onTranscriptReady,
@@ -333,6 +338,35 @@ async function generateMediaSummaryFromFileWithRetry(
   }
 
   throw new AISummaryProviderError("summary_failed", "AI summary failed");
+}
+
+async function loadExistingTopicTagHints(
+  prisma: PrismaClient,
+): Promise<MediaSummaryTopicTagHint[]> {
+  const topicTags = await prisma.tag.findMany({
+    where: {
+      type: "topic",
+      isArchived: false,
+    },
+    include: {
+      aliases: {
+        where: {
+          deletedAt: null,
+        },
+        orderBy: {
+          alias: "asc",
+        },
+      },
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
+
+  return topicTags.map((tag) => ({
+    name: tag.name,
+    aliases: tag.aliases.map((alias) => alias.alias),
+  }));
 }
 
 function isRetryableErrorCode(code: string): boolean {

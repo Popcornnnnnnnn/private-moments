@@ -231,7 +231,7 @@ Tag vocabulary 和 post assignments 分开同步。
 - `delete_tag_alias`：payload `{deletedAt}`。
 - `merge_tag`：`entityType: "tag"`，`entityId` 是 source topic tag，payload `{targetTagId, alias, mergedAt}`；server 会把 source 的活跃关联移动到 target、保留 source name 为 target alias，并 archive source tag。
 
-默认主标签由 server/iOS seed：`日记`、`想法`、`学习整理`、`情绪`、`碎碎念`、`复盘`。默认主标签不可重命名或归档；自定义主标签和 topic tag 通过 Settings > Tags 管理。AI 自动标签只在新 audio moment 的首次 ready summary 中应用一次。
+默认主标签由 server/iOS seed：`日记`、`想法`、`学习整理`、`情绪`、`碎碎念`、`复盘`。默认主标签不可重命名或归档；自定义主标签和 topic tag 通过 Settings > Tags 管理。AI 自动标签只在新 audio moment 的首次 ready summary 中应用一次；server 会把 active topic tag/alias 词表传给 summary/tag prompt，并在落库前优先复用现有 topic，只有没有可匹配 topic 时才创建新标签。
 
 ## AI Media Summary
 
@@ -301,7 +301,7 @@ Response：
     "summaryText": "# 面试复盘\n\n这段语音主要复盘了一次面试后的感受、系统设计回答问题，以及下一次准备的重点。",
     "inputTranscriptLength": 320,
     "inputDurationSeconds": 86,
-    "promptVersion": "media-summary-v3",
+    "promptVersion": "media-summary-v4",
     "provider": "openai",
     "model": "gpt-5.5",
     "errorCode": null,
@@ -328,7 +328,7 @@ curl -X DELETE http://127.0.0.1:3210/api/v1/ai/media-summary/summary-uuid \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-AI summary generated metadata 会进入 iPhone 本地 Timeline search；当前 server `/api/v1/search` 仍只搜索 post text、comments 和历史 media transcription metadata。`media-summary-v3` 的主内容是 `documentTitle`、`oneLiner` 和 `documentBlocks`；`overview`、`keyPoints`、`sections` 和 `summaryText` 继续保留，主要用于 copy 文本和旧客户端兼容。v3 要求可识别非空音频/转录生成 40 字符以内短标题，server 会在 provider 返回空/过长标题时从 `oneLiner` 派生 fallback。排查时只记录 id、状态、provider/model、错误码和 transcript length；不要复制私人 transcript 或 summary 正文。`AI_TRANSCRIPTION_PROVIDER=local` 是默认路径，本地转写模型和超时可通过 `AI_LOCAL_TRANSCRIPTION_MODEL` / `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS` 覆盖。`/api/v1/admin/status` 的 `aiSummaries` 字段提供 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项，供 iOS Settings > Storage & Diagnostics 显示；recent diagnostics 还包含卡住时长和 retry hint。
+AI summary generated metadata 会进入 iPhone 本地 Timeline search；当前 server `/api/v1/search` 仍只搜索 post text、comments 和历史 media transcription metadata。`media-summary-v4` 的主内容是 `documentTitle`、`oneLiner` 和 `documentBlocks`；`overview`、`keyPoints`、`sections` 和 `summaryText` 继续保留，主要用于 copy 文本和旧客户端兼容。v4 继承 v3 的短标题要求：可识别非空音频/转录应生成 40 字符以内短标题，server 会在 provider 返回空/过长标题时从 `oneLiner` 派生 fallback。v4 额外把 active topic tag/alias 词表用于 AI topic 复用，避免近义 topic 分裂。排查时只记录 id、状态、provider/model、错误码和 transcript length；不要复制私人 transcript 或 summary 正文。`AI_TRANSCRIPTION_PROVIDER=local` 是默认路径，本地转写模型和超时可通过 `AI_LOCAL_TRANSCRIPTION_MODEL` / `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS` 覆盖。`/api/v1/admin/status` 的 `aiSummaries` 字段提供 `transcribing`、`summarizing`、`ready`、`failed` 计数和非 ready 项，供 iOS Settings > Storage & Diagnostics 显示；recent diagnostics 还包含卡住时长和 retry hint。
 
 新 audio 的 AI 标题写回通过 `insert_ai_title` 同步，不使用普通 `update_post`。payload 只包含 `{summaryId, mediaId, insertedAt}`；server 从自己的 ready audio summary 读取 `documentTitle`，验证 post/media/summary 关系和当前 post 没有行首 `# ` / `## ` 标题后，才发出 `post_updated`，并带 `updateSource: "ai_title"`。客户端应用该 change 时不应把它当作用户手动编辑。
 

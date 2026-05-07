@@ -51,9 +51,143 @@ export const MAX_TAG_NAME_LENGTH = 40;
 export const MAX_TOPIC_TAGS_PER_POST = 3;
 const MIN_PRIMARY_CONFIDENCE = 0.6;
 const MIN_TOPIC_CONFIDENCE = 0.5;
+const GENERIC_TOPIC_CORES = new Set([
+  "ai",
+  "app",
+  "ios",
+  "学习",
+  "开发",
+  "工作",
+  "生活",
+  "运动",
+  "技术",
+  "问题",
+  "总结",
+  "复盘",
+]);
+
+interface TopicTagReuseAlias {
+  alias: string;
+  normalizedAlias?: string;
+}
+
+export interface TopicTagReuseCandidate {
+  id: string;
+  name: string;
+  normalizedName?: string;
+  aliases?: TopicTagReuseAlias[];
+}
 
 export function normalizeTagName(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
+}
+
+export function findReusableTopicTagForName(
+  rawName: string,
+  candidates: TopicTagReuseCandidate[],
+): TopicTagReuseCandidate | null {
+  const name = cleanedTagName(rawName);
+  if (!name) {
+    return null;
+  }
+
+  const normalizedName = normalizeTagName(name);
+  const compactName = compactTopicTagName(name);
+  let best: { candidate: TopicTagReuseCandidate; score: number } | null = null;
+
+  for (const candidate of candidates) {
+    for (const term of topicTagCandidateTerms(candidate)) {
+      const score = topicTagReuseScore({
+        suggestedNormalizedName: normalizedName,
+        suggestedCompactName: compactName,
+        term,
+      });
+      if (score > (best?.score ?? 0)) {
+        best = {
+          candidate,
+          score,
+        };
+      }
+    }
+  }
+
+  return best ? best.candidate : null;
+}
+
+interface TopicTagCandidateTerm {
+  value: string;
+  normalizedName: string;
+  compactName: string;
+  source: "name" | "alias";
+}
+
+function topicTagCandidateTerms(candidate: TopicTagReuseCandidate): TopicTagCandidateTerm[] {
+  const terms: TopicTagCandidateTerm[] = [
+    {
+      value: candidate.name,
+      normalizedName: candidate.normalizedName ?? normalizeTagName(candidate.name),
+      compactName: compactTopicTagName(candidate.name),
+      source: "name",
+    },
+  ];
+
+  for (const alias of candidate.aliases ?? []) {
+    terms.push({
+      value: alias.alias,
+      normalizedName: alias.normalizedAlias ?? normalizeTagName(alias.alias),
+      compactName: compactTopicTagName(alias.alias),
+      source: "alias",
+    });
+  }
+
+  return terms.filter((term) => term.value.trim().length > 0 && term.compactName.length > 0);
+}
+
+function topicTagReuseScore(input: {
+  suggestedNormalizedName: string;
+  suggestedCompactName: string;
+  term: TopicTagCandidateTerm;
+}): number {
+  if (input.term.normalizedName === input.suggestedNormalizedName) {
+    return input.term.source === "name" ? 100 : 98;
+  }
+
+  if (input.term.compactName === input.suggestedCompactName) {
+    return input.term.source === "name" ? 94 : 92;
+  }
+
+  if (isReusableTopicContainment(input.suggestedCompactName, input.term.compactName)) {
+    const shorterLength = Math.min(
+      Array.from(input.suggestedCompactName).length,
+      Array.from(input.term.compactName).length,
+    );
+    return (input.term.source === "name" ? 80 : 78) + Math.min(shorterLength, 20) / 100;
+  }
+
+  return 0;
+}
+
+function isReusableTopicContainment(suggestedCompactName: string, candidateCompactName: string): boolean {
+  if (!suggestedCompactName || !candidateCompactName || suggestedCompactName === candidateCompactName) {
+    return false;
+  }
+
+  const shorter =
+    suggestedCompactName.length < candidateCompactName.length
+      ? suggestedCompactName
+      : candidateCompactName;
+  if (GENERIC_TOPIC_CORES.has(shorter) || Array.from(shorter).length < 3) {
+    return false;
+  }
+
+  return (
+    suggestedCompactName.includes(candidateCompactName) ||
+    candidateCompactName.includes(suggestedCompactName)
+  );
+}
+
+function compactTopicTagName(value: string): string {
+  return normalizeTagName(value).replace(/[\s\p{P}\p{S}_]+/gu, "");
 }
 
 export function canonicalDefaultPrimaryTagForId(
@@ -405,21 +539,23 @@ async function resolveOrCreateTopicTag(
   }
 
   const normalizedName = normalizeTagName(name);
-  const aliasMatch = await tx.tagAlias.findFirst({
+  const activeTopicCandidates = await tx.tag.findMany({
     where: {
-      normalizedAlias: normalizedName,
-      deletedAt: null,
-      tag: {
-        isArchived: false,
-      },
+      type: "topic",
+      isArchived: false,
     },
     include: {
-      tag: true,
+      aliases: {
+        where: {
+          deletedAt: null,
+        },
+      },
     },
   });
+  const reusableTopic = findReusableTopicTagForName(name, activeTopicCandidates);
 
-  if (aliasMatch?.tag.type === "topic") {
-    return aliasMatch.tag;
+  if (reusableTopic) {
+    return activeTopicCandidates.find((tag) => tag.id === reusableTopic.id) ?? null;
   }
 
   const existing = await tx.tag.findUnique({

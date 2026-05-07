@@ -16,9 +16,9 @@ npm run verify:release-gates
 | Gate | Status | Area | Required Evidence |
 |---|---|---|---|
 | UAT-M004-AUDIO-VIDEO | open | Audio and Video Moments | 真实 iPhone 上录音、暂停/继续/停止、试听、发布、后台播放、短视频导入、超长视频拒绝、全屏播放、sync/upload/recovery、Storage cache clear 均通过。 |
-| UAT-M005-AI-SUMMARY | open | AI Media Summaries | fresh clear-speech audio/video 发布后，iOS 不显示 transcript/占位；Mac 生成 ready summary 后，timeline 显示 `Summary ready`，sheet 显示 v3 document summary，Regenerate/Delete/failed 保留旧摘要语义均可用。 |
+| UAT-M005-AI-SUMMARY | open | AI Media Summaries | fresh clear-speech audio/video 发布后，iOS 不显示 transcript/占位；Mac 生成 ready summary 后，timeline 显示 `Summary ready`，sheet 显示 v4 document summary，Regenerate/Delete/failed 保留旧摘要语义均可用。 |
 | UAT-M005-AI-TITLE | open | AI Title Auto-Insert | fresh audio 无用户标题时首次 ready summary 写入 `##` 短标题，不显示 `Edited`；已有 `#`/`##` 或关闭 `AI Title Auto-Insert` 时不写入；Regenerate 不覆盖已有标题。 |
-| UAT-M006-SMART-TAGS | open | Smart Tags | 手动主标签发布、timeline tag toggle、Detail 标签显示/单条编辑、topic alias search、topic merge/archive/restore/delete、Storage diagnostics tags、新语音 summary ready 后 AI tags sync 均通过。 |
+| UAT-M006-SMART-TAGS | open | Smart Tags | 手动主标签发布、timeline tag toggle、Detail 标签显示/单条编辑、topic alias search、topic merge/archive/restore/delete、Storage diagnostics tags、新语音 summary ready 后 AI tags sync 均通过，并确认 AI topic 优先复用已有 topic/alias 而不是创建近义重复标签。 |
 | UAT-M007-LANGUAGE | open | App Language | `System` / `English` / `简体中文` 切换后，主 App 主要 UI、日期、筛选、Settings、Tags、Summary、Detail/Edit 可读且不翻译用户内容。 |
 | UAT-M008-CALENDAR | open | Calendar Review | 真实 iPhone 上 Calendar month grid、Day Review、Month Stats、Day Review filters、Timeline day filter handoff、返回位置记忆、音频/视频提示体验成立。 |
 | UAT-M009-ARCHIVE | open | Archive / Restore / Export / Import | 真实本地服务上通过 Mac Admin 创建 backup、list/check snapshot、staged restore、promote preparation、export package、import staged data directory；确认真正切换仍走 `pending-promote.json` restart 流程。 |
