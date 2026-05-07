@@ -104,6 +104,16 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R036,R037,R047
 - Validation: Future planning/design docs justify any new Admin-only operational surface; affected user-facing docs state whether short-term Admin-only controls should later migrate to iOS Settings.
 
+### R051 — Admin migration must keep daily status on iOS and dangerous Mac recovery on Mac.
+- Class: operational
+- Status: active
+- Description: Settings > Storage & Diagnostics should expose read-only Mac runtime, maintenance, and Archive status when the server is reachable. Mac Admin top-level navigation should stay limited to `Archive / Overview`, with Posts hidden from normal content management. Backup, restore, promote, export, and import execution must remain Mac Admin only.
+- Why it matters: The phone is the daily surface, but Mac filesystem and recovery actions can damage the archive if they become casual mobile controls.
+- Source: admin migration implementation 2026-05-07
+- Primary owning slice: maintenance
+- Supporting slices: R050,R037,R003
+- Validation: iOS build proves `StorageSettingsView` can decode and display admin status, maintenance state/jobs, repository, and snapshots; Admin build proves the visible navigation is `Archive / Overview`; smoke checks prove existing authenticated Admin status and Archive read routes remain reachable.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active

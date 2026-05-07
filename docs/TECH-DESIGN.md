@@ -74,11 +74,11 @@ private-moments/
 
 当前仓库已经包含 `ios/`、`server/`、`admin/`、`shared/` 的 MVP 骨架和可编译实现。
 
-当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，系统 Share Sheet 导入入口，主时间线单用户私密评论，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、App Language-aware 人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、Calendar Review、详情页、编辑、软删除同步、iOS 本机语言偏好，以及 Mac 后台状态页和 Posts 运维管理。
+当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，系统 Share Sheet 导入入口，主时间线单用户私密评论，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、App Language-aware 人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、Calendar Review、详情页、编辑、软删除同步、iOS 本机语言偏好，以及 Mac 本地 Archive/恢复运维面。
 
 iOS 还提供本机 `Automatic Sync` 开关。打开时沿用启动、前台、发布/编辑、失败重试和 AI follow-up 的自动同步路径；关闭时进入严格 local-only 模式：发布、编辑、评论、标签和媒体草稿仍写入本地 SQLite/outbox，但不会自动连接 Mac server、上传媒体、拉取远端 AI summary/tag/media 变更或执行后台 retry。Settings 里的显式 `Sync Now` 仍是用户主动联网动作；Settings 根页的同步转圈只表示这类用户主动动作，不表示后台空闲检查。
 
-v0.1 owner reliability layer 增加 Mac Admin `Archive` 和 Sync Health。Archive 使用 restic 作为底层 deduplicated snapshot 工具，server 通过 durable `maintenance_jobs` 记录备份、检查、恢复和 promote preparation；Sync Health 在 Mac Admin 和 iOS Settings 中展示同步游标、outbox、media upload、missing media 和 AI pipeline 的安全诊断。
+v0.1 owner reliability layer 增加 Mac Admin `Archive` 和 Sync Health。Archive 使用 restic 作为底层 deduplicated snapshot 工具，server 通过 durable `maintenance_jobs` 记录备份、检查、恢复和 promote preparation；Sync Health 和 Mac operations read-only 摘要在 iOS Settings 中展示，Mac Admin 保留 Archive、runtime truth、maintenance jobs、logs 和 device emergency。
 
 当前 UI 设计原则是保持主时间线安静：筛选、Calendar 回看、收藏和管理能力应尽量藏在 toolbar menu、底部 review tab、滑动操作或详情页里，避免把主界面做成后台管理界面。详细原则见 `docs/DESIGN-PRINCIPLES.md`。
 
@@ -219,15 +219,15 @@ Review prompt 强制 whole-period reading：主题、关键词、状态回应、
 
 Review feedback 写入 `review_feedback`，并用粗粒度 counters 更新 `review_memory`。第一版 memory 只保存反馈偏好和最近反馈上下文，不保存私人内容正文。
 
-## 2.3 Mac Admin Posts 管理决策
+## 2.3 Mac Admin 迁移与最小运维面
 
-Mac Admin 的 Posts 功能定位为运维管理台，不替代 iPhone 的内容编辑入口。第一版采用 `Overview / Posts` 顶部 tab：Overview 保持服务、设备、日志和存储概览；Posts 负责内容查看、排查和清理测试数据。
+Mac Admin 定位为低频 Mac 本地运维台，不替代 iPhone 的内容编辑、回看、设置或日常诊断入口。当前顶层 tab 只保留 `Archive / Overview`：`Archive` 负责 restic backup/restore、promote preparation、export/import 和 repository 状态；`Overview` 只保留 runtime truth、maintenance jobs、server logs 和 device emergency。
 
 后续设置、监控、诊断和安全修复动作默认优先迁移到 iOS Settings / Diagnostics。Mac Admin 保留为低频 Mac 本地运维面：Archive backup/restore、staged promote、export/import artifact、server logs、文件系统权限、LaunchAgent/进程状态和必须靠 Mac 文件路径完成的恢复操作。短期如果某个能力只能先放在 Admin，需要在 `docs/HANDOFF.md` 标明它是否属于后续迁移到 iOS 的候选。Admin 最小保留信息和迁移顺序记录在 `docs/ADMIN-MIGRATION.md`。
 
-Posts 页面采用列表 + 右侧详情抽屉。列表用于快速扫描文字摘要、发生时间、媒体数量、创建设备、更新设备、删除状态和基础同步状态；详情抽屉用于查看完整正文、图片网格或媒体诊断、媒体状态、大小、checksum、`serverVersion`、创建/更新设备和删除时间。图片在详情抽屉内显示缩略图，点击后以全屏 lightbox 查看压缩展示图；语音/视频不在 Admin 内播放。
+Posts 不再作为 Mac Admin 顶层内容管理页面。底层 Admin posts API 和旧 React 组件短期保留一个 checkpoint，作为紧急排障余量；后续确认不需要浏览器侧内容证据后，再单独删除或改成 hidden/debug-only。若保留 debug 能力，只允许按 ID 定位少量 post、查看 media path/status/checksum 等恢复证据、或清理明确测试设备产生的数据；不增加 Admin 内编辑、播放、批量内容整理或日常搜索体验。
 
-列表默认只显示未删除 posts，可切换查看软删除 posts。普通列表沿用 cursor 分页，默认 50 条，支持 `Load more`。文本搜索用于定位少量记录，第一版限制最多 100 条，不做搜索分页。筛选能力包括创建设备、删除状态和文本搜索。
+历史 Posts 页面采用列表 + 右侧详情抽屉。列表用于快速扫描文字摘要、发生时间、媒体数量、创建设备、更新设备、删除状态和基础同步状态；详情抽屉用于查看完整正文、图片网格或媒体诊断、媒体状态、大小、checksum、`serverVersion`、创建/更新设备和删除时间。图片在详情抽屉内显示缩略图，点击后以全屏 lightbox 查看压缩展示图；语音/视频不在 Admin 内播放。该页面不再从顶层导航进入。
 
 后台单条删除只放在详情抽屉内，必须二次确认。单条删除采用软删除：服务端设置 `Post.deletedAt`，将该 post 下未删除媒体和 comments 标记为 deleted，并写入 `post_deleted` server change；iPhone 下次同步后隐藏本地缓存。第一版不做软删除恢复。
 
@@ -251,7 +251,9 @@ iOS Settings 的 Storage 功能主要是诊断入口。主 Settings 只显示一
 - 待上传 media 数。
 - 失败上传数。
 
-Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server/src/storage/stats.ts` 统计数据目录总量、SQLite 相关文件、media 目录、logs 目录和数据目录所在卷的可用空间；同一个响应还返回 `aiSummaries` 和 `aiUsage` 轻量诊断。iOS 已登录且请求成功时显示 Mac Server、AI summary 诊断和 AI token usage；如果 Mac 不在线、token 不可用或请求失败，详情页隐藏 Mac Server 区域，不弹错误。
+Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server/src/storage/stats.ts` 统计数据目录总量、SQLite 相关文件、media 目录、logs 目录和数据目录所在卷的可用空间；同一个响应还返回 runtime、sync、`aiSummaries`、`aiUsage` 和 tags 轻量诊断。iOS 已登录且请求成功时显示 Mac Server、AI summary 诊断和 AI token usage；如果 Mac 不在线、token 不可用或请求失败，详情页隐藏 Mac Server 区域，不弹错误。
+
+iOS Settings > Storage & Diagnostics 还会只读请求 maintenance state、最近 maintenance jobs、Archive repository 和 snapshots，用于展示 Mac Operations：maintenance mode、running job、最近失败 job、repository configured、restic availability/version、last backup/snapshot 和 next backup。该区域不触发 sync，也不提供 backup、restore、promote、export/import 等 Mac 本地恢复动作。
 
 Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Settings 主界面变成后台管理台。当前清理动作只删除已上传且可重新下载的本机完整语音/视频文件；不会删除视频 poster、本地待上传媒体或 Mac 归档内容。
 
@@ -269,7 +271,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 - 失败同步或上传任务使用 5s、20s、60s、120s、300s 的延迟自动重试。
 - 发布草稿保存文字、发生时间和已准备媒体。
 - 远端同步来的压缩图和视频 poster 会下载到本地缓存后展示；完整语音/视频按播放需求下载。
-- Settings > Storage & Diagnostics 展示本机存储、同步健康状态、AI summary 诊断、AI token usage 和安全修复动作；Mac 在线时额外展示服务端存储状态。后续日常设置和监控默认继续放到 iOS Settings，而不是扩展为日常使用的 Mac Admin。
+- Settings > Storage & Diagnostics 展示本机存储、同步健康状态、AI summary 诊断、AI token usage、安全修复动作和只读 Mac Operations；Mac 在线时额外展示服务端 runtime、storage、maintenance 和 Archive 状态。后续日常设置和监控默认继续放到 iOS Settings，而不是扩展为日常使用的 Mac Admin。
 
 ### Mac Server
 
@@ -280,7 +282,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 - SQLite。
 - 本地文件存储。
 - launchd 登录后自动启动。
-- `/api/v1/admin/status` 返回服务状态、计数、存储诊断和 AI summary 诊断。
+- `/api/v1/admin/status` 返回服务状态、计数、存储诊断、Sync Health、AI summary 诊断和 AI token usage。
 
 ### Mac Admin UI
 

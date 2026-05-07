@@ -52,6 +52,10 @@ interface AdminStatus {
   };
   storage: {
     totalBytes: number;
+    databaseBytes?: number | null;
+    mediaBytes?: number | null;
+    logsBytes?: number | null;
+    availableBytes?: number | null;
   };
   sync?: {
     latestServerChangeVersion: number;
@@ -64,6 +68,13 @@ interface AdminStatus {
     lastSuccessfulSyncAt?: string | null;
     lastRejectedSyncAt?: string | null;
   };
+}
+
+interface MaintenanceState {
+  active: boolean;
+  jobId: string | null;
+  reason: string | null;
+  startedAt: string | null;
 }
 
 interface LogEntry {
@@ -137,6 +148,11 @@ interface MaintenanceJob {
   finishedAt: string | null;
 }
 
+interface MaintenanceStateResponse {
+  maintenance: MaintenanceState;
+  runningJob: MaintenanceJob | null;
+}
+
 interface ArchiveRepositoryState {
   configured: boolean;
   repositoryPath: string | null;
@@ -162,7 +178,7 @@ interface ArchiveSnapshot {
   tags: string[];
 }
 
-type AdminTab = "overview" | "posts" | "archive";
+type AdminTab = "overview" | "archive";
 type DeletedFilter = "active" | "deleted" | "all";
 
 export function App() {
@@ -271,10 +287,11 @@ function Dashboard({
   const [status, setStatus] = useState<AdminStatus | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [maintenanceState, setMaintenanceState] = useState<MaintenanceStateResponse | null>(null);
+  const [maintenanceJobs, setMaintenanceJobs] = useState<MaintenanceJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [postsReloadKey, setPostsReloadKey] = useState(0);
   const [cleanPreview, setCleanPreview] = useState<CleanPreview | null>(null);
   const [cleanConfirmation, setCleanConfirmation] = useState("");
   const [cleanSubmitting, setCleanSubmitting] = useState(false);
@@ -284,15 +301,19 @@ function Dashboard({
     setError(null);
 
     try {
-      const [statusResponse, devicesResponse, logsResponse] = await Promise.all([
+      const [statusResponse, devicesResponse, logsResponse, maintenanceResponse, jobsResponse] = await Promise.all([
         apiFetch<AdminStatus>("/api/v1/admin/status", token),
         apiFetch<{ devices: Device[] }>("/api/v1/devices", token),
         apiFetch<{ logs: LogEntry[] }>("/api/v1/admin/logs?limit=20", token),
+        apiFetch<MaintenanceStateResponse>("/api/v1/admin/maintenance/state", token),
+        apiFetch<{ jobs: MaintenanceJob[] }>("/api/v1/admin/maintenance/jobs?limit=5", token),
       ]);
 
       setStatus(statusResponse);
       setDevices(devicesResponse.devices);
       setLogs(logsResponse.logs);
+      setMaintenanceState(maintenanceResponse);
+      setMaintenanceJobs(jobsResponse.jobs);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to load dashboard");
     } finally {
@@ -356,7 +377,6 @@ function Dashboard({
       );
       setCleanPreview(null);
       setCleanConfirmation("");
-      setPostsReloadKey((value) => value + 1);
       await load();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Failed to clean device posts");
@@ -404,13 +424,6 @@ function Dashboard({
         >
           Overview
         </button>
-        <button
-          className={activeTab === "posts" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("posts")}
-          type="button"
-        >
-          Posts
-        </button>
       </nav>
 
       {error ? <div className="banner error">{error}</div> : null}
@@ -423,19 +436,11 @@ function Dashboard({
           currentDeviceId={currentDeviceId}
           devices={devices}
           logs={logs}
+          maintenanceJobs={maintenanceJobs}
+          maintenanceState={maintenanceState}
           onCleanDevice={openCleanDevice}
           onRevokeDevice={revokeDevice}
           status={status}
-        />
-      ) : activeTab === "posts" ? (
-        <PostsManager
-          devices={devices}
-          onChanged={() => {
-            setPostsReloadKey((value) => value + 1);
-            void load();
-          }}
-          reloadSignal={postsReloadKey}
-          token={token}
         />
       ) : (
         <ArchiveManager token={token} />
@@ -463,6 +468,8 @@ function Overview({
   currentDeviceId,
   devices,
   logs,
+  maintenanceJobs,
+  maintenanceState,
   onCleanDevice,
   onRevokeDevice,
   status,
@@ -471,10 +478,15 @@ function Overview({
   currentDeviceId: string | null;
   devices: Device[];
   logs: LogEntry[];
+  maintenanceJobs: MaintenanceJob[];
+  maintenanceState: MaintenanceStateResponse | null;
   onCleanDevice: (deviceId: string) => void;
   onRevokeDevice: (deviceId: string) => void;
   status: AdminStatus | null;
 }) {
+  const runningJob = maintenanceState?.runningJob ?? maintenanceJobs.find((job) => job.status === "running");
+  const latestFailedJob = maintenanceJobs.find((job) => job.status === "failed");
+
   return (
     <>
       <section className="metric-grid">
@@ -485,22 +497,26 @@ function Overview({
           detail={status ? `schema ${status.schemaVersion}` : ""}
         />
         <Metric
-          icon={<Smartphone size={20} />}
-          label="Active devices"
-          value={String(status?.counts.activeDevices ?? activeDevices.length)}
-          detail={`${status?.counts.revokedDevices ?? 0} revoked`}
-        />
-        <Metric
-          icon={<Database size={20} />}
-          label="Posts"
-          value={String(status?.counts.posts ?? 0)}
-          detail={`${status?.counts.deletedPosts ?? 0} deleted`}
+          icon={<Activity size={20} />}
+          label="Maintenance"
+          value={maintenanceState?.maintenance.active ? "Active" : "Idle"}
+          detail={runningJob ? `${runningJob.type} · ${runningJob.progress}%` : "no running job"}
         />
         <Metric
           icon={<HardDrive size={20} />}
           label="Storage"
           value={status ? formatBytes(status.storage.totalBytes) : "-"}
-          detail={`${status?.counts.media ?? 0} media files`}
+          detail={
+            status?.storage.availableBytes !== undefined && status.storage.availableBytes !== null
+              ? `${formatBytes(status.storage.availableBytes)} available`
+              : "runtime data"
+          }
+        />
+        <Metric
+          icon={<Smartphone size={20} />}
+          label="Devices"
+          value={String(status?.counts.activeDevices ?? activeDevices.length)}
+          detail={`${status?.counts.revokedDevices ?? 0} revoked`}
         />
       </section>
 
@@ -519,57 +535,42 @@ function Overview({
               <dt>Uptime</dt>
               <dd>{status ? formatDuration(status.uptimeSeconds) : "-"}</dd>
             </div>
+            <div>
+              <dt>Storage</dt>
+              <dd>{status ? formatBytes(status.storage.totalBytes) : "-"}</dd>
+            </div>
+            <div>
+              <dt>Available disk</dt>
+              <dd>
+                {status?.storage.availableBytes !== undefined && status.storage.availableBytes !== null
+                  ? formatBytes(status.storage.availableBytes)
+                  : "-"}
+              </dd>
+            </div>
           </dl>
         </section>
 
         <section className="panel wide">
           <div className="panel-heading">
-            <h2>Sync Health</h2>
-            <RefreshCw size={18} />
-          </div>
-          <div className="sync-health-grid">
-            <MetricLite
-              label="Latest change"
-              value={String(status?.sync?.latestServerChangeVersion ?? "-")}
-              tone="neutral"
-            />
-            <MetricLite
-              label="Pending ops"
-              value={String(status?.sync?.pendingOperations ?? 0)}
-              tone={(status?.sync?.pendingOperations ?? 0) > 0 ? "warn" : "good"}
-            />
-            <MetricLite
-              label="Rejected ops"
-              value={String(status?.sync?.rejectedOperations ?? 0)}
-              tone={(status?.sync?.rejectedOperations ?? 0) > 0 ? "danger" : "good"}
-            />
-            <MetricLite
-              label="Failed media"
-              value={String(status?.sync?.failedMediaUploads ?? 0)}
-              tone={(status?.sync?.failedMediaUploads ?? 0) > 0 ? "danger" : "good"}
-            />
-            <MetricLite
-              label="AI not ready"
-              value={String(status?.sync?.aiNonReady ?? 0)}
-              tone={(status?.sync?.aiNonReady ?? 0) > 0 ? "warn" : "good"}
-            />
+            <h2>Jobs</h2>
+            <Activity size={18} />
           </div>
           <dl className="details-list compact">
             <div>
-              <dt>Last server change</dt>
-              <dd>{formatDate(status?.sync?.lastServerChangeAt)}</dd>
+              <dt>Maintenance mode</dt>
+              <dd>{maintenanceState?.maintenance.active ? "Active" : "Idle"}</dd>
             </div>
             <div>
-              <dt>Last sync operation</dt>
-              <dd>{formatDate(status?.sync?.lastSyncOperationAt)}</dd>
+              <dt>Running job</dt>
+              <dd>{runningJob ? jobSummary(runningJob) : "None"}</dd>
             </div>
             <div>
-              <dt>Last successful sync</dt>
-              <dd>{formatDate(status?.sync?.lastSuccessfulSyncAt)}</dd>
+              <dt>Recent failed job</dt>
+              <dd>{latestFailedJob ? jobSummary(latestFailedJob) : "None"}</dd>
             </div>
             <div>
-              <dt>Last rejected sync</dt>
-              <dd>{formatDate(status?.sync?.lastRejectedSyncAt)}</dd>
+              <dt>Recent jobs</dt>
+              <dd>{maintenanceJobs.length}</dd>
             </div>
           </dl>
         </section>
@@ -1774,6 +1775,18 @@ function formatDuration(seconds: number | null | undefined): string {
   }
 
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function jobSummary(job: MaintenanceJob): string {
+  if (job.status === "running") {
+    return `${job.type} · ${job.progress}%${job.stage ? ` · ${job.stage}` : ""}`;
+  }
+
+  if (job.errorCode) {
+    return `${job.type} · ${job.errorCode}`;
+  }
+
+  return `${job.type} · ${job.status}`;
 }
 
 function mediaSummary(media: AdminMedia[]): string {

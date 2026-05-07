@@ -33,21 +33,23 @@ Mac Admin 只保留必须依赖 Mac 本地文件系统、server 进程、Archive
 
 ### Step 1: Admin 入口降级为 Mac 运维面
 
-当前 checkpoint 已把 Mac Admin 默认入口切到 `Archive`，并把 tab 顺序调整为 `Archive / Overview / Posts`。这不会删除旧能力，但会让默认使用路径先落到最需要 Mac 的恢复和迁移能力上。
+已完成。Mac Admin 默认入口是 `Archive`，顶层导航只保留 `Archive / Overview`。这不会删除底层 Admin posts API，但不再把 Posts 作为日常可见内容管理入口。
 
 ### Step 2: Overview 收缩
 
-下一步把 Overview 收缩成三块：
+已完成首轮。Overview 收缩成三块：
 
 1. Runtime：server/schema/data dir/disk/logs。
 2. Jobs：maintenance mode、running/recent failed jobs。
 3. Emergency devices：active/revoked devices、revoke、clean test posts。
 
-普通 post count、media count、AI usage、tag diagnostics 等日常读数继续由 iOS Settings 展示；Admin 只在排障时读 `/api/v1/admin/status` 的 Mac 侧证据。
+普通 post count、media count、AI usage、tag diagnostics 等日常读数继续由 iOS Settings 展示；Admin 只在排障时读 `/api/v1/admin/status`、maintenance jobs 和日志的 Mac 侧证据。
 
 ### Step 3: Posts 降为 Debug/Emergency
 
-`Posts` 不再作为长期内容管理入口。后续可以改成 hidden/debug-only 或只保留：
+已从 Mac Admin 顶层移除。短期内 backend API 和 React 旧组件可以作为恢复余量保留一个 checkpoint；后续确认不需要浏览器侧内容排障后，再单独删除或改成 hidden/debug-only。
+
+如果以后需要恢复少量 debug 能力，只保留：
 
 - 按 ID 定位少量 post。
 - 查看 media path/status/checksum 等恢复证据。
@@ -57,15 +59,16 @@ Mac Admin 只保留必须依赖 Mac 本地文件系统、server 进程、Archive
 
 ### Step 4: iOS 补齐迁移项
 
-如果收缩 Admin 时发现某个日常动作还只能在 Mac Admin 里完成，优先补到 iOS Settings / Diagnostics。候选包括：
+已完成首轮只读迁移。iOS Settings > Storage & Diagnostics 在 Mac 在线时补充：
 
-- 更清晰的 Mac reachability/runtime 摘要。
-- Archive 最近备份时间的只读状态。
-- 最近 failed maintenance job 的只读提示。
-- Sync Health 与 AI diagnostics 的更短路径。
+- Mac runtime 摘要：server version、schema version、data dir、uptime、storage。
+- Maintenance 摘要：maintenance mode、running job、recent failed job。
+- Archive 摘要：repository configured、restic availability/version、last backup/snapshot、next backup。
 
 触发备份、restore、promote、export/import 仍留在 Mac Admin，避免 iPhone 误操作 Mac 本地恢复流程。
 
 ## 当前边界
 
-本轮只做低风险方向切换和文档化，不删除任何现有 Admin 功能，不改变 API、SQLite schema、sync 语义或 Archive job 行为。后续真正删除或隐藏 `Posts`、重构 Overview 时，应作为单独 checkpoint 处理，并至少验证 `npm run admin:build` 和 Admin smoke。
+本轮不改变 SQLite schema、sync 语义或 Archive job 行为。iOS 新增的是 read-only Admin 状态读取；Mac Admin 缩减的是可见导航和 Overview 信息架构。
+
+下一轮如果要真正删除 backend posts API、React 旧组件或 clean-posts emergency 能力，应作为单独 checkpoint 处理，并至少验证 `npm run admin:build`、Admin smoke、server route coverage，以及真实恢复流程是否仍有足够证据可查。

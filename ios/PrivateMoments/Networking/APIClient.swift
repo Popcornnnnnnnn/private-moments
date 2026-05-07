@@ -115,6 +115,58 @@ struct APIClient: Sendable {
         return try await send(request)
     }
 
+    func adminMaintenanceState(timeoutInterval: TimeInterval? = nil) async throws -> AdminMaintenanceStateResponse {
+        var request = try authorizedRequest(url: endpoint("api/v1/admin/maintenance/state"))
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
+        return try await send(request)
+    }
+
+    func adminMaintenanceJobs(limit: Int = 5, timeoutInterval: TimeInterval? = nil) async throws -> [AdminMaintenanceJob] {
+        var components = URLComponents(url: endpoint("api/v1/admin/maintenance/jobs"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+
+        guard let url = components?.url else {
+            throw APIError.invalidURL
+        }
+
+        var request = try authorizedRequest(url: url)
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
+        let response: AdminMaintenanceJobsResponse = try await send(request)
+        return response.jobs
+    }
+
+    func adminArchiveRepository(timeoutInterval: TimeInterval? = nil) async throws -> AdminArchiveRepositoryState {
+        var request = try authorizedRequest(url: endpoint("api/v1/admin/archive/repository"))
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
+        let response: AdminArchiveRepositoryResponse = try await send(request)
+        return response.repository
+    }
+
+    func adminArchiveSnapshots(timeoutInterval: TimeInterval? = nil) async throws -> [AdminArchiveSnapshot] {
+        var request = try authorizedRequest(url: endpoint("api/v1/admin/archive/snapshots"))
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
+        let response: AdminArchiveSnapshotsResponse = try await send(request)
+        return response.snapshots
+    }
+
     func requestMediaSummary(
         postId: String,
         mediaId: String,

@@ -58,11 +58,31 @@ struct StorageSummaryLink: View {
     }
 }
 
+private struct MacOperationsDiagnostics {
+    let maintenanceState: AdminMaintenanceStateResponse?
+    let maintenanceJobs: [AdminMaintenanceJob]
+    let repository: AdminArchiveRepositoryState?
+    let snapshots: [AdminArchiveSnapshot]
+
+    var runningJob: AdminMaintenanceJob? {
+        maintenanceState?.runningJob ?? maintenanceJobs.first { $0.status == "running" }
+    }
+
+    var latestFailedJob: AdminMaintenanceJob? {
+        maintenanceJobs.first { $0.status == "failed" }
+    }
+
+    var latestSnapshot: AdminArchiveSnapshot? {
+        snapshots.sorted { $0.time > $1.time }.first
+    }
+}
+
 struct StorageDetailsView: View {
     @EnvironmentObject private var store: TimelineStore
     @Environment(\.appLanguage) private var appLanguage
     @State private var localStats: LocalStorageStats?
     @State private var serverStatus: AdminStatusResponse?
+    @State private var macOperations: MacOperationsDiagnostics?
     @State private var isRefreshing = false
     @State private var isClearingCache = false
     @State private var isSyncNowInFlight = false
@@ -85,6 +105,9 @@ struct StorageDetailsView: View {
 
             if let serverStatus {
                 macServerSection(serverStatus)
+                if let macOperations {
+                    macOperationsSection(macOperations)
+                }
                 if let aiSummaries = serverStatus.aiSummaries {
                     aiSummarySection(aiSummaries)
                 }
@@ -237,6 +260,8 @@ struct StorageDetailsView: View {
 
     private func macServerSection(_ status: AdminStatusResponse) -> some View {
         Section(L10n.t("Mac Server", appLanguage)) {
+            LabeledContent(L10n.t("Version", appLanguage), value: "v\(status.serverVersion)")
+            LabeledContent(L10n.t("Schema", appLanguage), value: "\(status.schemaVersion)")
             LabeledContent(L10n.t("Total", appLanguage), value: StorageByteFormatter.string(from: status.storage.totalBytes))
 
             if let databaseBytes = status.storage.databaseBytes {
@@ -257,6 +282,58 @@ struct StorageDetailsView: View {
 
             LabeledContent(L10n.t("Posts", appLanguage), value: "\(status.counts.posts)")
             LabeledContent(L10n.t("Media", appLanguage), value: "\(status.counts.media)")
+            LabeledContent(L10n.t("Uptime", appLanguage), value: durationText(Double(status.uptimeSeconds)))
+        }
+    }
+
+    private func macOperationsSection(_ diagnostics: MacOperationsDiagnostics) -> some View {
+        Section(L10n.t("Mac Operations", appLanguage)) {
+            if let maintenance = diagnostics.maintenanceState?.maintenance {
+                LabeledContent(
+                    L10n.t("Maintenance", appLanguage),
+                    value: L10n.t(maintenance.active ? "Active" : "Idle", appLanguage)
+                )
+
+                if let reason = maintenance.reason, maintenance.active {
+                    LabeledContent(L10n.t("Reason", appLanguage), value: reason)
+                }
+            }
+
+            if let runningJob = diagnostics.runningJob {
+                LabeledContent(L10n.t("Running job", appLanguage), value: jobSummary(runningJob))
+            } else {
+                LabeledContent(L10n.t("Running job", appLanguage), value: L10n.t("None", appLanguage))
+            }
+
+            if let failedJob = diagnostics.latestFailedJob {
+                LabeledContent(L10n.t("Recent failed job", appLanguage), value: jobSummary(failedJob))
+                if let errorCode = failedJob.errorCode {
+                    LabeledContent(L10n.t("Error", appLanguage), value: errorCode)
+                }
+            }
+
+            if let repository = diagnostics.repository {
+                LabeledContent(
+                    L10n.t("Archive repository", appLanguage),
+                    value: L10n.t(repository.configured ? "Configured" : "Not configured", appLanguage)
+                )
+                LabeledContent(
+                    L10n.t("Restic", appLanguage),
+                    value: repository.resticAvailable ? (repository.resticVersion ?? L10n.t("Available", appLanguage)) : L10n.t("Unavailable", appLanguage)
+                )
+
+                if let lastRunAt = repository.schedule.lastRunAt {
+                    LabeledContent(L10n.t("Last backup", appLanguage), value: shortTimestamp(lastRunAt))
+                } else if let latestSnapshot = diagnostics.latestSnapshot {
+                    LabeledContent(L10n.t("Last snapshot", appLanguage), value: shortTimestamp(latestSnapshot.time))
+                }
+
+                if repository.schedule.enabled, let nextRunAt = repository.schedule.nextRunAt {
+                    LabeledContent(L10n.t("Next backup", appLanguage), value: shortTimestamp(nextRunAt))
+                }
+            } else {
+                LabeledContent(L10n.t("Archive repository", appLanguage), value: L10n.t("Unavailable", appLanguage))
+            }
         }
     }
 
@@ -381,6 +458,40 @@ struct StorageDetailsView: View {
         }
     }
 
+    private func jobSummary(_ job: AdminMaintenanceJob) -> String {
+        let title = maintenanceJobTitle(job.type)
+        if job.status == "running" {
+            return "\(title) · \(job.progress)%"
+        }
+
+        if let errorCode = job.errorCode, !errorCode.isEmpty {
+            return "\(title) · \(errorCode)"
+        }
+
+        return "\(title) · \(job.status)"
+    }
+
+    private func maintenanceJobTitle(_ value: String) -> String {
+        switch value {
+        case "backup_create":
+            return L10n.t("Backup", appLanguage)
+        case "backup_check":
+            return L10n.t("Backup check", appLanguage)
+        case "backup_restore":
+            return L10n.t("Restore", appLanguage)
+        case "backup_promote":
+            return L10n.t("Promote", appLanguage)
+        case "export_create":
+            return L10n.t("Export", appLanguage)
+        case "import_restore":
+            return L10n.t("Import", appLanguage)
+        case "sync_health_refresh":
+            return L10n.t("Sync Health", appLanguage)
+        default:
+            return value.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
     private func diagnosticDetail(for item: AdminAISummaryDiagnosticItem) -> String {
         var parts = ["\(L10n.t("Updated", appLanguage)) \(shortTimestamp(item.updatedAt))"]
 
@@ -425,7 +536,15 @@ struct StorageDetailsView: View {
         }
 
         localStats = try? LocalStorageStatsLoader.load(database: store.database)
-        serverStatus = store.automaticSyncEnabled ? await loadServerStatus() : nil
+        if store.automaticSyncEnabled {
+            async let nextStatus = loadServerStatus()
+            async let nextOperations = loadMacOperations()
+            serverStatus = await nextStatus
+            macOperations = await nextOperations
+        } else {
+            serverStatus = nil
+            macOperations = nil
+        }
     }
 
     private func syncNowFromDiagnostics() async {
@@ -512,6 +631,31 @@ struct StorageDetailsView: View {
         do {
             return try await store.withAvailableAPIClient(token: token, preferLastReachable: true) { client in
                 try await client.adminStatus(timeoutInterval: 5)
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    private func loadMacOperations() async -> MacOperationsDiagnostics? {
+        guard store.isAuthenticated,
+              let token = try? KeychainStore.deviceToken() else {
+            return nil
+        }
+
+        do {
+            return try await store.withAvailableAPIClient(token: token, preferLastReachable: true) { client in
+                async let maintenanceState = try? client.adminMaintenanceState(timeoutInterval: 5)
+                async let maintenanceJobs = try? client.adminMaintenanceJobs(limit: 5, timeoutInterval: 5)
+                async let repository = try? client.adminArchiveRepository(timeoutInterval: 5)
+                async let snapshots = try? client.adminArchiveSnapshots(timeoutInterval: 5)
+
+                return MacOperationsDiagnostics(
+                    maintenanceState: await maintenanceState,
+                    maintenanceJobs: (await maintenanceJobs) ?? [],
+                    repository: await repository,
+                    snapshots: (await snapshots) ?? []
+                )
             }
         } catch {
             return nil

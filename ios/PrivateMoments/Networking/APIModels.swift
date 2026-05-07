@@ -74,12 +74,81 @@ struct UploadedMedia: Decodable {
 }
 
 struct AdminStatusResponse: Decodable {
+    let serverVersion: String
+    let schemaVersion: Int
+    let dataDir: String
+    let uptimeSeconds: Int
     let counts: AdminStatusCounts
     let storage: ServerStorageStats
     let aiSummaries: AdminAISummaryDiagnostics?
     let aiUsage: AdminAIUsageDiagnostics?
     let tags: AdminTagDiagnostics?
     let sync: AdminSyncDiagnostics?
+}
+
+struct AdminMaintenanceStateResponse: Decodable {
+    let maintenance: AdminMaintenanceModeState
+    let runningJob: AdminMaintenanceJob?
+}
+
+struct AdminMaintenanceJobsResponse: Decodable {
+    let jobs: [AdminMaintenanceJob]
+}
+
+struct AdminMaintenanceModeState: Decodable, Equatable {
+    let active: Bool
+    let jobId: String?
+    let reason: String?
+    let startedAt: String?
+}
+
+struct AdminMaintenanceJob: Decodable, Identifiable, Equatable {
+    let id: String
+    let type: String
+    let status: String
+    let stage: String?
+    let progress: Int
+    let artifactPath: String?
+    let errorCode: String?
+    let errorMessage: String?
+    let createdAt: String
+    let startedAt: String?
+    let finishedAt: String?
+}
+
+struct AdminArchiveRepositoryResponse: Decodable {
+    let repository: AdminArchiveRepositoryState
+}
+
+struct AdminArchiveSnapshotsResponse: Decodable {
+    let snapshots: [AdminArchiveSnapshot]
+}
+
+struct AdminArchiveRepositoryState: Decodable, Equatable {
+    let configured: Bool
+    let repositoryPath: String?
+    let keyFilePath: String?
+    let resticAvailable: Bool
+    let resticVersion: String?
+    let initialized: Bool
+    let schedule: AdminArchiveSchedule
+    let updatedAt: String?
+}
+
+struct AdminArchiveSchedule: Decodable, Equatable {
+    let enabled: Bool
+    let timeOfDay: String
+    let lastRunAt: String?
+    let nextRunAt: String?
+}
+
+struct AdminArchiveSnapshot: Decodable, Identifiable, Equatable {
+    let id: String
+    let shortId: String
+    let time: String
+    let hostname: String?
+    let paths: [String]
+    let tags: [String]
 }
 
 struct AdminStatusCounts: Decodable, Equatable {
