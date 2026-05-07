@@ -311,12 +311,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R026 — Tags must sync as first-class recoverable metadata with deterministic conflict behavior.
 - Class: functional
 - Status: active
-- Description: Tag vocabulary, aliases, archive/delete state, primary colors, post tag assignments, assignment source/confidence, `aiTagProcessedAt`, and `tagsUserEditedAt` must persist on iOS and Mac server and sync across devices. Topic assignments merge independently; conflicting primary assignments use last-write-wins. Archived non-default tags can be permanently deleted to free an accidental normalized name.
+- Description: Tag vocabulary, aliases, archive/delete state, primary colors, post tag assignments, assignment source/confidence, `aiTagProcessedAt`, and `tagsUserEditedAt` must persist on iOS and Mac server and sync across devices. Topic assignments merge independently; server-side topic merges may move an existing assignment ID from a source topic to a target topic and iOS must apply that move without violating `local_post_tags` uniqueness constraints. Conflicting primary assignments use last-write-wins. Archived non-default tags can be permanently deleted to free an accidental normalized name.
 - Why it matters: Tags are long-lived organization work. Losing or corrupting them on reinstall, sync recovery, or multi-device edits would undermine their purpose.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S01
 - Supporting slices: M006/S05,M006/S06
-- Validation: Sync/recovery checks prove tag vocabulary and assignments pull after reinstall-equivalent refresh, topic assignments from different devices can coexist, primary conflicts resolve by updatedAt, user-edited moments block future AI auto-application, and cursor advancement remains safe.
+- Validation: Sync/recovery checks prove tag vocabulary and assignments pull after reinstall-equivalent refresh, topic assignments from different devices can coexist, server-side topic merge assignment moves apply by assignment ID without `local_post_tags` unique constraint failures, primary conflicts resolve by updatedAt, user-edited moments block future AI auto-application, and cursor advancement remains safe.
 
 ### R027 — Smart Tags implementation must preserve privacy, docs/contracts, diagnostics, and real-device proof.
 - Class: operational

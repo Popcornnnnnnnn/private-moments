@@ -334,6 +334,16 @@ extension LocalDatabase {
     func upsertAssignedTag(_ assignedTag: TimelineAssignedTag) throws {
         try upsertTag(assignedTag.tag)
 
+        if try assignedTagExists(id: assignedTag.id) {
+            try deleteConflictingAssignedTag(
+                postId: assignedTag.postId,
+                tagId: assignedTag.tagId,
+                excludingId: assignedTag.id
+            )
+            try updateAssignedTagById(assignedTag)
+            return
+        }
+
         let statement = try prepare(
             """
             INSERT INTO local_post_tags
@@ -364,6 +374,67 @@ extension LocalDatabase {
         try bind(assignedTag.createdAt, to: 8, in: statement)
         try bind(assignedTag.updatedAt, to: 9, in: statement)
         try bind(assignedTag.deletedAt, to: 10, in: statement)
+        try stepDone(statement)
+    }
+
+    private func assignedTagExists(id: String) throws -> Bool {
+        try count(
+            "SELECT COUNT(*) FROM local_post_tags WHERE id = ?",
+            bind: { statement in
+                try self.bind(id, to: 1, in: statement)
+            }
+        ) > 0
+    }
+
+    private func deleteConflictingAssignedTag(postId: String, tagId: String, excludingId: String) throws {
+        let statement = try prepare(
+            """
+            DELETE FROM local_post_tags
+            WHERE postId = ?
+              AND tagId = ?
+              AND id <> ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(postId, to: 1, in: statement)
+        try bind(tagId, to: 2, in: statement)
+        try bind(excludingId, to: 3, in: statement)
+        try stepDone(statement)
+    }
+
+    private func updateAssignedTagById(_ assignedTag: TimelineAssignedTag) throws {
+        let statement = try prepare(
+            """
+            UPDATE local_post_tags
+            SET postId = ?,
+                tagId = ?,
+                role = ?,
+                source = ?,
+                confidence = ?,
+                aiSummaryId = ?,
+                createdAt = ?,
+                updatedAt = ?,
+                deletedAt = ?
+            WHERE id = ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(assignedTag.postId, to: 1, in: statement)
+        try bind(assignedTag.tagId, to: 2, in: statement)
+        try bind(assignedTag.role, to: 3, in: statement)
+        try bind(assignedTag.source, to: 4, in: statement)
+        try bind(assignedTag.confidence, to: 5, in: statement)
+        try bind(assignedTag.aiSummaryId, to: 6, in: statement)
+        try bind(assignedTag.createdAt, to: 7, in: statement)
+        try bind(assignedTag.updatedAt, to: 8, in: statement)
+        try bind(assignedTag.deletedAt, to: 9, in: statement)
+        try bind(assignedTag.id, to: 10, in: statement)
         try stepDone(statement)
     }
 

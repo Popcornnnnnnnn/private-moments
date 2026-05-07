@@ -25,6 +25,27 @@ final class LocalDatabase {
         return localDatabase
     }
 
+#if DEBUG
+    static func openForTesting(url: URL) throws -> LocalDatabase {
+        var database: OpaquePointer?
+        let flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
+
+        guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK, let database else {
+            let message = database.map { String(cString: sqlite3_errmsg($0)) } ?? "Unable to open test database"
+            if let database {
+                sqlite3_close(database)
+            }
+            throw LocalDatabaseError.sqlite(message)
+        }
+
+        let localDatabase = LocalDatabase(handle: database)
+        try localDatabase.configure()
+        try localDatabase.migrate()
+        return localDatabase
+    }
+
+#endif
+
     private init(handle: OpaquePointer) {
         self.handle = handle
     }

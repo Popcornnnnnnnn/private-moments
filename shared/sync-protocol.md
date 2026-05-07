@@ -174,6 +174,7 @@ iOS behavior:
 
 - Stores vocabulary in `local_tags` and `local_tag_aliases`.
 - Stores assignments in `local_post_tags`.
+- Applies `post_tag_updated` by assignment ID first, because a server-side `merge_tag` may move an existing assignment from the source topic to the target topic while preserving the assignment ID.
 - Timeline may show only the primary tag and only when `Show Tags in Timeline` is enabled.
 - Timeline does not show the `synced` success badge; only abnormal sync states remain visible.
 - Search can match tag names and aliases. Filters separate primary tags and topic tags.
