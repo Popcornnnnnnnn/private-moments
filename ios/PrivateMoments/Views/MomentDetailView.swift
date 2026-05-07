@@ -175,14 +175,10 @@ struct MomentDetailView: View {
                 } else {
                     FlowLayout(spacing: 8, rowSpacing: 8) {
                         ForEach(item.tags) { assignedTag in
-                            HStack(spacing: 5) {
-                                TimelineTagChip(tag: assignedTag.tag)
-                                Text(assignedTag.source == "ai" ? "AI" : "Manual")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
+                            DetailAssignedTagBadge(assignedTag: assignedTag)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -356,6 +352,40 @@ private struct EditTagsView: View {
     }
 }
 
+private struct DetailAssignedTagBadge: View {
+    @Environment(\.appLanguage) private var appLanguage
+
+    let assignedTag: TimelineAssignedTag
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(L10n.tagName(assignedTag.tag, language: appLanguage))
+                .font(.caption.weight(.semibold))
+                .lineLimit(nil)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.primary.opacity(0.78))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(chipColor.opacity(0.34), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(chipColor.opacity(0.48), lineWidth: 0.6)
+                )
+
+            Text(assignedTag.source == "ai" ? "AI" : "Manual")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.leading, 4)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var chipColor: Color {
+        Color(hex: assignedTag.tag.colorHex) ?? Color.secondary.opacity(0.22)
+    }
+}
+
 private struct FlowLayout: Layout {
     var spacing: CGFloat
     var rowSpacing: CGFloat
@@ -393,12 +423,17 @@ private struct FlowLayout: Layout {
     }
 
     private func rows(proposal: ProposedViewSize, subviews: Subviews) -> [FlowRow] {
-        let maxWidth = proposal.width ?? .greatestFiniteMagnitude
+        let proposedWidth = proposal.width
+        let maxWidth = proposedWidth ?? .greatestFiniteMagnitude
+        let itemProposal = proposedWidth.map { ProposedViewSize(width: $0, height: nil) } ?? .unspecified
         var rows: [FlowRow] = []
         var current = FlowRow()
 
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            var size = subviews[index].sizeThatFits(itemProposal)
+            if let proposedWidth {
+                size.width = min(size.width, proposedWidth)
+            }
             if !current.items.isEmpty && current.width + spacing + size.width > maxWidth {
                 rows.append(current)
                 current = FlowRow()

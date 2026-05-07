@@ -281,12 +281,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R023 — Manual tagging must work for all moment types while keeping Composer and Timeline low-noise.
 - Class: functional
 - Status: active
-- Description: Text, image, video, and audio moments must support manual tags. Composer offers an optional primary-tag picker only; the single-moment tag editor can edit primary and topic tags; Detail shows full tags only when `Show tags in Timeline` is enabled; Timeline and Day Review show at most a primary tag under the same switch. When the switch is off, Moment Detail must not show the Tags section or offer tag editing.
+- Description: Text, image, video, and audio moments must support manual tags. Composer offers an optional primary-tag picker only; the single-moment tag editor can edit primary and topic tags; Detail shows full, non-truncated tags only when `Show tags in Timeline` is enabled; Timeline and Day Review show at most a primary tag under the same switch. When the switch is off, Moment Detail must not show the Tags section or offer tag editing.
 - Why it matters: Tags should reduce future retrieval cost without making publishing feel like filing paperwork or cluttering the feed.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S02
 - Supporting slices: M006/S01,M006/S06
-- Validation: iOS UAT verifies publishing with and without a primary tag, editing primary/topic tags later when tag display is enabled, hiding Timeline/Day Review/Detail tag display without disabling tag data, and keeping abnormal sync status/favorite visibility stable in the metadata row.
+- Validation: iOS UAT verifies publishing with and without a primary tag, editing primary/topic tags later when tag display is enabled, Detail tag badges showing full names without ellipsis or source-label overlap, hiding Timeline/Day Review/Detail tag display without disabling tag data, and keeping abnormal sync status/favorite visibility stable in the metadata row.
 
 ### R024 — AI automatic tags must be audio-only, sparse for short audio, and reuse the ready summary pipeline.
 - Class: functional
