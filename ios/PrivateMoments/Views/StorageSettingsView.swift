@@ -227,7 +227,7 @@ struct StorageDetailsView: View {
             } label: {
                 Text(L10n.t(isSyncNowInFlight ? "Syncing" : "Sync Now", appLanguage))
             }
-            .disabled(!store.isAuthenticated || store.isSyncing || isSyncNowInFlight)
+            .disabled(!store.isAuthenticated || isSyncNowInFlight)
 
             Button {
                 Task {
@@ -236,7 +236,7 @@ struct StorageDetailsView: View {
             } label: {
                 Text(L10n.t("Pull Server Changes", appLanguage))
             }
-            .disabled(!store.isAuthenticated || store.isSyncing || isPullingServerChanges)
+            .disabled(!store.isAuthenticated || isPullingServerChanges)
 
             Button {
                 Task {

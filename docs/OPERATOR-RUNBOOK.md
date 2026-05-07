@@ -476,7 +476,7 @@ tail -n 80 ~/Library/Logs/cloudflared-blog.err.log
 dig +short region1.v2.argotunnel.com A
 ```
 
-健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 会让 tunnel 断开；但不要把 Cloudflare Tunnel 相关域名设成 `DIRECT`。当前公网 fallback 依赖这些 edge 连接走稳定代理组：把 Cloudflare Tunnel 相关域名和个人 fallback 域名加入 `fake-ip-filter`，并把 `cloudflare.com`、`argotunnel.com`、`cfargotunnel.com`、`cftunnel.com`、个人 fallback 域名路由到当前可用代理组。reload Clash 配置后重启 cloudflared LaunchAgent，再用连续 health check 验证：
+健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 本身不一定是错误，关键是 tunnel 能稳定注册到 Cloudflare edge。不要把 Cloudflare Tunnel 相关域名盲目设成 `DIRECT`；也不要在 `cloudflared` LaunchAgent 里强塞 `HTTP_PROXY` / `HTTPS_PROXY`，这曾导致 edge `TLS handshake EOF` 和 fallback `530`。当前本机建议是：`cloudflared` 配置固定 `protocol: http2`，LaunchAgent 只保留本地 `NO_PROXY`，让系统/TUN 路由处理 Cloudflare edge 连接。修改 plist 后重载 LaunchAgent，再用连续 health check 验证：
 
 ```bash
 for i in {1..30}; do
@@ -487,7 +487,7 @@ for i in {1..30}; do
 done
 ```
 
-Cloudflare `530` / `1033` 表示没有 active connector；`502` 且本机 health 正常时，通常表示 edge 连接刚掉线或 connector 卡在假活状态。先用 `cloudflared tunnel info <tunnel-id>` 确认控制面是否仍显示 active connector；如果没有，重启 LaunchAgent 并检查 Clash 规则是否仍把 Tunnel 域名误设为 `DIRECT`。
+Cloudflare `530` / `1033` 表示没有 active connector；`502` 且本机 health 正常时，通常表示 edge 连接刚掉线或 connector 卡在假活状态。先用 `cloudflared tunnel info <tunnel-id>` 确认控制面是否仍显示 active connector；如果没有，重启 LaunchAgent，并检查 plist 是否误带 `HTTP_PROXY` / `HTTPS_PROXY` 或 Clash 规则是否把 Tunnel 域名误设为不稳定路径。
 
 Admin build 和 server typecheck：
 
