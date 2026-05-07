@@ -720,7 +720,7 @@ extension LocalDatabase {
                      remoteCompressedPath, remoteOriginalPath, remoteThumbnailPath, originalPreserved,
                      uploadStatus, mimeType, durationSeconds, transcriptionText, transcriptionStatus,
                      transcriptionError, transcriptionUpdatedAt, sortOrder, checksum, createdAt, updatedAt)
-                VALUES (?, ?, ?, '', NULL, NULL, ?, ?, ?, ?, 'uploaded', ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+                VALUES (?, ?, ?, '', NULL, NULL, ?, ?, ?, ?, 'uploaded', ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
                 """
             )
             defer {
