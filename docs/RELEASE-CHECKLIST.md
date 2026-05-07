@@ -145,4 +145,4 @@ M009 Phase A 完成后，v0.1 内部候选版本还必须满足：
 
 ## 当前结论
 
-截至 2026-05-07，项目方向调整为优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 v0.1 收口重点是真实 iPhone UAT gate、M009 backup/restore/Sync Health/export/import 迁移闭环、M010 Weekly Review 质量确认，以及这些能力的最终验证。
+截至 2026-05-07，项目方向调整为优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 10 个 v0.1 UAT gate 已由用户确认先验收通过。后续 release candidate 前仍需重新运行 `npm run verify:release-gates`，并在发现回归或新增范围时重新打开具体 gate。

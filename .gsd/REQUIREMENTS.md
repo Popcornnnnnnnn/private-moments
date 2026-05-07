@@ -86,13 +86,13 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R049 — Release candidate readiness must keep true-device and human UAT gates explicit.
 - Class: operational
-- Status: active
+- Status: validated
 - Description: Any path that cannot be proven by build/test alone must stay visible in `docs/UAT-GATES.md` until real iPhone, Mac Archive, Share Extension, AI quality, or user-confirmed evidence closes it. `verify:uat-gates` reports open gates during normal work, while `verify:release-gates` fails with any open gate.
 - Why it matters: The project has many implemented-but-not-accepted paths. A single gate list prevents accidental release overclaims while still allowing checkpoint commits for verified code.
 - Source: quality gate maintenance 2026-05-07
 - Primary owning slice: maintenance
 - Supporting slices: R001,R003
-- Validation: `npm run verify:uat-gates` reports current open gates; `npm run verify:release-gates` exits non-zero while any open gate remains; closing a gate requires updating `docs/UAT-GATES.md`, `docs/HANDOFF.md`, and affected `.gsd` facts with current-session evidence.
+- Validation: Validated on 2026-05-07 after user confirmed all 10 current UAT gates as accepted. `docs/UAT-GATES.md`, `docs/HANDOFF.md`, and `.gsd` facts record the closure; `npm run verify:uat-gates` / `npm run verify:release-gates` must report 0 open gates before release-candidate handoff.
 
 ### R050 — New operational settings and diagnostics should prefer iOS Settings over Mac Admin.
 - Class: constraint
@@ -206,7 +206,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M005 AI media summaries discussion 2026-04-30; server-side media summary follow-up 2026-05-01
 - Primary owning slice: M005/S02
 - Supporting slices: M005/S01,M005/S03,M005/S04
-- Validation: On a real iPhone, create one audio and one video moment, confirm media upload triggers local Mac transcription plus server-side summary, ready summary records include provider/model/prompt metadata and transcript length/hash only, and the result syncs back to iOS without changing the original post, media, or comments.
+- Validation: On a real iPhone, create one audio and one video moment, confirm media upload triggers local Mac transcription plus server-side summary, ready summary records include provider/model/prompt metadata and transcript length/hash only, and the result syncs back to iOS without changing the original post, media, or comments. User accepted `UAT-M005-AI-SUMMARY` on 2026-05-07.
 
 ### R015 — AI summary UI keeps the main timeline quiet: only button/status appears inline, while full adaptive document summaries are shown in a bottom sheet.
 - Class: functional
@@ -216,7 +216,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M005 AI media summaries discussion 2026-04-30
 - Primary owning slice: M005/S03
 - Supporting slices: M005/S01,M005/S04
-- Validation: Timeline rows show no Summary placeholder or transcript fallback before any result exists. After a summary exists, the inline control may show `Summary ready`, `Regenerating`, or `Summary failed`; full summary text and transcript text must not appear directly in the timeline row. Tapping the control opens a bottom sheet rendered from `documentTitle`, `oneLiner`, and `documentBlocks` with default-collapsed details and labeled `AI suggested` callouts. Regenerate shows immediate in-sheet progress feedback, prevents repeated taps, keeps showing `Regenerating` after sheet dismissal, preserves the previous readable summary until replacement succeeds, and exposes failure reason plus retry without clearing the old summary.
+- Validation: Timeline rows show no Summary placeholder or transcript fallback before any result exists. After a summary exists, the inline control may show `Summary ready`, `Regenerating`, or `Summary failed`; full summary text and transcript text must not appear directly in the timeline row. Tapping the control opens a bottom sheet rendered from `documentTitle`, `oneLiner`, and `documentBlocks` with default-collapsed details and labeled `AI suggested` callouts. Regenerate shows immediate in-sheet progress feedback, prevents repeated taps, keeps showing `Regenerating` after sheet dismissal, preserves the previous readable summary until replacement succeeds, and exposes failure reason plus retry without clearing the old summary. User accepted `UAT-M005-AI-SUMMARY` on 2026-05-07.
 
 ### R016 — AI summary implementation must preserve privacy, sync safety, and failure isolation.
 - Class: operational
@@ -256,7 +256,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: Share Extension capture-entry discussion 2026-05-03
 - Primary owning slice: maintenance
 - Supporting slices: R003,R013,R014
-- Validation: XcodeGen project generation, iOS unit tests, and generic iOS build must prove the app and extension compile together; real iPhone UAT should verify Photos/Safari/Files/Voice Memos share flows, composer launch, publish, and import queue cleanup when the phone is available.
+- Validation: XcodeGen project generation, iOS unit tests, and generic iOS build must prove the app and extension compile together. User accepted `UAT-SHARE-EXTENSION` on 2026-05-07 for Photos/Safari/Files/Voice Memos/video share flows, composer launch, publish, import queue cleanup, and provisioning/App Group behavior.
 
 ### R021 — Media upload must be atomic, retryable, and diagnosable under iPhone/Tailscale disconnects.
 - Class: operational
@@ -296,7 +296,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S05
 - Supporting slices: M005/S02,M005/S03,M006/S01,M006/S06
-- Validation: Real iPhone UAT publishes clear-speech short and multi-topic audio moments and confirms summary ready applies sparse topic tags; focused server tests prove existing-topic reuse for near-duplicate AI suggestions; video/image/text moments do not receive AI tags; summary regeneration leaves existing tags unchanged; summary failure leaves AI tags absent without extra timeline state.
+- Validation: Real iPhone UAT publishes clear-speech short and multi-topic audio moments and confirms summary ready applies sparse topic tags; focused server tests prove existing-topic reuse for near-duplicate AI suggestions; video/image/text moments do not receive AI tags; summary regeneration leaves existing tags unchanged; summary failure leaves AI tags absent without extra timeline state. User accepted `UAT-M006-SMART-TAGS` on 2026-05-07.
 
 ### R025 — Tags must participate in iPhone local search/filter and be manageable in iPhone Settings.
 - Class: functional
@@ -326,7 +326,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S06
 - Supporting slices: M006/S01,M006/S02,M006/S03,M006/S04,M006/S05
-- Validation: Completion evidence includes server/iOS/admin builds as applicable, migration/sync/search/filter tests, no-private-body log inspection, serialized local transcription queue review, Settings diagnostics shape checks, OpenAPI/sync-protocol updates, and real iPhone UAT for new audio AI tags plus manual tag search/filter/edit flows.
+- Validation: Completion evidence includes server/iOS/admin builds as applicable, migration/sync/search/filter tests, no-private-body log inspection, serialized local transcription queue review, Settings diagnostics shape checks, OpenAPI/sync-protocol updates, and real iPhone UAT for new audio AI tags plus manual tag search/filter/edit flows. User accepted `UAT-M006-SMART-TAGS` on 2026-05-07.
 
 ### R033 — v0.1 archive work is scoped to the current self-use iPhone + Mac server loop, not public distribution or iOS standalone.
 - Class: constraint
@@ -346,7 +346,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: v0.1 archive grill-me discussion 2026-05-05
 - Primary owning slice: M009/S02
 - Supporting slices: M009/S01,M009/S03,M009/S06
-- Validation: Admin can initialize a repo, run backup now, configure daily fixed-time backup, list/check snapshots, restore a snapshot into a new directory, verify it, and promote it only after strong confirmation and pre-promote backup.
+- Validation: Admin can initialize a repo, run backup now, configure daily fixed-time backup, list/check snapshots, restore a snapshot into a new directory, verify it, and promote it only after strong confirmation and pre-promote backup. User accepted `UAT-M009-ARCHIVE` on 2026-05-07.
 
 ### R035 — Restore/promote must protect current data through maintenance mode, pre-promote snapshot, verification, and restart-safe switching.
 - Class: operational
@@ -356,7 +356,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: v0.1 archive grill-me discussion 2026-05-05
 - Primary owning slice: M009/S02
 - Supporting slices: M009/S01,M009/S03,M009/S06
-- Validation: Restore and promote smoke tests use a staged directory, verify before switch, block ordinary writes during promote preparation, create a pre-promote backup, and write `pending-promote.json` with rollback-aware restart instructions.
+- Validation: Restore and promote smoke tests use a staged directory, verify before switch, block ordinary writes during promote preparation, create a pre-promote backup, and write `pending-promote.json` with rollback-aware restart instructions. User accepted `UAT-M009-ARCHIVE` on 2026-05-07.
 
 ### R036 — Sync Health must explain stale or failing sync in Mac Admin and iOS Settings without adding noise to Timeline.
 - Class: functional
@@ -366,7 +366,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: v0.1 archive grill-me discussion 2026-05-05
 - Primary owning slice: M009/S04
 - Supporting slices: M009/S01,M009/S06
-- Validation: Admin and iOS Settings show the same high-level health model; stale cursor, pending outbox, failed upload, missing media, server unreachable, auth failure, and AI non-ready states are distinguishable without showing private content bodies.
+- Validation: Admin and iOS Settings show the same high-level health model; stale cursor, pending outbox, failed upload, missing media, server unreachable, auth failure, and AI non-ready states are distinguishable without showing private content bodies. User accepted `UAT-M009-SYNC-HEALTH` on 2026-05-07.
 
 ### R037 — Sync Health may offer only safe, idempotent repair actions in v0.1.
 - Class: constraint
@@ -376,7 +376,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: v0.1 archive grill-me discussion 2026-05-05
 - Primary owning slice: M009/S04
 - Supporting slices: M009/S06
-- Validation: UI review confirms all repair actions are idempotent/low-risk; destructive actions are absent from default Sync Health.
+- Validation: UI review confirms all repair actions are idempotent/low-risk; destructive actions are absent from default Sync Health. User accepted `UAT-M009-SYNC-HEALTH` on 2026-05-07.
 
 ### R038 — Export/import is migration-first: JSON manifest is authoritative, Markdown is preview, and import targets only a clean archive.
 - Class: functional
@@ -406,7 +406,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: AI title auto-insert follow-up 2026-05-03
 - Primary owning slice: maintenance
 - Supporting slices: R014,R015,R016,R018,R024
-- Validation: iOS build/tests verify `# ` and `## ` display-only rendering in Timeline/Detail, plain Composer/Edit storage, heading-marker-stripped search, `AI Title Auto-Insert` toggle default on, and `insert_ai_title` sync preserving `localEditedAt`; server build verifies v3 title generation/fallback and that the sync operation accepts only server-owned ready audio summary titles and emits `post_updated` with `updateSource: ai_title`.
+- Validation: iOS build/tests verify `# ` and `## ` display-only rendering in Timeline/Detail, plain Composer/Edit storage, heading-marker-stripped search, `AI Title Auto-Insert` toggle default on, and `insert_ai_title` sync preserving `localEditedAt`; server build verifies title generation/fallback and that the sync operation accepts only server-owned ready audio summary titles and emits `post_updated` with `updateSource: ai_title`. User accepted `UAT-M005-AI-TITLE` on 2026-05-07.
 
 ### R029 — iOS App Language must be a local immediate preference for English and Simplified Chinese UI.
 - Class: functional
@@ -416,7 +416,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M007 iOS localization discussion 2026-05-03
 - Primary owning slice: M007
 - Supporting slices: R003,R018,R023,R025,R028
-- Validation: iOS build verifies the localization layer compiles; dictionary coverage check proves every `L10n.t(...)` key has a Simplified Chinese value; real-device UAT should switch Settings > App Language and inspect the main timeline, composer, filters, tags, summary sheet, detail/edit, and alerts.
+- Validation: iOS build verifies the localization layer compiles; dictionary coverage check proves every `L10n.t(...)` key has a Simplified Chinese value. User accepted `UAT-M007-LANGUAGE` on 2026-05-07 after App Language inspection across the main iOS surfaces.
 
 ### R030 — Default primary tags must display localized names while preserving one synced identity and bilingual search.
 - Class: functional
@@ -446,7 +446,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M008 Calendar Review discussion 2026-05-03
 - Primary owning slice: M008
 - Supporting slices: R003,R018,R029
-- Validation: CalendarReviewModelsTests cover continuous 42-cell months, empty months, locale first weekday, today/future states, density buckets, max-two media hints, and media/favorite filters. iOS UAT should verify arrows, horizontal swipe, Today, day tap to Day Review, Day Review item detail push/back, top-right Timeline day filter handoff, per-day scroll memory, light/dark, and English/Chinese labels.
+- Validation: CalendarReviewModelsTests cover continuous 42-cell months, empty months, locale first weekday, today/future states, density buckets, max-two media hints, and media/favorite filters. User accepted `UAT-M008-CALENDAR` on 2026-05-07 after real iPhone Calendar/Day Review/Timeline handoff checks.
 
 ### R051 — Mac Admin must shrink toward a minimal Mac-local recovery console.
 - Class: constraint
@@ -523,42 +523,42 @@ This file is the explicit capability and coverage contract for the project.
 | R011 | functional | active | M003/S03 | M003/S01,M003/S04 | Search applies current filters first, returns a moment when either moment text or comment text matches, prioritizes up to two matching comments in preview, lightly emphasizes matching comment rows, and keeps comment counts as the full undeleted count. |
 | R012 | operational | active | M003/S04 | M003/S01,M003/S02,M003/S03 | Completion evidence includes server migration/build, iOS schema/build, sync smoke checks, SQLite aggregate inspection or equivalent recovery proof, Advanced Sync/outbox operation counts without comment bodies, and real iPhone UAT when feasible. |
 | R013 | functional | active | M004 | none | iOS build no longer links Speech framework or contains local transcription services; creating audio/video moments uploads media without `transcriptionText`; timeline shows no transcript fallback/status when no ready AI summary exists. |
-| R014 | functional | active | M005/S02 | M005/S01,M005/S03,M005/S04 | Real iPhone UAT confirms uploaded audio/video triggers Mac-local transcription plus external summary generation and syncs ready summary records back to iOS; only the narrow R028 audio title insert may mutate `post.text`. |
-| R015 | functional | active | M005/S03 | M005/S01,M005/S04 | Timeline rows expose only `Summary ready`; bottom sheet renders ready v4 document summaries with copy/regenerate/delete controls and no transcript fallback. |
+| R014 | functional | active | M005/S02 | M005/S01,M005/S03,M005/S04 | Real iPhone UAT confirms uploaded audio/video triggers Mac-local transcription plus external summary generation and syncs ready summary records back to iOS; user accepted `UAT-M005-AI-SUMMARY` on 2026-05-07. |
+| R015 | functional | active | M005/S03 | M005/S01,M005/S04 | Timeline rows expose only `Summary ready`; bottom sheet renders ready v4 document summaries with copy/regenerate/delete controls and no transcript fallback; user accepted `UAT-M005-AI-SUMMARY` on 2026-05-07. |
 | R016 | operational | active | M005/S04 | M005/S01,M005/S02,M005/S03 | Verification proves server-only API keys, no private body logging, failure isolation, summary delete/regenerate behavior, and sync recovery for generated AI metadata. |
 | R017 | functional | validated | M005/S04 | M005/S02,M005/S03 | 2026-05-01 paired iPhone container advanced to `lastSyncCursor=196` with `local_ai_summaries ready=10 failed=0` after server-only summary changes; 2026-05-06 follow-ups keep diagnostics refresh read-only, use explicit `Sync Now` / `Pull Server Changes` for manual pull, and prevent background idle sync from appearing as an endless Settings spinner. |
 | R018 | functional | active | maintenance | M003/S03,M005/S03 | iPhone Timeline search covers text, comments, AI summary metadata, and historical transcript metadata with lightweight fuzzy matching plus composable local filters and active chips. |
 | R019 | operational | active | maintenance | none | `npm run setup:local` plus release/open-source/security docs provide the current setup and publication gate; public release still requires license, Git history secret scan, and release-grade backup/restore/export/import validation. |
-| R020 | functional | active | maintenance | R003,R013,R014 | `Save to Moments` stages supported Share Sheet content into an App Group inbox and opens the main app composer for final editing and publish; real-device UAT remains required when the paired phone is available. |
+| R020 | functional | active | maintenance | R003,R013,R014 | `Save to Moments` stages supported Share Sheet content into an App Group inbox and opens the main app composer for final editing and publish; user accepted `UAT-SHARE-EXTENSION` on 2026-05-07. |
 | R021 | operational | active | maintenance | R003,R014,R020 | Media upload uses temp-file atomic finalization and staged logs; verification checks server build, health, no stale write fds, no leftover temp files, and real-device retry behavior when feasible. |
 | R022 | functional | active | M006/S01 | M006/S02,M006/S04,M006/S06 | Default primary tags, topic canonicalization, aliases, uniqueness, archive behavior, and custom-primary constraints are verified by schema/seed checks and Settings/Edit UAT. |
 | R023 | functional | active | M006/S02 | M006/S01,M006/S06 | Composer optional primary tag, single-moment tag editing, Detail read-only tags, optional Timeline/Day Review/Detail tag visibility, and metadata-row priority are verified on iOS. |
-| R024 | functional | active | M006/S05 | M005/S02,M005/S03,M006/S01,M006/S06 | New short audio prefers one first-ready summary AI topic tag unless high-confidence separate themes justify more; non-audio moment types do not receive AI tags, summary regenerate does not change tags, and summary failure leaves no AI tags. |
+| R024 | functional | active | M006/S05 | M005/S02,M005/S03,M006/S01,M006/S06 | New short audio prefers one first-ready summary AI topic tag unless high-confidence separate themes justify more; non-audio moment types do not receive AI tags, summary regenerate does not change tags, and summary failure leaves no AI tags; user accepted `UAT-M006-SMART-TAGS` on 2026-05-07. |
 | R025 | functional | active | M006/S03 | M006/S04,M006/S06 | iPhone local search/filter matches tag names and aliases, distinguishes tag match source, separates primary/topic filters, uses AND semantics, and Settings can clean up vocabulary including batch Topic/Archived operations plus batch primary color edits. |
 | R026 | functional | active | M006/S01 | M006/S05,M006/S06 | Tag vocabulary and assignments sync/recover, archived custom tags can be permanently deleted, topic assignments merge, primary conflicts use last-write-wins, and user-edited moments block later AI auto-application. |
-| R027 | operational | active | M006/S06 | M006/S01,M006/S02,M006/S03,M006/S04,M006/S05 | Smart Tags closure includes builds/tests, real iPhone UAT, no private-body logs, Settings diagnostics, OpenAPI/sync protocol updates, and docs/fact-source updates. |
-| R028 | functional | active | maintenance | R014,R015,R016,R018,R024 | New audio AI summary title can sync into `post.text` as `## <title>` once, render as a restrained heading in Timeline/Detail, remain plain in Composer/Edit, avoid `Edited`, and be disabled for future inserts in Feature Modules. |
-| R029 | functional | active | M007 | R003,R018,R023,R025,R028 | iOS App Language is a local immediate preference for System/English/简体中文 and covers the main iOS visible surfaces with Chinese dictionary coverage. |
+| R027 | operational | active | M006/S06 | M006/S01,M006/S02,M006/S03,M006/S04,M006/S05 | Smart Tags closure includes builds/tests, real iPhone UAT, no private-body logs, Settings diagnostics, OpenAPI/sync protocol updates, docs/fact-source updates, and 2026-05-07 user UAT acceptance. |
+| R028 | functional | active | maintenance | R014,R015,R016,R018,R024 | New audio AI summary title can sync into `post.text` as `## <title>` once, render as a restrained heading in Timeline/Detail, remain plain in Composer/Edit, avoid `Edited`, be disabled for future inserts in Feature Modules, and was user-accepted on 2026-05-07. |
+| R029 | functional | active | M007 | R003,R018,R023,R025,R028 | iOS App Language is a local immediate preference for System/English/简体中文 and covers the main iOS visible surfaces with Chinese dictionary coverage; user accepted `UAT-M007-LANGUAGE` on 2026-05-07. |
 | R030 | functional | active | M007 | R022,R023,R025,R026 | Default primary tags display localized names without changing synced identity, and local search/filter matches both Chinese and English default names. |
 | R031 | functional | active | M007 | R014,R015,R016,R024,R028 | AI Language is local and independent from App Language; iOS passes `auto`/`zh`/`en` to upload-triggered and regenerated summary generation. |
-| R032 | functional | active | M008 | R003,R018,R029 | Calendar Review provides a local bottom-tab month grid, Day Review first navigation, Timeline handoff, and per-day scroll memory; CalendarReviewModelsTests and iOS build/test evidence passed, while real-device UAT remains pending. |
+| R032 | functional | active | M008 | R003,R018,R029 | Calendar Review provides a local bottom-tab month grid, Day Review first navigation, Timeline handoff, and per-day scroll memory; CalendarReviewModelsTests and iOS build/test evidence passed, and user accepted `UAT-M008-CALENDAR` on 2026-05-07. |
 | R033 | constraint | active | M009 | M009/S01,M009/S02,M009/S03,M009/S04,M009/S05,M009/S06 | M009 stays scoped to the current iPhone + Mac owner-use loop and excludes public distribution/App Store/iOS standalone work. |
-| R034 | functional | active | M009/S02 | M009/S01,M009/S03,M009/S06 | Admin can configure a restic repository, create a project-managed key file, run/list/check backups, schedule daily backups, and restore staged snapshots without user-managed passwords. |
-| R035 | operational | active | M009/S02 | M009/S01,M009/S03,M009/S06 | Restore writes to a new directory and promote preparation verifies the restore, enters maintenance mode, creates a pre-promote backup, and writes restart instructions instead of hot-swapping an open SQLite database. |
-| R036 | functional | active | M009/S04 | M009/S01,M009/S06 | Mac Admin and iOS Settings show Sync Health categories for reachability/auth/cursor/outbox/upload/missing-media/AI/last-success without putting diagnostics in Timeline. |
-| R037 | constraint | active | M009/S04 | M009/S06 | Sync Health exposes safe repair actions only: sync, pull server changes, retry/re-download media; destructive reset/rebuild actions stay out of default v0.1 UI. Explicit sync/pull buttons remain tappable for authenticated users during background sync so they can queue follow-up recovery work instead of becoming unavailable. |
-| R038 | functional | active | M009/S05 | M009/S01,M009/S03,M009/S06 | Phase B export/import creates migration-first packages where JSON manifest is authoritative, Markdown is preview, import targets only a new staged archive, and runtime auth/device state is excluded. |
+| R034 | functional | active | M009/S02 | M009/S01,M009/S03,M009/S06 | Admin can configure a restic repository, create a project-managed key file, run/list/check backups, schedule daily backups, and restore staged snapshots without user-managed passwords; user accepted `UAT-M009-ARCHIVE` on 2026-05-07. |
+| R035 | operational | active | M009/S02 | M009/S01,M009/S03,M009/S06 | Restore writes to a new directory and promote preparation verifies the restore, enters maintenance mode, creates a pre-promote backup, and writes restart instructions instead of hot-swapping an open SQLite database; user accepted `UAT-M009-ARCHIVE` on 2026-05-07. |
+| R036 | functional | active | M009/S04 | M009/S01,M009/S06 | Mac Admin and iOS Settings show Sync Health categories for reachability/auth/cursor/outbox/upload/missing-media/AI/last-success without putting diagnostics in Timeline; user accepted `UAT-M009-SYNC-HEALTH` on 2026-05-07. |
+| R037 | constraint | active | M009/S04 | M009/S06 | Sync Health exposes safe repair actions only: sync, pull server changes, retry/re-download media; destructive reset/rebuild actions stay out of default v0.1 UI. Explicit sync/pull buttons remain tappable for authenticated users during background sync; user accepted `UAT-M009-SYNC-HEALTH` on 2026-05-07. |
+| R038 | functional | active | M009/S05 | M009/S01,M009/S03,M009/S06 | Phase B export/import creates migration-first packages where JSON manifest is authoritative, Markdown is preview, import targets only a new staged archive, runtime auth/device state is excluded, and user accepted `UAT-M009-ARCHIVE` on 2026-05-07. |
 | R039 | operational | active | M009/S01 | M009/S02,M009/S03,M009/S04,M009/S05,M009/S06 | Durable serial `maintenance_jobs` store safe job state, recover stale running jobs after restart, and support maintenance mode for recovery operations without private content body leakage. |
 | R040 | functional | active | M010/S01 | R003 | Review artifacts use generic kind/range fields so Weekly Review is the first period kind without hard-coding week-only storage. |
 | R041 | functional | active | M010/S04 | R003 | Manual and scheduled Weekly Review generation default to rolling seven-day ranges, with scheduled generation default off and quiet. |
 | R042 | functional | active | M010/S02 | R014,R015,R024 | Review input uses post text, comments, ready media summary metadata, tags, favorite, media kind, and rhythm stats; image vision/OCR is out of v1. |
 | R043 | constraint | active | M010/S03 | R015,R045 | Review prompt/schema use whole-period reading and reserve moment IDs only for low-weight `Worth Revisiting` anchors. |
 | R044 | functional | active | M010/S06 | R001,R003 | Review settings and feedback are explicit, visible, default-off where invasive, and never mutate original moments. |
-| R045 | functional | active | M010/S05 | R032 | Weekly Review belongs in Calendar Reviews, and moment anchors open inside the Review context rather than jumping Timeline. |
+| R045 | functional | active | M010/S05 | R032 | Weekly Review belongs in Calendar Reviews, moment anchors open inside the Review context rather than jumping Timeline, and user accepted `UAT-M010-WEEKLY-REVIEW` on 2026-05-07. |
 | R046 | constraint | active | M010/S04,M010/S06 | R044 | Publish-as-moment is explicit and never automatic by default. |
 | R047 | operational | active | M010/S08 | R016,R024,R040,R041 | `ai_usage_events` and admin/iOS diagnostics measure AI token usage without storing transcript, prompt, review input, provider response, or generated bodies. |
 | R048 | operational | active | none | R001,R002,R003 | Feature work uses dedicated worktrees and protects live Mac/iPhone data before real-device installs or high-risk runtime checks. |
-| R049 | operational | active | maintenance | R001,R003 | `docs/UAT-GATES.md` plus `verify:uat-gates` / `verify:release-gates` keep true-device and human UAT gaps visible until evidence closes them. |
+| R049 | operational | validated | maintenance | R001,R003 | 2026-05-07 user accepted all 10 current UAT gates; `docs/UAT-GATES.md` records them as closed and `verify:uat-gates` / `verify:release-gates` must report 0 open gates. |
 | R050 | constraint | active | maintenance | R036,R037,R047 | New operational settings, diagnostics, monitoring, and safe repair controls prefer iOS Settings; Mac Admin remains for Mac-local recovery and low-frequency operations. |
 | R051 | constraint | active | maintenance | R036,R037,R047,R050 | Mac Admin opens Archive first and should retain only Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency while daily operations migrate to iOS. |
 
