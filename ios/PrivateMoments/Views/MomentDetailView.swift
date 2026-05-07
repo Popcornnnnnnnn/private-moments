@@ -175,7 +175,7 @@ struct MomentDetailView: View {
                 } else {
                     FlowLayout(spacing: 8, rowSpacing: 8) {
                         ForEach(item.tags) { assignedTag in
-                            DetailAssignedTagBadge(assignedTag: assignedTag)
+                            DetailTagBadge(tag: assignedTag.tag)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -352,37 +352,29 @@ private struct EditTagsView: View {
     }
 }
 
-private struct DetailAssignedTagBadge: View {
+private struct DetailTagBadge: View {
     @Environment(\.appLanguage) private var appLanguage
 
-    let assignedTag: TimelineAssignedTag
+    let tag: TimelineTag
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(L10n.tagName(assignedTag.tag, language: appLanguage))
-                .font(.caption.weight(.semibold))
-                .lineLimit(nil)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(.primary.opacity(0.78))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(chipColor.opacity(0.34), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .stroke(chipColor.opacity(0.48), lineWidth: 0.6)
-                )
-
-            Text(assignedTag.source == "ai" ? "AI" : "Manual")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.leading, 4)
-        }
-        .accessibilityElement(children: .combine)
+        Text(L10n.tagName(tag, language: appLanguage))
+            .font(.caption.weight(.semibold))
+            .lineLimit(nil)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(.primary.opacity(0.78))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(chipColor.opacity(0.34), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(chipColor.opacity(0.48), lineWidth: 0.6)
+            )
     }
 
     private var chipColor: Color {
-        Color(hex: assignedTag.tag.colorHex) ?? Color.secondary.opacity(0.22)
+        Color(hex: tag.colorHex) ?? Color.secondary.opacity(0.22)
     }
 }
 

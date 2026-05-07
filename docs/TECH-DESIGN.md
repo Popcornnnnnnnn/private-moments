@@ -174,7 +174,7 @@ UI 边界：
 
 - Composer 只提供一个可选主标签 picker；用户不选时正常发布。
 - Timeline 和 Day Review 只在 `Show Tags in Timeline` 打开时显示主标签 chip，不显示主题标签；Moment Detail 的 Tags section 和单条标签编辑入口也跟随同一个开关。成功态 `synced` badge 从 timeline 移除，只保留异常同步状态。
-- Detail 在 `Show Tags in Timeline` 打开时只读显示完整标签，并提供单条标签编辑入口；tag badge 不做省略号截断，长标签在可用宽度内换行，`Manual` / `AI` 来源信息不与标签名抢占同一行。关闭后 Detail 不露出标签展示或编辑操作。
+- Detail 在 `Show Tags in Timeline` 打开时只读显示完整标签，并提供单条标签编辑入口；tag badge 不做省略号截断，长标签在可用宽度内换行，normal read mode 不显示 `Manual` / `AI` 来源信息。关闭后 Detail 不露出标签展示或编辑操作。
 - Settings > Tags 管理词表：usage count、自定义主标签、主题标签新增/重命名/归档/恢复、Topic 批量归档/合并、Archived 批量恢复/永久删除、alias、topic merge，以及主标签颜色；颜色选择以预设调色盘为主，保留 6 个低饱和默认色，也提供一组更清晰的高饱和标准色，并预留 HEX 自定义输入。Edit 模式支持批量选择多个 primary tag 并统一修改颜色，但不批量修改名称。
 - Settings > Appearance 提供 `System`、`Light`、`Dark` 本机外观偏好，通过 SwiftUI `preferredColorScheme` 即时覆盖 Moments App 外观；该偏好不进入 sync，也不尝试修改 iOS 设备级系统外观。
 - Settings > Language 提供 App Language 和 AI Language。App Language 是本机 UI 偏好；AI Language 只影响之后生成或重新生成的 summary/title。

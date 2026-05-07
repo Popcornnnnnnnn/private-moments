@@ -286,7 +286,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: M006 Smart Tags discussion 2026-05-03
 - Primary owning slice: M006/S02
 - Supporting slices: M006/S01,M006/S06
-- Validation: iOS UAT verifies publishing with and without a primary tag, editing primary/topic tags later when tag display is enabled, Detail tag badges showing full names without ellipsis or source-label overlap, hiding Timeline/Day Review/Detail tag display without disabling tag data, and keeping abnormal sync status/favorite visibility stable in the metadata row.
+- Validation: iOS UAT verifies publishing with and without a primary tag, editing primary/topic tags later when tag display is enabled, Detail tag badges showing full names without ellipsis and without normal-read `AI`/`Manual` source labels, hiding Timeline/Day Review/Detail tag display without disabling tag data, and keeping abnormal sync status/favorite visibility stable in the metadata row.
 
 ### R024 — AI automatic tags must be audio-only, sparse for short audio, and reuse the ready summary pipeline.
 - Class: functional
