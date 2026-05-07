@@ -27,6 +27,7 @@ Private Moments is a private, local-first personal timeline:
 - `docs/INTEGRATION-GUIDE.md`: API usage and route reference.
 - `docs/OPERATOR-RUNBOOK.md`: setup, operations, iPhone install, troubleshooting.
 - `docs/HANDOFF.md`: current working state and follow-up notes.
+- `docs/ADMIN-MIGRATION.md`: Mac Admin minimal surface and migration plan.
 - `docs/WORKFLOW.md`: project workflow, documentation ownership, verification levels, and closure rules.
 
 ## Persistent Workflow
@@ -54,6 +55,7 @@ Keep docs single-purpose:
 - `docs/INTEGRATION-GUIDE.md`: API route usage and integration reference.
 - `docs/HANDOFF.md`: current working state, recent important fixes, known risks, and next sensible work.
 - `docs/DESIGN-PRINCIPLES.md`: UI and product design principles.
+- `docs/ADMIN-MIGRATION.md`: Mac Admin minimal surface, migration boundary, and shrink order.
 - `docs/WORKFLOW.md`: how work is planned, verified, closed, and documented.
 - `docs/RELEASE-CHECKLIST.md`: v0.1 candidate and public-release gates.
 - `docs/OPEN-SOURCE-READINESS.md`: current open-source blockers, privacy review, and release risk assessment.

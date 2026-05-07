@@ -267,7 +267,7 @@ function Dashboard({
   token: string;
   onLogout: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<AdminTab>("posts");
+  const [activeTab, setActiveTab] = useState<AdminTab>("archive");
   const [status, setStatus] = useState<AdminStatus | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -391,6 +391,13 @@ function Dashboard({
 
       <nav className="tabbar" aria-label="Admin sections">
         <button
+          className={activeTab === "archive" ? "tab-button active" : "tab-button"}
+          onClick={() => setActiveTab("archive")}
+          type="button"
+        >
+          Archive
+        </button>
+        <button
           className={activeTab === "overview" ? "tab-button active" : "tab-button"}
           onClick={() => setActiveTab("overview")}
           type="button"
@@ -403,13 +410,6 @@ function Dashboard({
           type="button"
         >
           Posts
-        </button>
-        <button
-          className={activeTab === "archive" ? "tab-button active" : "tab-button"}
-          onClick={() => setActiveTab("archive")}
-          type="button"
-        >
-          Archive
         </button>
       </nav>
 

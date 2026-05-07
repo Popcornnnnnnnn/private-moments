@@ -49,7 +49,7 @@ Implemented capabilities include:
 - AI Periodic Reviews foundation with Weekly Review as the first review kind: manual rolling-seven-day generation, default-off Sunday-evening auto-generation, Calendar Reviews UI, feedback, and optional publish-as-moment.
 - Privacy-safe AI token usage metering for media summaries, weekly reviews, and tag fallback calls, with Settings diagnostics for Today, current week, current month, all-time totals, failures, cached input tokens, estimated requests, and feature breakdowns.
 - UAT gate tracking through `docs/UAT-GATES.md`, with normal gate reporting via `npm run verify:uat-gates` and strict release blocking via `npm run verify:release-gates`.
-- Mac Admin Overview and Posts management.
+- Mac Admin now opens Archive first and is being narrowed toward a Mac-local operations surface: Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency. Posts management remains only as a troubleshooting/cleanup surface while migration continues.
 - Device binding via stable device keys to avoid duplicate physical-device registrations.
 
 ## Current Planning Direction
@@ -108,6 +108,7 @@ Current documentation responsibilities:
 - `docs/INTEGRATION-GUIDE.md`: API route usage and integration reference.
 - `docs/HANDOFF.md`: current working state, recent important fixes, and next sensible work.
 - `docs/DESIGN-PRINCIPLES.md`: UI and product design principles.
+- `docs/ADMIN-MIGRATION.md`: Mac Admin minimal surface, migration boundary, and shrink order.
 - `docs/WORKFLOW.md`: how work is planned, verified, closed, and documented.
 - `docs/UAT-GATES.md`: real-device, human acceptance, and release-blocking verification gates.
 - `docs/MARKET-RESEARCH.md`: market positioning, competitor landscape, distribution strategy, and productization recommendations.

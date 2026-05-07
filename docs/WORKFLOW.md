@@ -131,6 +131,7 @@ npm run verify:release-gates
 - `Integration Guide`：API 用法、route 示例、sync payload、media route 和 admin route contract。
 - `Handoff`：当前状态、重要修复、已知大文件和下一步。它是“下次接手先看这里”的入口。
 - `Design Principles`：未来功能需要遵守的 UI / 产品设计原则。
+- `Admin Migration`：Mac Admin 最小保留面、迁移边界和后续收缩顺序。
 - `Workflow`：本工作流文档。
 
 避免把同一段操作细节复制到多个文档里。稳定信息只放在它所属的文档，其他地方链接过去。

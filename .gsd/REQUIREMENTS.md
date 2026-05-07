@@ -438,6 +438,16 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R003,R018,R029
 - Validation: CalendarReviewModelsTests cover continuous 42-cell months, empty months, locale first weekday, today/future states, density buckets, max-two media hints, and media/favorite filters. iOS UAT should verify arrows, horizontal swipe, Today, day tap to Day Review, Day Review item detail push/back, top-right Timeline day filter handoff, per-day scroll memory, light/dark, and English/Chinese labels.
 
+### R051 — Mac Admin must shrink toward a minimal Mac-local recovery console.
+- Class: constraint
+- Status: active
+- Description: Mac Admin should keep only the long-term information and actions that require Mac-local context: Archive/recovery state, promote/export/import artifacts, server runtime truth, maintenance jobs, privacy-safe server logs, and device emergency actions. Daily settings, monitoring, diagnostics, AI/token usage, tags, review settings, and content browsing should prefer iOS Settings, Calendar, Timeline, Search, or dedicated iOS diagnostics. Admin should open Archive first while Posts is reduced to troubleshooting and test-data cleanup.
+- Why it matters: The phone is the real daily surface, while the computer Admin is rarely used. Keeping Admin narrow reduces product split-brain and avoids growing a parallel private content backend.
+- Source: Admin migration start 2026-05-07
+- Primary owning slice: maintenance
+- Supporting slices: R036,R037,R047,R050
+- Validation: Current checkpoint verifies Admin default tab/order through code review and `npm run admin:build`. Future Overview/Posts shrink work should include Admin build plus Admin smoke or browser verification.
+
 ## Validated
 
 ### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
@@ -540,10 +550,11 @@ This file is the explicit capability and coverage contract for the project.
 | R048 | operational | active | none | R001,R002,R003 | Feature work uses dedicated worktrees and protects live Mac/iPhone data before real-device installs or high-risk runtime checks. |
 | R049 | operational | active | maintenance | R001,R003 | `docs/UAT-GATES.md` plus `verify:uat-gates` / `verify:release-gates` keep true-device and human UAT gaps visible until evidence closes them. |
 | R050 | constraint | active | maintenance | R036,R037,R047 | New operational settings, diagnostics, monitoring, and safe repair controls prefer iOS Settings; Mac Admin remains for Mac-local recovery and low-frequency operations. |
+| R051 | constraint | active | maintenance | R036,R037,R047,R050 | Mac Admin opens Archive first and should retain only Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency while daily operations migrate to iOS. |
 
 ## Coverage Summary
 
-- Active requirements: 45
-- Mapped to slices: 41 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R049, R050)
+- Active requirements: 46
+- Mapped to slices: 42 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R049, R050, R051)
 - Validated: 5 (R004, R005, R006, R007, R017)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)
