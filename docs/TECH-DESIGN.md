@@ -223,6 +223,8 @@ Review feedback 写入 `review_feedback`，并用粗粒度 counters 更新 `revi
 
 Mac Admin 的 Posts 功能定位为运维管理台，不替代 iPhone 的内容编辑入口。第一版采用 `Overview / Posts` 顶部 tab：Overview 保持服务、设备、日志和存储概览；Posts 负责内容查看、排查和清理测试数据。
 
+后续设置、监控、诊断和安全修复动作默认优先迁移到 iOS Settings / Diagnostics。Mac Admin 保留为低频 Mac 本地运维面：Archive backup/restore、staged promote、export/import artifact、server logs、文件系统权限、LaunchAgent/进程状态和必须靠 Mac 文件路径完成的恢复操作。短期如果某个能力只能先放在 Admin，需要在 `docs/HANDOFF.md` 标明它是否属于后续迁移到 iOS 的候选。
+
 Posts 页面采用列表 + 右侧详情抽屉。列表用于快速扫描文字摘要、发生时间、媒体数量、创建设备、更新设备、删除状态和基础同步状态；详情抽屉用于查看完整正文、图片网格或媒体诊断、媒体状态、大小、checksum、`serverVersion`、创建/更新设备和删除时间。图片在详情抽屉内显示缩略图，点击后以全屏 lightbox 查看压缩展示图；语音/视频不在 Admin 内播放。
 
 列表默认只显示未删除 posts，可切换查看软删除 posts。普通列表沿用 cursor 分页，默认 50 条，支持 `Load more`。文本搜索用于定位少量记录，第一版限制最多 100 条，不做搜索分页。筛选能力包括创建设备、删除状态和文本搜索。
@@ -267,7 +269,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 - 失败同步或上传任务使用 5s、20s、60s、120s、300s 的延迟自动重试。
 - 发布草稿保存文字、发生时间和已准备媒体。
 - 远端同步来的压缩图和视频 poster 会下载到本地缓存后展示；完整语音/视频按播放需求下载。
-- Settings > Storage & Diagnostics 展示本机存储、同步健康状态和 AI summary 诊断；Mac 在线时额外展示服务端存储状态。
+- Settings > Storage & Diagnostics 展示本机存储、同步健康状态、AI summary 诊断、AI token usage 和安全修复动作；Mac 在线时额外展示服务端存储状态。后续日常设置和监控默认继续放到 iOS Settings，而不是扩展为日常使用的 Mac Admin。
 
 ### Mac Server
 

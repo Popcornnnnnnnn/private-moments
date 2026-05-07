@@ -83,7 +83,13 @@ npm run ios:device
 
 ## 产品 UAT 清单
 
-每个候选版本至少手工验证一次：
+每个候选版本至少手工验证一次。权威 gate 状态记录在 `docs/UAT-GATES.md`；release candidate 前必须运行：
+
+```bash
+npm run verify:release-gates
+```
+
+以下是人工验证范围摘要：
 
 - 发布纯文本 Moment。
 - 发布图片 Moment。
@@ -101,6 +107,8 @@ npm run ios:device
 - Settings > Storage & Diagnostics 可以看到 storage、sync 和 AI summary 状态。
 - Mac Admin 的 Archive & Export / Backups 区域可以创建、列出、校验、恢复并 promote 备份快照。
 - Mac Admin 和 iOS Settings 的 Sync Health 可以区分 server reachability、auth、cursor lag、outbox、media upload、missing media 和 AI summary pipeline 状态。
+
+如果某一项暂时只能由用户肉眼确认，关闭 gate 时必须把用户确认写进 `docs/UAT-GATES.md`、`docs/HANDOFF.md` 和 `.gsd` 验证记录。
 
 ## 数据恢复门禁
 
@@ -137,4 +145,4 @@ M009 Phase A 完成后，v0.1 内部候选版本还必须满足：
 
 ## 当前结论
 
-截至 2026-05-05，项目方向调整为优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 v0.1 收口重点是 M009 的 backup/restore、Sync Health、export/import 迁移闭环，以及这些能力的最终验证和人工 UAT。
+截至 2026-05-07，项目方向调整为优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 v0.1 收口重点是真实 iPhone UAT gate、M009 backup/restore/Sync Health/export/import 迁移闭环、M010 Weekly Review 质量确认，以及这些能力的最终验证。

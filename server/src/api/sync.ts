@@ -24,6 +24,7 @@ import {
   upsertPostTag,
 } from "../tags/tagging.js";
 import { sendBadRequest, sendForbidden, sendUnauthorized } from "./http-errors.js";
+import { shouldReplayPreviouslyUnsupportedOperation } from "./sync-operations.js";
 
 const MAX_LOCAL_CHANGES = 100;
 const MAX_COMMENT_LENGTH = 500;
@@ -237,37 +238,6 @@ async function applyOrReplayOperation(
       reason: error.message,
     };
   }
-}
-
-function shouldReplayPreviouslyUnsupportedOperation(
-  existing: { rejectionReason: string | null },
-  operation: SyncOperationInput,
-): boolean {
-  return (
-    existing.rejectionReason === `Unsupported operation type: ${operation.type}` &&
-    isSupportedOperation(operation)
-  );
-}
-
-function isSupportedOperation(operation: SyncOperationInput): boolean {
-  return (
-    (operation.type === "create_post" && operation.entityType === "post") ||
-    (operation.type === "update_post" && operation.entityType === "post") ||
-    (operation.type === "insert_ai_title" && operation.entityType === "post") ||
-    (operation.type === "update_post_favorite" && operation.entityType === "post") ||
-    (operation.type === "delete_post" && operation.entityType === "post") ||
-    (operation.type === "update_media_transcription" && operation.entityType === "media") ||
-    (operation.type === "create_comment" && operation.entityType === "comment") ||
-    (operation.type === "delete_comment" && operation.entityType === "comment") ||
-    (operation.type === "upsert_tag" && operation.entityType === "tag") ||
-    (operation.type === "archive_tag" && operation.entityType === "tag") ||
-    (operation.type === "restore_tag" && operation.entityType === "tag") ||
-    (operation.type === "delete_tag" && operation.entityType === "tag") ||
-    (operation.type === "merge_tag" && operation.entityType === "tag") ||
-    (operation.type === "upsert_tag_alias" && operation.entityType === "tag_alias") ||
-    (operation.type === "delete_tag_alias" && operation.entityType === "tag_alias") ||
-    (operation.type === "set_post_tags" && operation.entityType === "post")
-  );
 }
 
 async function applyOperation(

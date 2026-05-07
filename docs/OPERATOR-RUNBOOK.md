@@ -53,6 +53,35 @@ curl -fsS http://127.0.0.1:3210/api/v1/health
 
 `/api/v1/health` 的 `schemaVersion` 必须和 `server/src/config/app-config.ts` 中的 `SCHEMA_VERSION` 一致。若 build 通过但 health 仍返回旧 schema，说明 LaunchAgent 或当前 server 进程仍在运行旧代码，先重启服务再继续验证。
 
+## 统一验证入口
+
+常规 checkpoint 优先运行：
+
+```bash
+npm run verify:all
+```
+
+它会串联 server typecheck/test/build、Admin build、generic iOS build、UAT gate 检查、`git diff --check`，并在本机 `3210` 已有 server 响应时附带一次 live health check。它不会安装到真实 iPhone，也不会替代人工 UAT。
+
+按范围拆开运行：
+
+```bash
+npm run verify:server
+npm run verify:ios:generic
+npm run verify:uat-gates
+npm run smoke:admin
+```
+
+`npm run verify:uat-gates` 只报告 `docs/UAT-GATES.md` 里还打开的真实设备/人工门禁。准备 release candidate 时再运行严格门禁：
+
+```bash
+npm run verify:release-gates
+```
+
+只要还有 open UAT gate，`verify:release-gates` 就会失败，这是预期行为。关闭 gate 需要真实 iPhone、Mac Archive 或用户确认的证据，不能只用 build/simulator 结果代替。
+
+`npm run smoke:admin` 默认只检查 live health。如果设置 `PRIVATE_MOMENTS_SMOKE_PASSWORD`，脚本会登录本机 server，并只读检查 Admin status、Archive maintenance state/job list、Archive repository、Review settings 和 Review list。认证模式会创建或复用一个名为 `Admin Smoke` 的 Mac device row；不要把真实 password 写入脚本或文档。
+
 ## Worktree 开发和数据安全
 
 `main` 工作目录只作为固定版本的集成线。功能开发、测试、构建、打包和真实设备 UAT 默认在独立 worktree 中完成。

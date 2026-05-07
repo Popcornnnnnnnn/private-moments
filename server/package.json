@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/reviews/review-limits.test.ts src/reviews/review-markdown.test.ts src/reviews/review-service.test.ts src/ai/review-generation.test.ts src/ai/usage.test.ts",
+    "test": "node --import tsx --test src/api/media-helpers.test.ts src/api/sync-operations.test.ts src/auth/device-binding.test.ts src/reviews/review-limits.test.ts src/reviews/review-markdown.test.ts src/reviews/review-service.test.ts src/ai/review-generation.test.ts src/ai/usage.test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

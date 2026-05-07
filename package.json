@@ -21,6 +21,11 @@
     "server:prisma:migrate": "npm run prisma:migrate -w server",
     "server:prisma:deploy": "npm run prisma:deploy -w server",
     "verify:server": "npm run server:typecheck && npm run server:test && npm run server:build && npm run admin:build",
+    "verify:ios:generic": "bash scripts/verify-ios-generic.sh",
+    "verify:uat-gates": "node scripts/verify-uat-gates.mjs",
+    "verify:release-gates": "node scripts/verify-uat-gates.mjs --strict",
+    "verify:all": "bash scripts/verify-all.sh",
+    "smoke:admin": "node scripts/smoke-admin-maintenance.mjs",
     "ios:simulator": "scripts/run-ios-simulator.sh",
     "ios:device": "scripts/run-ios-device.sh"
   },

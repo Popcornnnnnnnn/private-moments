@@ -84,6 +84,26 @@ This file is the explicit capability and coverage contract for the project.
 - Source: branch/worktree workflow discussion 2026-05-06
 - Validation: New feature work starts in a dedicated worktree; completion summaries name the worktree/branch used; high-risk worktree installs include Sync Health/outbox review plus backup/container-copy evidence or an explicit recovery checkpoint; merged worktrees and branches are removed after integration.
 
+### R049 — Release candidate readiness must keep true-device and human UAT gates explicit.
+- Class: operational
+- Status: active
+- Description: Any path that cannot be proven by build/test alone must stay visible in `docs/UAT-GATES.md` until real iPhone, Mac Archive, Share Extension, AI quality, or user-confirmed evidence closes it. `verify:uat-gates` reports open gates during normal work, while `verify:release-gates` fails with any open gate.
+- Why it matters: The project has many implemented-but-not-accepted paths. A single gate list prevents accidental release overclaims while still allowing checkpoint commits for verified code.
+- Source: quality gate maintenance 2026-05-07
+- Primary owning slice: maintenance
+- Supporting slices: R001,R003
+- Validation: `npm run verify:uat-gates` reports current open gates; `npm run verify:release-gates` exits non-zero while any open gate remains; closing a gate requires updating `docs/UAT-GATES.md`, `docs/HANDOFF.md`, and affected `.gsd` facts with current-session evidence.
+
+### R050 — New operational settings and diagnostics should prefer iOS Settings over Mac Admin.
+- Class: constraint
+- Status: active
+- Description: New settings, monitoring, diagnostics, and safe repair controls should default to iOS Settings / Diagnostics. Mac Admin remains for low-frequency Mac-local operations such as Archive backup/restore, staged promote, export/import artifacts, server logs, LaunchAgent/process state, filesystem paths, and permissions.
+- Why it matters: The owner uses the phone as the primary surface and rarely uses the Mac Admin UI. Moving routine operations toward iOS keeps daily maintenance close to the app while preserving Admin where Mac-only context is required.
+- Source: admin direction follow-up 2026-05-07
+- Primary owning slice: maintenance
+- Supporting slices: R036,R037,R047
+- Validation: Future planning/design docs justify any new Admin-only operational surface; affected user-facing docs state whether short-term Admin-only controls should later migrate to iOS Settings.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active
@@ -509,17 +529,21 @@ This file is the explicit capability and coverage contract for the project.
 | R037 | constraint | active | M009/S04 | M009/S06 | Sync Health exposes safe repair actions only: sync, pull server changes, retry/re-download media; destructive reset/rebuild actions stay out of default v0.1 UI. |
 | R038 | functional | active | M009/S05 | M009/S01,M009/S03,M009/S06 | Phase B export/import creates migration-first packages where JSON manifest is authoritative, Markdown is preview, import targets only a new staged archive, and runtime auth/device state is excluded. |
 | R039 | operational | active | M009/S01 | M009/S02,M009/S03,M009/S04,M009/S05,M009/S06 | Durable serial `maintenance_jobs` store safe job state, recover stale running jobs after restart, and support maintenance mode for recovery operations without private content body leakage. |
-| R040 | functional | active | maintenance | R003,R014,R020,R036 | iOS `Automatic Sync` can be disabled as a local-only mode that suppresses automatic bootstrap/foreground/retry/follow-up sync, media uploads/downloads, and AI summary network requests while preserving local outbox data and explicit `Sync Now`. |
-| R041 | functional | active | maintenance | R003,R020,R026 | Pending, partial, failed, and synced moments remain editable for text/date/media ordering and tags; edits apply locally immediately and later sync as normal outbox operations. |
-| R042 | functional | active | maintenance | R028 | Moment Detail provides a copy action for non-empty moment body text and copies the stored Markdown source string. |
-| R043 | functional | active | maintenance | R020 | `Save to Moments` supports screenshot/photo sharing and web URL/text sharing paths, including WeChat article URLs when the host app exposes them through the system Share Sheet; imported URL moments render a tappable link-card style preview. |
-| R044 | functional | active | maintenance | R013 | Audio recording should coexist with music/navigation audio when iOS allows it by using a mixing-capable recording session. |
-| R045 | functional | active | maintenance | R028 | Composer/Edit Markdown editor keeps H1/H2 controls but avoids repeated live text-storage rewrites that cause long-text flashing, focus loss, or automatic scroll jumps. |
-| R046 | functional | active | maintenance | R003,R020,R036 | iOS private builds can include a bundled fallback server URL through ignored local config; network-level failures on the primary Server URL fall back for login, sync, media transfer, AI summary, and storage diagnostics, while public project config remains Tailscale/private-VPN-first and contains no owner personal endpoint. |
+| R040 | functional | active | M010/S01 | R003 | Review artifacts use generic kind/range fields so Weekly Review is the first period kind without hard-coding week-only storage. |
+| R041 | functional | active | M010/S04 | R003 | Manual and scheduled Weekly Review generation default to rolling seven-day ranges, with scheduled generation default off and quiet. |
+| R042 | functional | active | M010/S02 | R014,R015,R024 | Review input uses post text, comments, ready media summary metadata, tags, favorite, media kind, and rhythm stats; image vision/OCR is out of v1. |
+| R043 | constraint | active | M010/S03 | R015,R045 | Review prompt/schema use whole-period reading and reserve moment IDs only for low-weight `Worth Revisiting` anchors. |
+| R044 | functional | active | M010/S06 | R001,R003 | Review settings and feedback are explicit, visible, default-off where invasive, and never mutate original moments. |
+| R045 | functional | active | M010/S05 | R032 | Weekly Review belongs in Calendar Reviews, and moment anchors open inside the Review context rather than jumping Timeline. |
+| R046 | constraint | active | M010/S04,M010/S06 | R044 | Publish-as-moment is explicit and never automatic by default. |
+| R047 | operational | active | M010/S08 | R016,R024,R040,R041 | `ai_usage_events` and admin/iOS diagnostics measure AI token usage without storing transcript, prompt, review input, provider response, or generated bodies. |
+| R048 | operational | active | none | R001,R002,R003 | Feature work uses dedicated worktrees and protects live Mac/iPhone data before real-device installs or high-risk runtime checks. |
+| R049 | operational | active | maintenance | R001,R003 | `docs/UAT-GATES.md` plus `verify:uat-gates` / `verify:release-gates` keep true-device and human UAT gaps visible until evidence closes them. |
+| R050 | constraint | active | maintenance | R036,R037,R047 | New operational settings, diagnostics, monitoring, and safe repair controls prefer iOS Settings; Mac Admin remains for Mac-local recovery and low-frequency operations. |
 
 ## Coverage Summary
 
-- Active requirements: 40
-- Mapped to slices: 37 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045)
+- Active requirements: 45
+- Mapped to slices: 41 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R049, R050)
 - Validated: 5 (R004, R005, R006, R007, R017)
-- Unmapped active requirements: 3 global operational requirements (R001, R002, R003)
+- Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

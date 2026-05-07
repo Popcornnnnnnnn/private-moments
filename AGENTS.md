@@ -12,6 +12,7 @@ Private Moments is a private, local-first personal timeline:
 - Mac runs the self-hosted server, SQLite archive, media storage, sync API, and Admin UI.
 - Tailscale or a private VPN is the intended network boundary.
 - Main timeline simplicity is a design constraint. Put low-frequency controls in toolbar menus, swipe actions, detail views, or settings rather than crowding the timeline.
+- New settings, monitoring, diagnostics, and safe repair controls should prefer iOS Settings / diagnostics first. Keep Mac Admin for low-frequency Mac-local operations such as archive backup/restore, staged promote, export/import artifacts, server logs, and filesystem/process recovery.
 - App-facing UI copy should stay primarily English unless the user explicitly requests localization.
 - Timeline date/month context should stay light: use `MomentDateFormatter` for English human-friendly labels and a temporary floating month hint while scrolling.
 - Timeline delete should use a centered alert, not a position-based `confirmationDialog`; keep trailing delete full-swipe disabled to avoid list jumps.

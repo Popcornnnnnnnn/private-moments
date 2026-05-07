@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import { generateDeviceToken, hashDeviceToken } from "../auth/device-token.js";
+import { upsertLoginDevice } from "../auth/device-binding.js";
 import { verifyPassword } from "../auth/password.js";
 import { SCHEMA_VERSION, SERVER_VERSION } from "../config/app-config.js";
 import type { FileLogger } from "../logging/file-logger.js";
@@ -108,129 +109,6 @@ function parseLoginRequestBody(
     deviceName,
     platform,
     deviceKey,
-  };
-}
-
-async function upsertLoginDevice(
-  prisma: PrismaClient,
-  input: {
-    userId: string;
-    deviceName: string;
-    deviceKey: string | undefined;
-    platform: string;
-    tokenHash: string;
-  },
-): Promise<{
-  id: string;
-  name: string;
-  platform: string;
-  wasCreated: boolean;
-}> {
-  const now = new Date();
-
-  if (input.deviceKey) {
-    const existingByKey = await prisma.device.findUnique({
-      where: {
-        userId_platform_deviceKey: {
-          userId: input.userId,
-          platform: input.platform,
-          deviceKey: input.deviceKey,
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (existingByKey) {
-      const device = await prisma.device.update({
-        where: {
-          id: existingByKey.id,
-        },
-        data: {
-          name: input.deviceName,
-          tokenHash: input.tokenHash,
-          lastSeenAt: now,
-          revokedAt: null,
-        },
-        select: {
-          id: true,
-          name: true,
-          platform: true,
-        },
-      });
-
-      return {
-        ...device,
-        wasCreated: false,
-      };
-    }
-
-    const existingByName = await prisma.device.findFirst({
-      where: {
-        userId: input.userId,
-        platform: input.platform,
-        name: input.deviceName,
-        deviceKey: null,
-        revokedAt: null,
-      },
-      orderBy: [
-        {
-          lastSeenAt: "desc",
-        },
-        {
-          createdAt: "desc",
-        },
-      ],
-      select: {
-        id: true,
-      },
-    });
-
-    if (existingByName) {
-      const device = await prisma.device.update({
-        where: {
-          id: existingByName.id,
-        },
-        data: {
-          deviceKey: input.deviceKey,
-          tokenHash: input.tokenHash,
-          lastSeenAt: now,
-          revokedAt: null,
-        },
-        select: {
-          id: true,
-          name: true,
-          platform: true,
-        },
-      });
-
-      return {
-        ...device,
-        wasCreated: false,
-      };
-    }
-  }
-
-  const device = await prisma.device.create({
-    data: {
-      userId: input.userId,
-      name: input.deviceName,
-      deviceKey: input.deviceKey,
-      platform: input.platform,
-      tokenHash: input.tokenHash,
-      lastSeenAt: now,
-    },
-    select: {
-      id: true,
-      name: true,
-      platform: true,
-    },
-  });
-
-  return {
-    ...device,
-    wasCreated: true,
   };
 }
 

@@ -26,6 +26,17 @@ Moments 是一个没有观众的生活表达空间。它应该像社交一样轻
 - 时间和月份提示应服务于方向感，并保持 App UI 的英文体系。优先使用 `Just now`、`2 min ago`、`Yesterday 2:40 PM` 这类人类表达；月份信息适合作为滚动时短暂出现的浮层提示，而不是常驻的大块结构标题。
 - 如果一个功能让首屏变复杂，默认重新设计入口，而不是继续堆控件。
 
+## iOS-First Operations
+
+Mac Admin 是低频运维工具，不是长期的日常使用中心。后续新增设置、监控、诊断和安全修复动作时，默认先判断能否放在 iOS Settings 或 iOS 内的专用诊断页里。
+
+设计约束：
+
+- iPhone 是主要使用设备；同步健康、AI 使用量、标签管理、语言、外观、本机存储和安全 repair action 应优先在 iOS 端可见。
+- Mac Admin 保留给必须依赖 Mac 文件系统或服务权限的低频动作，例如 backup repository、staged restore、promote preparation、export/import artifact 和 server logs。
+- 不要因为已有 Admin UI 就把新监控默认塞到后台。只有当该能力需要 Mac 本地路径、restic、server process、文件系统 artifact 或比手机端更强的运维上下文时，才优先进入 Mac Admin。
+- 如果某个能力短期先放进 Mac Admin，技术设计和 handoff 里要记录它是否应迁移到 iOS，以及迁移前不能依赖 Admin 作为唯一入口。
+
 ## Private Feed Comments
 
 评论是主时间线的受控例外：它借用朋友圈式交互，但仍然是单用户、私密、无观众的补充表达。

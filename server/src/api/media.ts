@@ -21,12 +21,21 @@ import {
 } from "../maintenance/maintenance-mode.js";
 import type { DataPaths } from "../storage/data-dir.js";
 import { sendBadRequest, sendNotFound, sendUnauthorized } from "./http-errors.js";
+import {
+  MEDIA_KINDS,
+  MEDIA_VARIANTS,
+  contentTypeForMediaPath,
+  mediaUploadErrorCode,
+  parseMediaIds,
+  parseMediaVariant,
+  pathForMediaVariant,
+  type MediaKind,
+  type MediaVariant,
+} from "./media-helpers.js";
 
-const VARIANTS = new Set(["compressed", "original", "thumbnail"]);
 const execFileAsync = promisify(execFile);
 const THUMBNAIL_MAX_EDGE = "800";
 const THUMBNAIL_MAX_BYTES = 180_000;
-const MEDIA_KINDS = new Set(["image", "video", "audio"]);
 const MAX_TRANSCRIPTION_LENGTH = 100_000;
 const UPLOAD_STREAM_TIMEOUT_MS = 240_000;
 
@@ -37,9 +46,6 @@ interface MediaRouteContext {
   fileLogger: FileLogger;
   maintenanceMode: MaintenanceModeService;
 }
-
-type MediaVariant = "compressed" | "original" | "thumbnail";
-type MediaKind = "image" | "video" | "audio";
 
 interface UploadFields {
   mediaId: string;
@@ -74,7 +80,7 @@ export async function registerMediaRoutes(
       }
 
       const mediaIds = parseMediaIds(request.body?.mediaIds);
-      const variant = parseVariant(
+      const variant = parseMediaVariant(
         typeof request.body?.variant === "string" ? request.body.variant : "thumbnail",
       );
       if (mediaIds.length === 0) {
@@ -109,7 +115,7 @@ export async function registerMediaRoutes(
         downloadedMedia.push({
           id: media.id,
           variant,
-          contentType: contentTypeForPath(relativePath),
+          contentType: contentTypeForMediaPath(relativePath),
           fileName: path.basename(relativePath),
           base64: data.toString("base64"),
         });
@@ -141,7 +147,7 @@ export async function registerMediaRoutes(
       }
 
       const query = parseQuery(request.query);
-      const variant = parseVariant(query.variant ?? "compressed");
+      const variant = parseMediaVariant(query.variant ?? "compressed");
       if (!variant) {
         return sendBadRequest(reply, "variant must be one of: compressed, original, thumbnail");
       }
@@ -173,7 +179,7 @@ export async function registerMediaRoutes(
         sizeBytes: fileStats.size,
       });
 
-      reply.header("Content-Type", contentTypeForPath(relativePath));
+      reply.header("Content-Type", contentTypeForMediaPath(relativePath));
       reply.header("Content-Length", String(fileStats.size));
       reply.header("Connection", "close");
       if (variant === "thumbnail" || fileStats.size <= 1_000_000) {
@@ -313,57 +319,6 @@ function parseQuery(query: unknown): Record<string, string | undefined> {
   return parsed;
 }
 
-function parseVariant(value: string): MediaVariant | null {
-  return VARIANTS.has(value) ? (value as MediaVariant) : null;
-}
-
-function parseMediaIds(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const seen = new Set<string>();
-  const mediaIds = [];
-  for (const item of value) {
-    if (typeof item !== "string") {
-      continue;
-    }
-
-    const mediaId = item.trim();
-    if (!mediaId || seen.has(mediaId)) {
-      continue;
-    }
-
-    seen.add(mediaId);
-    mediaIds.push(mediaId);
-
-    if (mediaIds.length >= 20) {
-      break;
-    }
-  }
-
-  return mediaIds;
-}
-
-function pathForVariant(
-  media: {
-    compressedPath: string | null;
-    originalPath: string | null;
-    thumbnailPath: string | null;
-  },
-  variant: MediaVariant,
-): string | null {
-  if (variant === "compressed") {
-    return media.compressedPath;
-  }
-
-  if (variant === "original") {
-    return media.originalPath;
-  }
-
-  return media.thumbnailPath;
-}
-
 async function pathForVariantOrGeneratedThumbnail(
   context: MediaRouteContext,
   media: {
@@ -379,7 +334,7 @@ async function pathForVariantOrGeneratedThumbnail(
     return generateThumbnailFromCompressed(context, media.id, media.compressedPath, media.thumbnailPath);
   }
 
-  const existingPath = pathForVariant(media, variant);
+  const existingPath = pathForMediaVariant(media, variant);
   if (existingPath) {
     return existingPath;
   }
@@ -475,43 +430,6 @@ function isPathInside(parent: string, child: string): boolean {
   return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
-function contentTypeForPath(relativePath: string): string {
-  const extension = path.extname(relativePath).toLowerCase();
-  if (extension === ".jpg" || extension === ".jpeg") {
-    return "image/jpeg";
-  }
-
-  if (extension === ".png") {
-    return "image/png";
-  }
-
-  if (extension === ".heic") {
-    return "image/heic";
-  }
-
-  if (extension === ".webp") {
-    return "image/webp";
-  }
-
-  if (extension === ".mp4") {
-    return "video/mp4";
-  }
-
-  if (extension === ".mov") {
-    return "video/quicktime";
-  }
-
-  if (extension === ".m4a") {
-    return "audio/mp4";
-  }
-
-  if (extension === ".aac") {
-    return "audio/aac";
-  }
-
-  return "application/octet-stream";
-}
-
 async function writeUploadedFile(
   file: MultipartFile,
   absolutePath: string,
@@ -581,25 +499,6 @@ function parseContentLength(value: string | string[] | undefined): number | null
 
   const parsed = Number(rawValue);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function mediaUploadErrorCode(error: unknown): string {
-  if (error instanceof Error && error.name === "AbortError") {
-    return "upload_timeout";
-  }
-
-  if (error instanceof Error && /premature close/i.test(error.message)) {
-    return "client_premature_close";
-  }
-
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const code = (error as { code?: unknown }).code;
-    if (typeof code === "string" && code.length > 0) {
-      return code.toLowerCase();
-    }
-  }
-
-  return "upload_failed";
 }
 
 async function upsertMediaRecord(
@@ -753,7 +652,7 @@ function parseUploadFields(
     return null;
   }
 
-  if (!VARIANTS.has(variant)) {
+  if (!MEDIA_VARIANTS.has(variant)) {
     sendBadRequest(reply, "variant must be one of: compressed, original, thumbnail");
     return null;
   }

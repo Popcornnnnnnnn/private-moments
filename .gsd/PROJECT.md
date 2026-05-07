@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
 ## What This Project Is
 
@@ -21,7 +21,7 @@ The intended network boundary is Tailscale or another private VPN. Private owner
 
 - iOS app: SwiftUI, local SQLite, local media cache, drafts, outbox sync, and real-device install support.
 - Mac server: Node.js, TypeScript, Fastify, Prisma, SQLite, local file storage, auth, sync, media, admin APIs, and static Admin UI hosting.
-- Admin UI: React + Vite, built separately and served by Fastify.
+- Admin UI: React + Vite, built separately and served by Fastify. It is a low-frequency Mac-local operations surface, not the long-term daily settings/monitoring center.
 - Shared contracts: OpenAPI route contract and sync protocol notes under `shared/`.
 - XcodeGen specs: `ios/project.yml` is the canonical iOS spec for normal iOS work, and root `project.yml` mirrors it for automation that runs XcodeGen from the repository root.
 
@@ -48,6 +48,7 @@ Implemented capabilities include:
 - Local iOS App Language preference for `System`, `English`, and `简体中文`, plus independent AI Language preference for generated summaries/titles.
 - AI Periodic Reviews foundation with Weekly Review as the first review kind: manual rolling-seven-day generation, default-off Sunday-evening auto-generation, Calendar Reviews UI, feedback, and optional publish-as-moment.
 - Privacy-safe AI token usage metering for media summaries, weekly reviews, and tag fallback calls, with Settings diagnostics for Today, current week, current month, all-time totals, failures, cached input tokens, estimated requests, and feature breakdowns.
+- UAT gate tracking through `docs/UAT-GATES.md`, with normal gate reporting via `npm run verify:uat-gates` and strict release blocking via `npm run verify:release-gates`.
 - Mac Admin Overview and Posts management.
 - Device binding via stable device keys to avoid duplicate physical-device registrations.
 
@@ -71,6 +72,8 @@ M008 adds Calendar Review as a second bottom-tab browsing mode beside Timeline. 
 
 M009 shifts v0.1 close-out toward owner long-term self-use after market research. Public distribution, App Store/TestFlight, and iOS standalone are not part of this milestone. Phase A implementation has landed for Admin-managed restic backup/restore, daily scheduled backups, staged restore/promote preparation with maintenance mode, pre-promote snapshot, durable maintenance jobs, and Sync Health in both Mac Admin and iOS Settings. Current v0.1 promote writes `archive/pending-promote.json` restart instructions rather than hot-swapping the live SQLite database while Prisma is connected. Phase B implementation has landed for migration-first export/import where JSON manifest/metadata is authoritative, Markdown is only a preview, and import targets a new staged archive while preserving content identity and excluding auth/session/device runtime state. Verification includes fresh SQLite setup, server/admin/iOS builds, isolated restic backup/restore/promote smoke, isolated export/import smoke, and real-device install/launch.
 
+The owner rarely uses Mac Admin for daily operation. Future settings, monitoring, diagnostics, and safe repair controls should therefore default to iOS Settings / Diagnostics; Mac Admin remains for Mac-only operations such as Archive repository paths, staged promote/restart instructions, export/import artifacts, server logs, LaunchAgent/process state, filesystem permissions, and local recovery.
+
 M010 adds AI Periodic Reviews. The first artifact is Weekly Review, but server data uses generic review kind/range concepts so monthly/custom reviews can reuse the same foundation. Weekly Review is retrospective-first with moderate reflection, uses text moments, comments, ready audio/video AI summaries, tags/favorites/time/media metadata, and leaves images as metadata-only in v1. It avoids per-claim evidence links; only `Worth Revisiting` exposes low-weight moment anchors inside the review context. Auto-generation is default off and runs Sunday evening on the Mac server when enabled. A follow-up adds `ai_usage_events` so growing AI surfaces have token/cost diagnostics without storing private AI input or output bodies.
 
 ## Design Constraints
@@ -80,6 +83,7 @@ M010 adds AI Periodic Reviews. The first artifact is Weekly Review, but server d
 - Audio/video support is a moment media expansion, not a comment/media-thread expansion; do not mix audio/video into comments in the first version.
 - AI summaries are generated metadata, not comments or timeline prose; first-version AI may run automatically for newly uploaded audio/video media but should not auto-analyze the whole archive in the background. The only post-text mutation exception is the optional new-audio `##` title insert; full summary bodies remain generated metadata. New summary source data is a structured block model, not arbitrary Markdown.
 - Content management features must help the user return to lived time, not turn Moments into an archive/database manager.
+- Daily operational visibility should move toward iOS Settings / Diagnostics. Admin-only surfaces require a Mac-local reason or a documented migration note.
 - Tags should support retrieval and lightweight organization without turning the timeline into a tag wall. Primary tags are expression-type metadata; topic tags are concrete searchable concepts. Timeline display is optional and limited to primary tags.
 - Timeline date navigation should avoid duplicate entry points. M008 Calendar becomes the primary date review surface; Timeline should not keep a parallel `Jump to date` toolbar calendar icon after Calendar lands.
 - Input assistance must reduce friction for lightweight expression, not turn Moments into a full Markdown editor or writing tool. Saved post text remains Markdown source `String`; Composer/Edit may render only line-leading H1 and H2 in a lightweight editor. Timeline/Detail/Day Review render the same limited subset. New Moment may treat pasted real clipboard images as media attachments, but Markdown image syntax remains plain text and is not parsed into media.
@@ -105,6 +109,7 @@ Current documentation responsibilities:
 - `docs/HANDOFF.md`: current working state, recent important fixes, and next sensible work.
 - `docs/DESIGN-PRINCIPLES.md`: UI and product design principles.
 - `docs/WORKFLOW.md`: how work is planned, verified, closed, and documented.
+- `docs/UAT-GATES.md`: real-device, human acceptance, and release-blocking verification gates.
 - `docs/MARKET-RESEARCH.md`: market positioning, competitor landscape, distribution strategy, and productization recommendations.
 
 ## Current Workflow Policy
@@ -114,6 +119,8 @@ Use lightweight continuous maintenance by default. Upgrade work to milestone/sli
 Keep `main` as the fixed integration/version line. Parallel feature work should happen in dedicated Git worktrees, with one Codex thread bound to one worktree. Feature worktrees may run development, testing, builds, packaging, and UAT, but server runtime data should be isolated by default and real iPhone installs must not downgrade schema, clear app containers, lose unsynced local data, or otherwise risk existing personal data without an explicit recovery checkpoint.
 
 Every non-trivial change must close with a short summary, fresh verification evidence, known issues or next steps, and updates to affected `.gsd` or `docs/` files.
+
+True-device and human acceptance gaps must stay in `docs/UAT-GATES.md`. Normal work should run `npm run verify:uat-gates` to keep the list visible; release candidate readiness must run `npm run verify:release-gates`, which fails while any gate remains open.
 
 ## Milestone Sequence
 
