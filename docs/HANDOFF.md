@@ -9,6 +9,7 @@ Last reconciled: 2026-05-08
 - Admin UI 可通过 `npm run admin:build` 构建，并由 server 在 `/admin/` 提供访问。
 - 项目工作流已写入 `docs/WORKFLOW.md`，agent 强制规则写入 `AGENTS.md`。
 - `.gsd/` 是结构化事实源，记录当前项目事实、requirements、decisions 和 milestone state；`docs/` 是给人阅读的稳定文档层。
+- 2026-05-08 Settings 顶层 `Appearance` 已收成二级页：顶层只显示当前外观模式摘要，具体 `System` / `Light` / `Dark` 选择进入 `Settings > Appearance`。
 - 2026-05-08 Settings 顶层 `Language` 也已收成二级页：顶层只显示当前 App Language / AI Language 摘要，具体 `System` / `English` / `简体中文` 和 `Auto` / `Chinese` / `English` 选择进入 `Settings > Language`。
 - 2026-05-08 Settings > Storage & Diagnostics 已做首轮分级：第一页只保留 `Summary`、本机占用、Mac reachability 和异常摘要，详细计数/操作进入 `This iPhone`、`Sync Health`、`Mac Server`、`Mac Operations`、`AI & Tags` 子页；刷新仍是只读，显式同步/重试动作保留在 `Sync Health` 子页。
 - 2026-05-07 新增统一质量门禁：`docs/UAT-GATES.md` 集中记录真实 iPhone、Mac Archive、Share Extension、AI Summary、Smart Tags、Weekly Review 等人工/真机门禁；`npm run verify:uat-gates` 报告 open gates，`npm run verify:release-gates` 在 open gates 存在时失败；`npm run verify:all` 作为日常 checkpoint 入口串联 server/admin/iOS generic build、focused tests、UAT gate 报告和 diff check。

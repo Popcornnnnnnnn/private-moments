@@ -69,17 +69,17 @@ struct SettingsView: View {
                 }
 
                 Section(L10n.t("Appearance", appLanguage)) {
-                    ForEach(AppAppearanceMode.allCases) { mode in
-                        Button {
-                            store.setAppAppearanceMode(mode)
-                        } label: {
-                            AppearanceModeRow(
-                                mode: mode,
-                                isSelected: store.appAppearanceMode == mode
-                            )
+                    NavigationLink {
+                        AppearanceSettingsView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.t("Appearance", appLanguage))
+                            Text(appearanceSummary)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(store.appAppearanceMode == mode ? .isSelected : [])
+                        .padding(.vertical, 3)
                     }
                 }
 
@@ -192,6 +192,10 @@ struct SettingsView: View {
         store.pendingOperationCount > 0 || store.pendingUploadCount > 0
     }
 
+    private var appearanceSummary: String {
+        L10n.t(store.appAppearanceMode.title, appLanguage)
+    }
+
     private var languageSummary: String {
         "\(store.appLanguageMode.title(language: appLanguage)) · \(store.aiLanguageMode.title(language: appLanguage))"
     }
@@ -216,6 +220,32 @@ struct SettingsView: View {
         }
 
         await store.syncNow()
+    }
+}
+
+private struct AppearanceSettingsView: View {
+    @EnvironmentObject private var store: TimelineStore
+    @Environment(\.appLanguage) private var appLanguage
+
+    var body: some View {
+        Form {
+            Section(L10n.t("Appearance", appLanguage)) {
+                ForEach(AppAppearanceMode.allCases) { mode in
+                    Button {
+                        store.setAppAppearanceMode(mode)
+                    } label: {
+                        AppearanceModeRow(
+                            mode: mode,
+                            isSelected: store.appAppearanceMode == mode
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(store.appAppearanceMode == mode ? .isSelected : [])
+                }
+            }
+        }
+        .navigationTitle(L10n.t("Appearance", appLanguage))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
