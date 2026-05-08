@@ -188,7 +188,7 @@ Mac 通过 Tailscale 或私有 VPN 被 iPhone 访问，不直接暴露公网。
 - `Check-ins` 默认显示 `Today`；可以在同一界面切到 `History`，查看最近一周、一个月和按 item 的概况。
 - 点击 Today 中某个 check-in item 的主区域会立即打卡，不弹出必填表单。
 - 需要补充内容时，使用独立入口添加 note、发生时间、照片和 `Show in Timeline` 开关；默认打卡可以什么内容都没有。
-- 新建 item 时可以选择一天一次或一天多次，设置名称、SF Symbol 图标、HEX 或预设高对比度颜色、活跃星期和默认是否显示到 Timeline。
+- 新建 item 时可以选择一天一次或一天多次，设置名称、通过精选选择器或高级输入设置 SF Symbol 图标、HEX 或预设高对比度颜色、活跃星期和默认是否显示到 Timeline。
 - 每条 check-in entry 的 `Show in Timeline` 与 entry 是否存在相互独立；即使不显示到 Timeline，仍然进入 Check-ins History、Calendar heatmap、Day Review 和 Month Stats。
 - Timeline 只显示 `Show in Timeline` 打开的 check-in entry，并使用紧凑 check-in row，不提供 favorite、pin 或 comments。
 - Calendar heatmap、Day Review 和 Month Stats 把 check-ins 作为生活 activity 计入，并区分普通 moments 和 check-ins；带照片的 check-ins 也计入 Photos 相关过滤和回看。

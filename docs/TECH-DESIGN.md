@@ -161,8 +161,10 @@ Check-ins 是第三个底部 tab，和 Timeline、Calendar 并列；默认启动
 
 数据模型分两层：
 
-- `checkin_items` / `local_checkin_items` 定义活动：名称、SF Symbol、颜色、`oncePerDay` 或 `multiplePerDay`、活跃星期、手动排序、默认 `showInTimeline`、可选 tag、archive/delete 状态和 sync 状态。
+- `checkin_items` / `local_checkin_items` 定义活动：名称、SF Symbol `symbolName`、颜色、`oncePerDay` 或 `multiplePerDay`、活跃星期、手动排序、默认 `showInTimeline`、可选 tag、archive/delete 状态和 sync 状态。
 - `checkin_entries` / `local_checkin_entries` 定义一次打卡：item id、发生时间、可选 note、entry-level `showInTimeline`、soft delete 状态和 sync 状态。
+
+Check-in 图标没有单独的 server/database icon 表。同步协议只保存 SF Symbol 名称字符串；iOS 编辑器提供本地精选图标 catalog、类别筛选、搜索、预览和高级 `SF Symbol name` 输入，并在保存前用系统 symbol lookup 校验。只有未来需要跨平台可管理 icon library 时，才重新考虑 icon catalog 表。
 
 一次一天 item 使用本地日期做去重，编辑 entry 时间时也要重新校验同一天是否已有 entry。一天多次 item 不做时间冲突 UI，因为用户不需要在同一时间连续打卡；按发生时间自然排序即可。
 

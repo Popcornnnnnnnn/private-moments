@@ -345,8 +345,7 @@ extension TimelineStore {
     }
 
     private func normalizedCheckInSymbol(_ value: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "checkmark.circle" : trimmed
+        CheckInSymbolValidator.normalized(value)
     }
 
     private func normalizedCheckInColor(_ value: String) -> String {

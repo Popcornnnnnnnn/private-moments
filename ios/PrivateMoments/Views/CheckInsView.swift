@@ -745,16 +745,20 @@ private struct CheckInItemEditorView: View {
     @State private var tagId: String
     @State private var isSaving = false
     @State private var isDeleteConfirmationPresented = false
+    @State private var selectedIconCategoryId: String
+    @State private var iconSearchText = ""
 
     init(item: CheckInItem?) {
         self.item = item
+        let initialSymbolName = item?.symbolName ?? CheckInSymbolValidator.fallbackSymbolName
         _name = State(initialValue: item?.name ?? "")
-        _symbolName = State(initialValue: item?.symbolName ?? "checkmark.circle")
+        _symbolName = State(initialValue: initialSymbolName)
         _colorHex = State(initialValue: item?.colorHex ?? "#61B88D")
         _recordMode = State(initialValue: item?.recordMode ?? .oncePerDay)
         _activeWeekdays = State(initialValue: Set(item?.activeWeekdays ?? [1, 2, 3, 4, 5, 6, 7]))
         _defaultShowInTimeline = State(initialValue: item?.defaultShowInTimeline ?? false)
         _tagId = State(initialValue: item?.tagId ?? "")
+        _selectedIconCategoryId = State(initialValue: CheckInIconCatalog.categoryId(containing: initialSymbolName))
     }
 
     var body: some View {
@@ -771,11 +775,61 @@ private struct CheckInItemEditorView: View {
                 }
 
                 Section(L10n.t("Icon", appLanguage)) {
-                    CheckInIconPresetGrid(selection: $symbolName)
-                    DisclosureGroup(L10n.t("Custom icon", appLanguage)) {
-                        TextField("SF Symbol", text: $symbolName)
+                    CheckInSelectedIconPreview(symbolName: symbolName, colorHex: colorHex, language: appLanguage)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField(L10n.t("Search icons", appLanguage), text: $iconSearchText)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                        if !iconSearchText.isEmpty {
+                            Button {
+                                iconSearchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(L10n.t("Clear", appLanguage))
+                        }
+                    }
+
+                    Picker(L10n.t("Category", appLanguage), selection: $selectedIconCategoryId) {
+                        Text(L10n.t("All icons", appLanguage)).tag(CheckInIconCategory.allId)
+                        ForEach(CheckInIconCatalog.categories) { category in
+                            Text(L10n.t(category.title, appLanguage)).tag(category.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    CheckInIconPresetGrid(
+                        selection: $symbolName,
+                        presets: visibleIconPresets,
+                        language: appLanguage
+                    )
+
+                    if visibleIconPresets.isEmpty {
+                        Text(L10n.t("No matching icons", appLanguage))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
+                    }
+
+                    DisclosureGroup(L10n.t("Advanced", appLanguage)) {
+                        TextField(L10n.t("SF Symbol name", appLanguage), text: $symbolName)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
+                        if !isIconSymbolValid {
+                            Label(
+                                L10n.t("Enter a valid SF Symbol name.", appLanguage),
+                                systemImage: "exclamationmark.triangle"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        }
                     }
                 }
 
@@ -832,7 +886,7 @@ private struct CheckInItemEditorView: View {
                     Button(L10n.t("Save", appLanguage)) {
                         save()
                     }
-                    .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isSaving || !canSave)
                 }
             }
             .alert(L10n.t("Delete check-in?", appLanguage), isPresented: $isDeleteConfirmationPresented) {
@@ -851,13 +905,31 @@ private struct CheckInItemEditorView: View {
         }
     }
 
+    private var visibleIconPresets: [CheckInIconPreset] {
+        CheckInIconCatalog.presets(categoryId: selectedIconCategoryId, query: iconSearchText)
+    }
+
+    private var isIconSymbolValid: Bool {
+        CheckInSymbolValidator.isValid(symbolName)
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isIconSymbolValid
+    }
+
     private func save() {
+        let normalizedSymbolName = CheckInSymbolValidator.normalized(symbolName)
+        guard normalizedSymbolName == symbolName.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            symbolName = normalizedSymbolName
+            return
+        }
+
         isSaving = true
         Task {
             let didSave: Bool
             if var item {
                 item.name = name
-                item.symbolName = symbolName
+                item.symbolName = normalizedSymbolName
                 item.colorHex = colorHex
                 item.recordMode = recordMode
                 item.activeWeekdays = Array(activeWeekdays)
@@ -867,7 +939,7 @@ private struct CheckInItemEditorView: View {
             } else {
                 didSave = await store.createCheckInItem(
                     name: name,
-                    symbolName: symbolName,
+                    symbolName: normalizedSymbolName,
                     colorHex: colorHex,
                     recordMode: recordMode,
                     activeWeekdays: Array(activeWeekdays),
@@ -894,45 +966,64 @@ private struct CheckInItemEditorView: View {
     }
 }
 
-private struct CheckInIconPreset: Identifiable {
+private struct CheckInSelectedIconPreview: View {
     let symbolName: String
-    let title: String
+    let colorHex: String
+    let language: AppResolvedLanguage
 
-    var id: String {
-        symbolName
+    private var trimmedSymbolName: String {
+        symbolName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static let all: [CheckInIconPreset] = [
-        CheckInIconPreset(symbolName: "fork.knife", title: "Meal"),
-        CheckInIconPreset(symbolName: "figure.run", title: "Workout"),
-        CheckInIconPreset(symbolName: "sun.max", title: "Wake up"),
-        CheckInIconPreset(symbolName: "drop", title: "Water"),
-        CheckInIconPreset(symbolName: "pills", title: "Medicine"),
-        CheckInIconPreset(symbolName: "book.closed", title: "Read"),
-        CheckInIconPreset(symbolName: "bed.double", title: "Sleep"),
-        CheckInIconPreset(symbolName: "heart", title: "Health"),
-        CheckInIconPreset(symbolName: "leaf", title: "Diet"),
-        CheckInIconPreset(symbolName: "figure.mind.and.body", title: "Mindful"),
-        CheckInIconPreset(symbolName: "cup.and.saucer", title: "Coffee"),
-        CheckInIconPreset(symbolName: "checkmark.circle", title: "Check")
-    ]
+    private var isValid: Bool {
+        CheckInSymbolValidator.isValid(symbolName)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: isValid ? trimmedSymbolName : "exclamationmark.triangle")
+                .font(.title3.weight(.semibold))
+                .frame(width: 38, height: 38)
+                .foregroundStyle(isValid ? Color(hex: colorHex) ?? .accentColor : .orange)
+                .background(
+                    (isValid ? Color(hex: colorHex) ?? .accentColor : .orange).opacity(0.14),
+                    in: Circle()
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isValid ? L10n.t("Selected icon", language) : L10n.t("Invalid icon", language))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(isValid ? trimmedSymbolName : L10n.t("Choose a preset or enter a valid SF Symbol name.", language))
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+    }
 }
 
 private struct CheckInIconPresetGrid: View {
     @Binding var selection: String
+    let presets: [CheckInIconPreset]
+    let language: AppResolvedLanguage
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(CheckInIconPreset.all) { preset in
+            ForEach(presets) { preset in
                 Button {
                     selection = preset.symbolName
                 } label: {
                     VStack(spacing: 5) {
                         Image(systemName: preset.symbolName)
                             .font(.body.weight(.semibold))
-                        Text(preset.title)
+                        Text(L10n.t(preset.title, language))
                             .font(.caption2.weight(.semibold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.78)
@@ -946,6 +1037,7 @@ private struct CheckInIconPresetGrid: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t(preset.title, language))
             }
         }
         .padding(.vertical, 4)

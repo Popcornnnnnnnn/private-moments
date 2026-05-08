@@ -420,7 +420,7 @@ extension TimelineStore {
         return CheckInItem(
             id: id,
             name: name,
-            symbolName: symbolName,
+            symbolName: CheckInSymbolValidator.normalized(symbolName),
             colorHex: colorHex,
             recordMode: recordMode,
             activeWeekdays: activeWeekdays.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : activeWeekdays,
