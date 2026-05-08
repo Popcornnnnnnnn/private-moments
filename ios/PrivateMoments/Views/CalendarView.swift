@@ -15,10 +15,6 @@ struct CalendarView: View {
     @State private var navigationPath = NavigationPath()
     @State private var daySelectionFeedbackToken = 0
     @State private var showMonthStats = false
-    @State private var monthNavigationDirection = 1
-    @State private var monthPageProgress: CGFloat = 0
-    @State private var isAnimatingMonthPage = false
-    @State private var monthTransitionTarget: Date?
     @State private var now = Date()
 
     private var calendar: Calendar {
@@ -26,44 +22,8 @@ struct CalendarView: View {
     }
 
     private var month: CalendarReviewMonth {
-        reviewMonth(containing: visibleMonth)
-    }
-
-    private var previousMonth: CalendarReviewMonth {
-        reviewMonth(containing: previousMonthStart)
-    }
-
-    private var nextMonth: CalendarReviewMonth {
-        reviewMonth(containing: nextMonthStart)
-    }
-
-    private var previousMonthStart: Date {
-        if isAnimatingMonthPage,
-           monthNavigationDirection < 0,
-           let monthTransitionTarget {
-            return monthTransitionTarget
-        }
-
-        return CalendarReviewBuilder.addMonths(-1, to: visibleMonth, calendar: calendar)
-    }
-
-    private var nextMonthStart: Date {
-        if isAnimatingMonthPage,
-           monthNavigationDirection > 0,
-           let monthTransitionTarget {
-            return monthTransitionTarget
-        }
-
-        return CalendarReviewBuilder.addMonths(1, to: visibleMonth, calendar: calendar)
-    }
-
-    private var monthPageAnimation: Animation {
-        .smooth(duration: 0.30, extraBounce: 0)
-    }
-
-    private func reviewMonth(containing date: Date) -> CalendarReviewMonth {
         CalendarReviewBuilder.month(
-            containing: date,
+            containing: visibleMonth,
             items: store.items,
             now: now,
             calendar: calendar,
@@ -97,15 +57,9 @@ struct CalendarView: View {
                             onToday: { jumpToToday() }
                         )
 
-                        CalendarMonthGridPager(
-                            previousMonth: previousMonth,
+                        CalendarMonthGrid(
                             month: month,
-                            nextMonth: nextMonth,
-                            progress: $monthPageProgress,
                             calendar: calendar,
-                            isInteractionEnabled: !isAnimatingMonthPage,
-                            onCommitMonth: commitInteractiveMonthChange,
-                            onCancelMonth: cancelInteractiveMonthChange,
                             onSelectDay: selectDay
                         )
 
@@ -120,6 +74,7 @@ struct CalendarView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 6)
+                    .gesture(monthSwipeGesture)
                 }
             }
             .navigationTitle(L10n.t("Calendar", appLanguage))
@@ -231,77 +186,33 @@ struct CalendarView: View {
         }
     }
 
-    private func moveMonth(_ offset: Int) {
-        guard offset != 0 else {
-            return
-        }
+    private var monthSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 28)
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height),
+                      abs(value.translation.width) >= 54 else {
+                    return
+                }
 
-        let targetMonth = CalendarReviewBuilder.addMonths(offset, to: visibleMonth, calendar: calendar)
-        animateMonthChange(to: targetMonth, direction: offset > 0 ? 1 : -1)
+                if value.translation.width < 0 {
+                    moveMonth(1)
+                } else {
+                    moveMonth(-1)
+                }
+            }
+    }
+
+    private func moveMonth(_ offset: Int) {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            visibleMonth = CalendarReviewBuilder.addMonths(offset, to: visibleMonth, calendar: calendar)
+        }
     }
 
     private func jumpToToday() {
         now = Date()
-        let targetMonth = CalendarReviewBuilder.monthStart(for: now, calendar: calendar)
-        let monthOffset = calendar.dateComponents(
-            [.month],
-            from: CalendarReviewBuilder.monthStart(for: visibleMonth, calendar: calendar),
-            to: targetMonth
-        ).month ?? 0
-
-        guard monthOffset != 0 else {
-            visibleMonth = targetMonth
-            return
+        withAnimation(.easeInOut(duration: 0.22)) {
+            visibleMonth = CalendarReviewBuilder.monthStart(for: now, calendar: calendar)
         }
-
-        animateMonthChange(to: targetMonth, direction: monthOffset > 0 ? 1 : -1)
-    }
-
-    private func animateMonthChange(to targetMonth: Date, direction: Int) {
-        guard !isAnimatingMonthPage else {
-            return
-        }
-
-        let normalizedTarget = CalendarReviewBuilder.monthStart(for: targetMonth, calendar: calendar)
-        guard !calendar.isDate(visibleMonth, equalTo: normalizedTarget, toGranularity: .month) else {
-            completeMonthChange(to: normalizedTarget)
-            return
-        }
-
-        let resolvedDirection = direction >= 0 ? 1 : -1
-        monthNavigationDirection = resolvedDirection
-        monthTransitionTarget = normalizedTarget
-        isAnimatingMonthPage = true
-
-        withAnimation(monthPageAnimation) {
-            monthPageProgress = CGFloat(resolvedDirection)
-        } completion: {
-            completeMonthChange(to: normalizedTarget)
-        }
-    }
-
-    private func commitInteractiveMonthChange(_ direction: Int) {
-        let targetMonth = CalendarReviewBuilder.addMonths(direction, to: visibleMonth, calendar: calendar)
-        animateMonthChange(to: targetMonth, direction: direction)
-    }
-
-    private func cancelInteractiveMonthChange() {
-        withAnimation(monthPageAnimation) {
-            monthPageProgress = 0
-        }
-    }
-
-    private func completeMonthChange(to targetMonth: Date) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-
-        withTransaction(transaction) {
-            visibleMonth = CalendarReviewBuilder.monthStart(for: targetMonth, calendar: calendar)
-            monthPageProgress = 0
-        }
-
-        monthTransitionTarget = nil
-        isAnimatingMonthPage = false
     }
 
     private func selectDay(_ day: CalendarReviewDay) {
@@ -370,97 +281,6 @@ private struct CalendarDayRoute: Hashable {
 }
 
 private struct CalendarReviewsRoute: Hashable {}
-
-private struct CalendarMonthGridPager: View {
-    let previousMonth: CalendarReviewMonth
-    let month: CalendarReviewMonth
-    let nextMonth: CalendarReviewMonth
-    @Binding var progress: CGFloat
-    let calendar: Calendar
-    let isInteractionEnabled: Bool
-    let onCommitMonth: (Int) -> Void
-    let onCancelMonth: () -> Void
-    let onSelectDay: (CalendarReviewDay) -> Void
-
-    var body: some View {
-        CalendarMonthGrid(
-            month: month,
-            calendar: calendar,
-            onSelectDay: onSelectDay
-        )
-        .hidden()
-        .allowsHitTesting(false)
-        .overlay {
-            GeometryReader { proxy in
-                HStack(spacing: 0) {
-                    CalendarMonthGrid(
-                        month: previousMonth,
-                        calendar: calendar,
-                        onSelectDay: onSelectDay
-                    )
-                    .frame(width: proxy.size.width)
-
-                    CalendarMonthGrid(
-                        month: month,
-                        calendar: calendar,
-                        onSelectDay: onSelectDay
-                    )
-                    .frame(width: proxy.size.width)
-
-                    CalendarMonthGrid(
-                        month: nextMonth,
-                        calendar: calendar,
-                        onSelectDay: onSelectDay
-                    )
-                    .frame(width: proxy.size.width)
-                }
-                .frame(width: proxy.size.width * 3, alignment: .leading)
-                .offset(x: -proxy.size.width * (1 + progress))
-                .contentShape(Rectangle())
-                .gesture(monthDragGesture(width: proxy.size.width))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .clipped()
-    }
-
-    private func monthDragGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 16, coordinateSpace: .local)
-            .onChanged { value in
-                guard isInteractionEnabled,
-                      width > 0,
-                      abs(value.translation.width) > abs(value.translation.height) else {
-                    return
-                }
-
-                progress = clamped(-value.translation.width / width)
-            }
-            .onEnded { value in
-                guard isInteractionEnabled,
-                      width > 0,
-                      abs(value.translation.width) > abs(value.translation.height) else {
-                    onCancelMonth()
-                    return
-                }
-
-                let currentProgress = clamped(-value.translation.width / width)
-                let projectedProgress = clamped(-value.predictedEndTranslation.width / width)
-                let shouldCommit = abs(currentProgress) >= 0.28 || abs(projectedProgress) >= 0.48
-
-                guard shouldCommit else {
-                    onCancelMonth()
-                    return
-                }
-
-                let direction = (abs(projectedProgress) > abs(currentProgress) ? projectedProgress : currentProgress) > 0 ? 1 : -1
-                onCommitMonth(direction)
-            }
-    }
-
-    private func clamped(_ value: CGFloat) -> CGFloat {
-        min(max(value, -1), 1)
-    }
-}
 
 private struct CalendarMonthHeader: View {
     @Environment(\.appLanguage) private var appLanguage

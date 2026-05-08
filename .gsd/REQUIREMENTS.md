@@ -441,12 +441,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R032 — Calendar Review must provide local month-grid time review without becoming a second editor or sync surface.
 - Class: functional
 - Status: active
-- Description: iOS must expose a bottom `Calendar` / `日历` tab beside Timeline. Calendar defaults to a local-derived month grid, supports continuous month navigation by arrows and horizontal swipe with direction-aware controlled three-page slide transitions, uses quiet heatmap density from local moment counts, shows at most two media hints per day, supports Calendar-owned media/favorite filters, fades future dates, highlights today subtly, and has no Compose entry. Tapping a populated date opens Day Review first, and Day Review should remember its per-day scroll position.
+- Description: iOS must expose a bottom `Calendar` / `日历` tab beside Timeline. Calendar defaults to a local-derived month grid, supports continuous month navigation by arrows and horizontal swipe, uses quiet heatmap density from local moment counts, shows at most two media hints per day, supports Calendar-owned media/favorite filters, fades future dates, highlights today subtly, and has no Compose entry. Tapping a populated date opens Day Review first, and Day Review should remember its per-day scroll position.
 - Why it matters: As the timeline grows, the user needs stronger回看 ability than scrolling or toolbar menus, but the main reading surface should remain Timeline and Calendar must not become a management dashboard.
 - Source: M008 Calendar Review discussion 2026-05-03
 - Primary owning slice: M008
 - Supporting slices: R003,R018,R029
-- Validation: CalendarReviewModelsTests cover continuous 42-cell months, empty months, locale first weekday, today/future states, density buckets, max-two media hints, and media/favorite filters. User accepted `UAT-M008-CALENDAR` on 2026-05-07 after real iPhone Calendar/Day Review/Timeline handoff checks. On 2026-05-08 Calendar month paging was refined to a custom offset pager with adjacent months pre-rendered and no animated state reset.
+- Validation: CalendarReviewModelsTests cover continuous 42-cell months, empty months, locale first weekday, today/future states, density buckets, max-two media hints, and media/favorite filters. User accepted `UAT-M008-CALENDAR` on 2026-05-07 after real iPhone Calendar/Day Review/Timeline handoff checks.
 
 ### R051 — Mac Admin must shrink toward a minimal Mac-local recovery console.
 - Class: constraint
