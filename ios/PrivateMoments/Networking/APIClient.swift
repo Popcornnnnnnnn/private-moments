@@ -617,7 +617,7 @@ enum APIError: LocalizedError {
         case .invalidResponse:
             return true
         case .httpStatus(let status, let body):
-            return status >= 500 || (status == 404 && body.looksLikeRouteNotFound)
+            return status >= 500 || (status == 404 && body.looksLikeFallbackRouteMiss)
         case .invalidURL, .missingToken, .missingUploadFile:
             return false
         }
@@ -640,7 +640,11 @@ enum APIError: LocalizedError {
 }
 
 private extension String {
-    var looksLikeRouteNotFound: Bool {
+    var looksLikeFallbackRouteMiss: Bool {
+        if trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return true
+        }
+
         let normalized = lowercased()
         return normalized.contains("route")
             && normalized.contains("not found")

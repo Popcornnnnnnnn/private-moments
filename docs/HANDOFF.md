@@ -9,6 +9,7 @@ Last reconciled: 2026-05-08
 - Admin UI 可通过 `npm run admin:build` 构建，并由 server 在 `/admin/` 提供访问。
 - 项目工作流已写入 `docs/WORKFLOW.md`，agent 强制规则写入 `AGENTS.md`。
 - `.gsd/` 是结构化事实源，记录当前项目事实、requirements、decisions 和 milestone state；`docs/` 是给人阅读的稳定文档层。
+- 2026-05-08 Check-in photo failed sync 根因修复：真实 iPhone 的 check-in item/entry 已同步成功，failed count 来自 `local_checkin_media` 照片上传；iPhone 优先使用上次可达的 `https://moments.popcornnn.xyz`，但本机 Cloudflare Tunnel allowlist 漏了新增 `/api/v1/checkin-media/*`，导致 fallback endpoint 返回空 body `404`，客户端没有继续尝试 primary Tailscale URL。已备份并更新本机 ignored tunnel config，重载后公网 `/api/v1/checkin-media/upload` 不再 404；iOS 端也改为把空 body 404 当作 fallback route miss 继续尝试下一个 server candidate。随后已 build/sign/install/launch 到 `wwz 的 iphone`，server 记录 `checkin_media.upload_completed`，iPhone container 复查 active failed/pending check-in media 均为 0。该照片随后由 iPhone 发出 `delete_checkin_media` 并被 server 接受，当前 entry 已 synced 且没有活动照片附件；这看起来是一次后续编辑/保存动作，不再是 upload failed。
 - 2026-05-08 Settings 顶层 `Appearance` 已收成二级页：顶层只显示当前外观模式摘要，具体 `System` / `Light` / `Dark` 选择进入 `Settings > Appearance`。
 - 2026-05-08 Settings 顶层 `Language` 也已收成二级页：顶层只显示当前 App Language / AI Language 摘要，具体 `System` / `English` / `简体中文` 和 `Auto` / `Chinese` / `English` 选择进入 `Settings > Language`。
 - 2026-05-08 Settings > Storage & Diagnostics 已按语义拆成两个入口：`Storage` 只放本机存储、媒体缓存清理和 `Mac Storage`；`Diagnostics` 放 `Sync Health`、`Mac Server` runtime、`Mac Operations`、`AI & Tags`。刷新仍是只读，显式同步/重试动作保留在 `Sync Health` 子页。

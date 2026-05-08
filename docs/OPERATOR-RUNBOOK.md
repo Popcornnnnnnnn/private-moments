@@ -455,7 +455,7 @@ curl -fsS --resolve <tailscale-host>:443:<tailscale-ip> https://<tailscale-host>
 PRIVATE_MOMENTS_FALLBACK_SERVER_URL=https://your-private-fallback.example
 ```
 
-`npm run ios:device` 和 `npm run ios:simulator` 会读取 `.env.local`，并把 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL` 写入 app bundle 的 `PrivateMomentsFallbackServerURL`。运行时仍以 Settings 中的 Server URL 为 primary；当 primary 出现网络级连接失败时，app 会自动尝试 bundled fallback。HTTP 401/403/404 等认证或服务端错误不会触发 fallback。
+`npm run ios:device` 和 `npm run ios:simulator` 会读取 `.env.local`，并把 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL` 写入 app bundle 的 `PrivateMomentsFallbackServerURL`。运行时仍以 Settings 中的 Server URL 为 primary；当 primary 出现网络级连接失败时，app 会自动尝试 bundled fallback。HTTP 401/403 或业务级 404 不会触发 fallback；fallback endpoint 返回空 body 404 或 `Route ... not found` 这类路由级 404 时，iOS 会继续尝试下一个 server candidate，避免 stale tunnel allowlist 卡住 primary。
 
 如果使用 Cloudflare Tunnel，建议只放行 iOS 同步所需 API，避免把完整 Mac Admin UI 暴露到公网：
 
