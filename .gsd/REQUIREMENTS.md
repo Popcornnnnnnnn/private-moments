@@ -458,6 +458,16 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R036,R037,R047,R050
 - Validation: Current checkpoint verifies Admin default tab/order through code review and `npm run admin:build`. Future Overview/Posts shrink work should include Admin build plus Admin smoke or browser verification.
 
+### R052 — Pinned Moments must stay a quiet shortcut layer over the chronological Timeline.
+- Class: functional
+- Status: active
+- Description: The user can pin several moments. Timeline shows a top `Pinned` section when matching pinned moments exist, defaulting to collapsed one-line title rows. Pinned moments remain in their normal chronological positions, use existing content to derive a title, and open the original moment detail rather than creating duplicate content.
+- Why it matters: The user wants fast access to important moments, but the product's main value is still a quiet lived-time feed. Pinning should not turn Timeline into a dashboard or break Calendar/Day Review chronology.
+- Source: Pinned Moments design 2026-05-08
+- Primary owning slice: M011/S02
+- Supporting slices: M011/S01,M011/S03,M011/S04,M011/S05,R048
+- Validation: Planned M011 validation must cover schema/sync migration, title derivation, collapsed default UI, filter behavior, generic iOS build, isolated server sync smoke, and a deliberate real-device UAT checkpoint or open UAT gate.
+
 ## Validated
 
 ### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
@@ -561,10 +571,11 @@ This file is the explicit capability and coverage contract for the project.
 | R049 | operational | validated | maintenance | R001,R003 | 2026-05-07 user accepted all 10 current UAT gates; `docs/UAT-GATES.md` records them as closed and `verify:uat-gates` / `verify:release-gates` must report 0 open gates. |
 | R050 | constraint | active | maintenance | R036,R037,R047 | New operational settings, diagnostics, monitoring, and safe repair controls prefer iOS Settings; Mac Admin remains for Mac-local recovery and low-frequency operations. |
 | R051 | constraint | active | maintenance | R036,R037,R047,R050 | Mac Admin opens Archive first and should retain only Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency while daily operations migrate to iOS. |
+| R052 | functional | active | M011/S02 | M011/S01,M011/S03,M011/S04,M011/S05,R048 | Pinned Moments design checkpoint defines a collapsed title-only shortcut shelf above Timeline; implementation must verify schema/sync, UI, isolated server smoke, and real-device safety gate. |
 
 ## Coverage Summary
 
-- Active requirements: 46
-- Mapped to slices: 42 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R049, R050, R051)
+- Active requirements: 47
+- Mapped to slices: 43 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R049, R050, R051, R052)
 - Validated: 5 (R004, R005, R006, R007, R017)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

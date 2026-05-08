@@ -67,6 +67,7 @@ The MVP server currently supports these operation types:
 
 Future operation types:
 
+- `update_post_pin`
 - `upsert_media`
 - media status reconciliation
 
@@ -248,6 +249,33 @@ Favorite state is synced as metadata on the post, but it uses a separate lightwe
 ```
 
 The server updates `Post.isFavorite`, emits `post_favorite_updated`, and assigns a new `serverVersion`. Clients should keep the time line visually quiet: favorites are a small marker and filter target, not a prominent content block.
+
+## Planned Pinned Moments
+
+M011 plans a lightweight pin metadata operation. This is not implemented in the current protocol yet.
+
+`update_post_pin` payload:
+
+```json
+{
+  "isPinned": true,
+  "pinnedAt": "2026-05-08T12:00:00Z"
+}
+```
+
+Planned server behavior:
+
+- Validates that the post exists and is not deleted.
+- Updates `Post.isPinned` and `Post.pinnedAt`.
+- Emits `post_pin_updated` with `id`, `isPinned`, nullable `pinnedAt`, and `updatedAt`.
+- Includes pin fields in `post_created` and `post_updated` payloads for baseline recovery.
+
+Planned iOS behavior:
+
+- Applies `post_pin_updated` into `local_posts.isPinned` / `local_posts.pinnedAt`.
+- Shows pinned moments in a collapsed title-only Timeline shelf when they match active filters.
+- Keeps pinned moments in their original chronological Timeline, Calendar, and Day Review positions.
+- Treats pin/unpin like favorite in edit semantics: it does not set user edited metadata and does not change post text or `occurredAt`.
 
 ## Comments
 

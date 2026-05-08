@@ -26,6 +26,20 @@ Moments 是一个没有观众的生活表达空间。它应该像社交一样轻
 - 时间和月份提示应服务于方向感，并保持 App UI 的英文体系。优先使用 `Just now`、`2 min ago`、`Yesterday 2:40 PM` 这类人类表达；月份信息适合作为滚动时短暂出现的浮层提示，而不是常驻的大块结构标题。
 - 如果一个功能让首屏变复杂，默认重新设计入口，而不是继续堆控件。
 
+## Pinned Moments Without Timeline Clutter
+
+置顶是少量重要 moment 的快捷入口，不是把时间线顶部改造成公告栏、任务列表或收藏夹页面。
+
+设计约束：
+
+- Pinned 区域只在有置顶内容时出现，并且默认折叠。
+- 折叠状态只显示标题，不显示正文、图片网格、comments、summary 正文、tag 列表或管理按钮。
+- 置顶不改变 moment 的发生时间，也不把原 moment 从正常时间线、Calendar 或 Day Review 中移走。
+- Pin / Unpin 是低频操作，入口优先放在 Detail、context menu、swipe/menu 等位置，不给普通 timeline row 常驻增加 pin 按钮。
+- 置顶标题优先来自已有正文标题或内容 fallback。第一版不要新增“置顶标题”编辑字段，避免把一个快捷入口变成第二套写作/整理系统。
+- 如果以后需要排序，先评估是否真的超过少量置顶；默认用 `pinnedAt` 排序，不急着做拖拽管理。
+- 当前筛选/搜索启用时，Pinned 应只显示同样匹配筛选的 pinned moments，避免顶部出现和当前上下文无关的内容。
+
 ## iOS-First Operations
 
 Mac Admin 是低频运维工具，不是长期的日常使用中心。后续新增设置、监控、诊断和安全修复动作时，默认先判断能否放在 iOS Settings 或 iOS 内的专用诊断页里。
