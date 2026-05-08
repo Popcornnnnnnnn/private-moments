@@ -122,6 +122,19 @@ struct SyncDoctorDiagnosis: Equatable {
             )
         }
 
+        if let sync, hasCurrentRejectedSyncWork(stats: stats, sync: sync) {
+            findings.append(
+                SyncDoctorFinding(
+                    id: "rejected-operations",
+                    status: .blocked,
+                    titleKey: "Server rejected sync work",
+                    detailKey: "Check Sync Health and Mac logs before retrying rejected sync work.",
+                    value: "\(sync.rejectedOperations ?? 0)",
+                    action: nil
+                )
+            )
+        }
+
         if stats.pendingChanges > 0 || stats.pendingUploads > 0 {
             findings.append(
                 SyncDoctorFinding(
@@ -157,19 +170,6 @@ struct SyncDoctorDiagnosis: Equatable {
                     detailKey: "Some uploaded media is missing locally and can be downloaded again.",
                     value: "\(stats.missingMediaDownloads)",
                     action: .redownloadMissingMedia
-                )
-            )
-        }
-
-        if let rejectedOperations = sync?.rejectedOperations, rejectedOperations > 0 {
-            findings.append(
-                SyncDoctorFinding(
-                    id: "rejected-operations",
-                    status: .blocked,
-                    titleKey: "Server rejected sync work",
-                    detailKey: "Check Sync Health and Mac logs before retrying rejected sync work.",
-                    value: "\(rejectedOperations)",
-                    action: nil
                 )
             )
         }
@@ -232,5 +232,41 @@ struct SyncDoctorDiagnosis: Equatable {
 
     private static func hasPendingWork(_ stats: LocalStorageStats) -> Bool {
         stats.pendingChanges > 0 || stats.pendingUploads > 0 || stats.failedUploads > 0
+    }
+
+    private static func hasCurrentRejectedSyncWork(stats: LocalStorageStats, sync: AdminSyncDiagnostics) -> Bool {
+        guard let rejectedOperations = sync.rejectedOperations, rejectedOperations > 0 else {
+            return false
+        }
+
+        guard stats.pendingChanges > 0 || (sync.pendingOperations ?? 0) > 0 else {
+            return false
+        }
+
+        guard let lastRejectedSyncAt = parseAdminTimestamp(sync.lastRejectedSyncAt) else {
+            return false
+        }
+
+        guard let lastSuccessfulSyncAt = parseAdminTimestamp(sync.lastSuccessfulSyncAt) else {
+            return true
+        }
+
+        return lastRejectedSyncAt > lastSuccessfulSyncAt
+    }
+
+    private static func parseAdminTimestamp(_ value: String?) -> Date? {
+        guard let value else {
+            return nil
+        }
+
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: value) {
+            return date
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
     }
 }

@@ -74,15 +74,52 @@ final class SyncDoctorDiagnosisTests: XCTestCase {
         XCTAssertEqual(diagnosis.recommendedAction, .redownloadMissingMedia)
     }
 
-    func testRejectedOperationsRequireManualInspection() {
+    func testHistoricalRejectedOperationsDoNotBlockWhenSyncIsHealthy() {
         let diagnosis = diagnose(
-            sync: Self.makeSync(latestServerChangeVersion: 10, rejectedOperations: 2),
+            sync: Self.makeSync(
+                latestServerChangeVersion: 10,
+                rejectedOperations: 2,
+                lastSuccessfulSyncAt: "2026-05-08T10:05:00.000Z",
+                lastRejectedSyncAt: "2026-05-08T10:00:00.000Z"
+            ),
+            lastSyncCursor: 10
+        )
+
+        XCTAssertEqual(diagnosis.status, .allClear)
+        XCTAssertEqual(diagnosis.recommendedAction, nil)
+        XCTAssertTrue(diagnosis.findings.isEmpty)
+    }
+
+    func testCurrentRejectedOperationsRequireManualInspectionWhenPendingWorkRemains() {
+        let diagnosis = diagnose(
+            stats: Self.makeStats(pendingChanges: 1),
+            sync: Self.makeSync(
+                latestServerChangeVersion: 10,
+                rejectedOperations: 2,
+                lastSuccessfulSyncAt: "2026-05-08T10:00:00.000Z",
+                lastRejectedSyncAt: "2026-05-08T10:05:00.000Z"
+            ),
             lastSyncCursor: 10
         )
 
         XCTAssertEqual(diagnosis.status, .blocked)
         XCTAssertEqual(diagnosis.titleKey, "Server rejected sync work")
         XCTAssertEqual(diagnosis.recommendedAction, nil)
+    }
+
+    func testHistoricalRejectedOperationsDoNotOutrankNewPendingWork() {
+        let diagnosis = diagnose(
+            stats: Self.makeStats(pendingChanges: 1),
+            sync: Self.makeSync(
+                latestServerChangeVersion: 10,
+                rejectedOperations: 2
+            ),
+            lastSyncCursor: 10
+        )
+
+        XCTAssertEqual(diagnosis.status, .needsAttention)
+        XCTAssertEqual(diagnosis.titleKey, "Sync work is waiting")
+        XCTAssertEqual(diagnosis.recommendedAction, .syncNow)
     }
 
     private func diagnose(
@@ -124,7 +161,9 @@ final class SyncDoctorDiagnosisTests: XCTestCase {
     private static func makeSync(
         latestServerChangeVersion: Int,
         rejectedOperations: Int = 0,
-        aiNonReady: Int = 0
+        aiNonReady: Int = 0,
+        lastSuccessfulSyncAt: String? = nil,
+        lastRejectedSyncAt: String? = nil
     ) -> AdminSyncDiagnostics {
         AdminSyncDiagnostics(
             latestServerChangeVersion: latestServerChangeVersion,
@@ -134,8 +173,8 @@ final class SyncDoctorDiagnosisTests: XCTestCase {
             aiNonReady: aiNonReady,
             lastServerChangeAt: nil,
             lastSyncOperationAt: nil,
-            lastSuccessfulSyncAt: nil,
-            lastRejectedSyncAt: nil
+            lastSuccessfulSyncAt: lastSuccessfulSyncAt,
+            lastRejectedSyncAt: lastRejectedSyncAt
         )
     }
 }

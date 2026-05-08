@@ -471,12 +471,12 @@ This file is the explicit capability and coverage contract for the project.
 ### R053 — Sync Doctor should guide diagnosis and safe repair from existing Sync Health evidence.
 - Class: functional
 - Status: validated
-- Description: Sync Doctor uses existing local and Mac-side Sync Health evidence to classify common sync problems such as unreachable server, stale fallback endpoint, auth failure, cursor lag, pending outbox, failed media uploads, missing media, rejected operations, and AI non-ready state. It recommends or triggers only safe explicit next actions: Sync Now, Pull Server Changes, Retry Uploads, Re-download Missing Media, or manual Mac-side service/tunnel/log inspection.
+- Description: Sync Doctor uses existing local and Mac-side Sync Health evidence to classify common sync problems such as unreachable server, stale fallback endpoint, auth failure, cursor lag, pending outbox, failed media uploads, missing media, active rejected operations, and AI non-ready state. It recommends or triggers only safe explicit next actions: Sync Now, Pull Server Changes, Retry Uploads, Re-download Missing Media, or manual Mac-side service/tunnel/log inspection. Historical Mac-side rejected operation counts remain raw Sync Health evidence; they should not block Sync Doctor when local pending work is clear or a newer successful sync has happened.
 - Why it matters: The project already exposes many diagnostics, but repeated real-use incidents still require manual interpretation. A guided flow can reduce recovery time without crowding Timeline or moving dangerous Mac archive actions to iOS.
 - Source: post-M011 feature triage 2026-05-08
 - Primary owning slice: maintenance
 - Supporting slices: R036,R037,R050,R051
-- Validation: Validated on 2026-05-08 with focused `SyncDoctorDiagnosisTests` covering all-clear, unauthenticated, Mac unavailable, local-only pending work, failed uploads, cursor lag, missing media, and rejected operations; generic iOS Debug build passed; the modified app installed and launched on the paired iPhone. The implementation is iOS-only and does not change server status data, SQLite schema, or sync protocol.
+- Validation: Validated on 2026-05-08 with focused `SyncDoctorDiagnosisTests` covering all-clear, unauthenticated, Mac unavailable, local-only pending work, failed uploads, cursor lag, missing media, historical rejected operations, and active rejected operations; generic iOS Debug build passed; the modified app installed and launched on the paired iPhone. The implementation is iOS-only and does not change server status data, SQLite schema, or sync protocol.
 
 ## Validated
 
