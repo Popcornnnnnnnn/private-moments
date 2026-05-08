@@ -130,5 +130,8 @@ Simulator UI/interaction validation:
 
 Known limitations:
 
-- Real iPhone install/UAT is intentionally deferred for this worktree. Before any true-device install, run Sync Health/outbox checks and create a recovery checkpoint.
+- Main deploy follow-up on 2026-05-08: merged `codex/pinned-moments-design` into `main` as `49e3c5f`, applied `20260508130000_pinned_posts` to the live Mac SQLite database, restarted `com.private-moments.server`, and confirmed `GET /api/v1/health` returns `schemaVersion: 13`.
+- Before true-device install, created recovery checkpoint `.tmp/deploy-checkpoints/20260508-121602` with a Mac SQLite backup plus copied iPhone app data container. Pre-install iPhone checks showed 127 visible local posts, 0 pending/failed outbox operations, 0 missing visible media, and 3 pre-existing pending media uploads.
+- Installed and launched the merged main build on `wwz 的 iphone` with bundled fallback `https://moments.popcornnn.xyz`. Post-install iPhone database copy confirmed `local_posts.isPinned` and `local_posts.pinnedAt` exist, 127 visible posts remain, outbox remains 0, and the same 3 media uploads remain pending for the normal upload queue.
+- Real iPhone install is complete, but human UI UAT remains open until the owner confirms the pinned interactions on device.
 - Context-menu pin/unpin visual presentation was implemented and compiled, but simulator validation focused on header, sheet, title-row expansion, and sheet detail navigation because those are the primary UI/interaction paths for this checkpoint.
