@@ -189,6 +189,7 @@ Mac 通过 Tailscale 或私有 VPN 被 iPhone 访问，不直接暴露公网。
 - 置顶标题行显示标题和很轻的发生日期辅助信息，不显示正文、媒体、评论、Tag 或完整预览。
 - 点击置顶标题打开原 moment detail；从置顶 sheet 进入时，detail 在 sheet 内部 navigation stack 中打开，并保留完整详情能力。
 - 当 `Pinned` 区域可见时，已置顶 moment 不再作为普通完整 row 重复出现在无筛选主 Timeline；Calendar、Day Review、搜索、筛选和 Weekly Review 不因为置顶而改变发生时间或统计。
+- 当搜索或筛选让已置顶 moment 作为普通 Timeline row 出现时，该 row 显示轻量 pin 图标，提示它已经被置顶。
 - Pin / Unpin 入口放在 Moment Detail 的 `More` 菜单、Timeline row 长按菜单和置顶 sheet 行 context menu，不在每条时间线 row 常驻增加按钮，也不占用现有 Favorite 左滑操作。
 - Pin 状态应该随同步恢复，离线、pending、failed、partial 或 synced moment 都可以本地 pin/unpin，后续在 Mac 可达时同步。
 - Pin 和 Favorite 相互独立；pin/unpin 不改变 favorite，favorite/unfavorite 不改变 pin。

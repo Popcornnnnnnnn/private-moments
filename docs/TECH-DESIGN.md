@@ -136,6 +136,7 @@ Timeline UI：
 - Pinned 只出现在主 Timeline，并且只在没有 active search/filter state 时出现；搜索、日期、Tag、Favorite、评论、内容类型、待同步或 match-source 筛选都会隐藏 Pinned。
 - Timeline 顶部默认只显示 `Pinned · N` 汇总 header。
 - 当 Pinned 区域可见时，已置顶 items 从普通 unfiltered Timeline list 中移除，避免 header 下方立刻重复出现完整置顶 row；active search/filter state 隐藏 Pinned 后，置顶 items 仍按普通筛选结果显示。
+- 当 active search/filter state 让置顶 items 作为普通 Timeline row 显示时，row 顶部 metadata 区显示一个低权重 `pin.fill` 图标，和 Favorite / sync badge 一样作为状态提示，不增加文字或新操作按钮。
 - 当 pinned 数量为 1-3 条时，点击 header 展开/收起最多 3 条标题行。展开/收起状态只保存在本机 `UserDefaults`，不进入 sync。
 - 当 pinned 数量超过 3 条时，点击 header 打开底部 sheet，显示完整 pinned 标题列表。
 - 标题行只显示标题和轻量发生日期辅助信息；不显示正文、media grid、comments、AI summary、tag wall 或 sync success badge。

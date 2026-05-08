@@ -35,6 +35,12 @@ struct TimelineRow: View {
                         .foregroundStyle(.yellow)
                         .accessibilityLabel(L10n.t("Favorite", appLanguage))
                 }
+                if item.post.isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(L10n.t("Pinned", appLanguage))
+                }
                 if item.post.syncStatus != "synced" {
                     SyncBadge(status: item.post.syncStatus)
                 }
