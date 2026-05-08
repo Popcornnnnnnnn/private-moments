@@ -16,7 +16,7 @@ struct CalendarView: View {
     @State private var daySelectionFeedbackToken = 0
     @State private var showMonthStats = false
     @State private var monthNavigationDirection = 1
-    @State private var monthPageSelection = 0
+    @State private var monthPageProgress: CGFloat = 0
     @State private var isAnimatingMonthPage = false
     @State private var monthTransitionTarget: Date?
     @State private var now = Date()
@@ -58,7 +58,7 @@ struct CalendarView: View {
     }
 
     private var monthPageAnimation: Animation {
-        .interactiveSpring(response: 0.34, dampingFraction: 0.9, blendDuration: 0.04)
+        .smooth(duration: 0.30, extraBounce: 0)
     }
 
     private func reviewMonth(containing date: Date) -> CalendarReviewMonth {
@@ -101,14 +101,13 @@ struct CalendarView: View {
                             previousMonth: previousMonth,
                             month: month,
                             nextMonth: nextMonth,
-                            selection: $monthPageSelection,
+                            progress: $monthPageProgress,
                             calendar: calendar,
                             isInteractionEnabled: !isAnimatingMonthPage,
+                            onCommitMonth: commitInteractiveMonthChange,
+                            onCancelMonth: cancelInteractiveMonthChange,
                             onSelectDay: selectDay
                         )
-                        .onChange(of: monthPageSelection) { _, selection in
-                            handleMonthPageSelection(selection)
-                        }
 
                         if store.items.isEmpty {
                             Text(L10n.t("No moments yet", appLanguage))
@@ -258,16 +257,6 @@ struct CalendarView: View {
         animateMonthChange(to: targetMonth, direction: monthOffset > 0 ? 1 : -1)
     }
 
-    private func handleMonthPageSelection(_ selection: Int) {
-        guard selection != 0, !isAnimatingMonthPage else {
-            return
-        }
-
-        let direction = selection > 0 ? 1 : -1
-        let targetMonth = CalendarReviewBuilder.addMonths(direction, to: visibleMonth, calendar: calendar)
-        completeMonthChange(to: targetMonth)
-    }
-
     private func animateMonthChange(to targetMonth: Date, direction: Int) {
         guard !isAnimatingMonthPage else {
             return
@@ -285,11 +274,20 @@ struct CalendarView: View {
         isAnimatingMonthPage = true
 
         withAnimation(monthPageAnimation) {
-            monthPageSelection = resolvedDirection
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) {
+            monthPageProgress = CGFloat(resolvedDirection)
+        } completion: {
             completeMonthChange(to: normalizedTarget)
+        }
+    }
+
+    private func commitInteractiveMonthChange(_ direction: Int) {
+        let targetMonth = CalendarReviewBuilder.addMonths(direction, to: visibleMonth, calendar: calendar)
+        animateMonthChange(to: targetMonth, direction: direction)
+    }
+
+    private func cancelInteractiveMonthChange() {
+        withAnimation(monthPageAnimation) {
+            monthPageProgress = 0
         }
     }
 
@@ -299,7 +297,7 @@ struct CalendarView: View {
 
         withTransaction(transaction) {
             visibleMonth = CalendarReviewBuilder.monthStart(for: targetMonth, calendar: calendar)
-            monthPageSelection = 0
+            monthPageProgress = 0
         }
 
         monthTransitionTarget = nil
@@ -377,9 +375,11 @@ private struct CalendarMonthGridPager: View {
     let previousMonth: CalendarReviewMonth
     let month: CalendarReviewMonth
     let nextMonth: CalendarReviewMonth
-    @Binding var selection: Int
+    @Binding var progress: CGFloat
     let calendar: Calendar
     let isInteractionEnabled: Bool
+    let onCommitMonth: (Int) -> Void
+    let onCancelMonth: () -> Void
     let onSelectDay: (CalendarReviewDay) -> Void
 
     var body: some View {
@@ -389,34 +389,76 @@ private struct CalendarMonthGridPager: View {
             onSelectDay: onSelectDay
         )
         .hidden()
+        .allowsHitTesting(false)
         .overlay {
-            TabView(selection: $selection) {
-                CalendarMonthGrid(
-                    month: previousMonth,
-                    calendar: calendar,
-                    onSelectDay: onSelectDay
-                )
-                .tag(-1)
+            GeometryReader { proxy in
+                HStack(spacing: 0) {
+                    CalendarMonthGrid(
+                        month: previousMonth,
+                        calendar: calendar,
+                        onSelectDay: onSelectDay
+                    )
+                    .frame(width: proxy.size.width)
 
-                CalendarMonthGrid(
-                    month: month,
-                    calendar: calendar,
-                    onSelectDay: onSelectDay
-                )
-                .tag(0)
+                    CalendarMonthGrid(
+                        month: month,
+                        calendar: calendar,
+                        onSelectDay: onSelectDay
+                    )
+                    .frame(width: proxy.size.width)
 
-                CalendarMonthGrid(
-                    month: nextMonth,
-                    calendar: calendar,
-                    onSelectDay: onSelectDay
-                )
-                .tag(1)
+                    CalendarMonthGrid(
+                        month: nextMonth,
+                        calendar: calendar,
+                        onSelectDay: onSelectDay
+                    )
+                    .frame(width: proxy.size.width)
+                }
+                .frame(width: proxy.size.width * 3, alignment: .leading)
+                .offset(x: -proxy.size.width * (1 + progress))
+                .contentShape(Rectangle())
+                .gesture(monthDragGesture(width: proxy.size.width))
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .allowsHitTesting(isInteractionEnabled)
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .clipped()
+    }
+
+    private func monthDragGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+            .onChanged { value in
+                guard isInteractionEnabled,
+                      width > 0,
+                      abs(value.translation.width) > abs(value.translation.height) else {
+                    return
+                }
+
+                progress = clamped(-value.translation.width / width)
+            }
+            .onEnded { value in
+                guard isInteractionEnabled,
+                      width > 0,
+                      abs(value.translation.width) > abs(value.translation.height) else {
+                    onCancelMonth()
+                    return
+                }
+
+                let currentProgress = clamped(-value.translation.width / width)
+                let projectedProgress = clamped(-value.predictedEndTranslation.width / width)
+                let shouldCommit = abs(currentProgress) >= 0.28 || abs(projectedProgress) >= 0.48
+
+                guard shouldCommit else {
+                    onCancelMonth()
+                    return
+                }
+
+                let direction = (abs(projectedProgress) > abs(currentProgress) ? projectedProgress : currentProgress) > 0 ? 1 : -1
+                onCommitMonth(direction)
+            }
+    }
+
+    private func clamped(_ value: CGFloat) -> CGFloat {
+        min(max(value, -1), 1)
     }
 }
 
