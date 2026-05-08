@@ -11,7 +11,7 @@ Last reconciled: 2026-05-08
 - `.gsd/` 是结构化事实源，记录当前项目事实、requirements、decisions 和 milestone state；`docs/` 是给人阅读的稳定文档层。
 - 2026-05-08 Settings 顶层 `Appearance` 已收成二级页：顶层只显示当前外观模式摘要，具体 `System` / `Light` / `Dark` 选择进入 `Settings > Appearance`。
 - 2026-05-08 Settings 顶层 `Language` 也已收成二级页：顶层只显示当前 App Language / AI Language 摘要，具体 `System` / `English` / `简体中文` 和 `Auto` / `Chinese` / `English` 选择进入 `Settings > Language`。
-- 2026-05-08 Settings > Storage & Diagnostics 已做首轮分级：第一页只保留 `Summary`、本机占用、Mac reachability 和异常摘要，详细计数/操作进入 `This iPhone`、`Sync Health`、`Mac Server`、`Mac Operations`、`AI & Tags` 子页；刷新仍是只读，显式同步/重试动作保留在 `Sync Health` 子页。
+- 2026-05-08 Settings > Storage & Diagnostics 已按语义拆成两个入口：`Storage` 只放本机存储、媒体缓存清理和 `Mac Storage`；`Diagnostics` 放 `Sync Health`、`Mac Server` runtime、`Mac Operations`、`AI & Tags`。刷新仍是只读，显式同步/重试动作保留在 `Sync Health` 子页。
 - 2026-05-07 新增统一质量门禁：`docs/UAT-GATES.md` 集中记录真实 iPhone、Mac Archive、Share Extension、AI Summary、Smart Tags、Weekly Review 等人工/真机门禁；`npm run verify:uat-gates` 报告 open gates，`npm run verify:release-gates` 在 open gates 存在时失败；`npm run verify:all` 作为日常 checkpoint 入口串联 server/admin/iOS generic build、focused tests、UAT gate 报告和 diff check。
 - 2026-05-07 用户确认当前 10 个 UAT gate 先全部验收通过；`docs/UAT-GATES.md` 已全部改为 `closed`，后续 release gate 应以 `npm run verify:release-gates` 复查是否仍为 0 open。
 - 2026-05-08 修复 Settings > Feature Modules 中 Weekly Review 两个开关的 404 体验：iOS API client 对“Route ... not found”这类路由级 404 会继续尝试下一个 server candidate，避免上次可达的旧 fallback/隧道地址挡住当前主地址；publish 开关文案缩短为 `Publish Weekly Review`，Feature Modules toggle 标签优先单行显示。

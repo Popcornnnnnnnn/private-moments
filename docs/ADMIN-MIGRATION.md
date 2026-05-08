@@ -59,9 +59,10 @@ Mac Admin 只保留必须依赖 Mac 本地文件系统、server 进程、Archive
 
 ### Step 4: iOS 补齐迁移项
 
-已完成首轮只读迁移。iOS Settings > Storage & Diagnostics 在 Mac 在线时补充：
+已完成首轮只读迁移。iOS Settings > Storage & Diagnostics 已拆成 `Storage` 与 `Diagnostics` 两个入口；Mac 在线时补充：
 
-- Mac runtime 摘要：server version、schema version、data dir、uptime、storage。
+- Mac storage 摘要：server total、database、media、logs、available disk。
+- Mac runtime 摘要：server version、schema version、data dir、uptime。
 - Maintenance 摘要：maintenance mode、running job、recent failed job。
 - Archive 摘要：repository configured、restic availability/version、last backup/snapshot、next backup。
 

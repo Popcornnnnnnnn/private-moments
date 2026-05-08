@@ -1,48 +1,123 @@
 import SwiftUI
 
+enum StorageDiagnosticsModule {
+    case storage
+    case diagnostics
+
+    var titleKey: String {
+        switch self {
+        case .storage:
+            return "Storage"
+        case .diagnostics:
+            return "Diagnostics"
+        }
+    }
+}
+
 struct StorageSummaryLink: View {
     @Environment(\.appLanguage) private var appLanguage
     @EnvironmentObject private var store: TimelineStore
     @State private var localStats: LocalStorageStats?
-    @State private var serverStats: ServerStorageStats?
+    @State private var serverStatus: AdminStatusResponse?
 
     var body: some View {
-        NavigationLink {
-            StorageDetailsView()
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.t("Storage", appLanguage))
-                Text(summary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        Group {
+            NavigationLink {
+                StorageDetailsView(module: .storage)
+            } label: {
+                summaryLinkLabel(title: "Storage", detail: storageSummary)
             }
-            .padding(.vertical, 3)
+
+            NavigationLink {
+                StorageDetailsView(module: .diagnostics)
+            } label: {
+                summaryLinkLabel(title: "Diagnostics", detail: diagnosticsSummary)
+            }
         }
         .task {
             await refresh()
         }
     }
 
-    private var summary: String {
+    private var storageSummary: String {
         guard let localStats else {
             return L10n.t("Checking storage", appLanguage)
         }
 
         let local = "iPhone \(StorageByteFormatter.string(from: localStats.totalBytes))"
-        guard let serverStats else {
+        guard let serverStats = serverStatus?.storage else {
             return local
         }
 
         return "\(local), Mac \(StorageByteFormatter.string(from: serverStats.totalBytes))"
     }
 
-    private func refresh() async {
-        localStats = try? LocalStorageStatsLoader.load(database: store.database)
-        serverStats = store.automaticSyncEnabled ? await loadServerStats() : nil
+    private var diagnosticsSummary: String {
+        guard let localStats else {
+            return L10n.t("Checking", appLanguage)
+        }
+
+        var parts = [
+            syncStatusText(for: localStats),
+            macReachabilityText
+        ]
+
+        if localStats.failedUploads > 0 {
+            parts.append("\(localStats.failedUploads) \(L10n.t("failed uploads", appLanguage))")
+        }
+
+        if localStats.missingMediaDownloads > 0 {
+            parts.append("\(localStats.missingMediaDownloads) \(L10n.t("Missing media", appLanguage))")
+        }
+
+        return parts.joined(separator: " · ")
     }
 
-    private func loadServerStats() async -> ServerStorageStats? {
+    private var macReachabilityText: String {
+        if serverStatus != nil {
+            return L10n.t("Reachable", appLanguage)
+        }
+
+        if store.automaticSyncEnabled {
+            return L10n.t("Unavailable", appLanguage)
+        }
+
+        return L10n.t("Local-only", appLanguage)
+    }
+
+    private func summaryLinkLabel(title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.t(title, appLanguage))
+            Text(detail)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func syncStatusText(for stats: LocalStorageStats) -> String {
+        if stats.pendingChanges == 0 && stats.pendingUploads == 0 && stats.failedUploads == 0 {
+            return L10n.t("All synced", appLanguage)
+        }
+
+        if stats.failedUploads > 0 {
+            return "\(stats.failedUploads) \(L10n.t("failed uploads", appLanguage))"
+        }
+
+        if stats.pendingUploads > 0 {
+            return "\(stats.pendingUploads) \(L10n.t("pending uploads", appLanguage))"
+        }
+
+        return "\(stats.pendingChanges) \(L10n.t("pending changes", appLanguage))"
+    }
+
+    private func refresh() async {
+        localStats = try? LocalStorageStatsLoader.load(database: store.database)
+        serverStatus = store.automaticSyncEnabled ? await loadServerStatus() : nil
+    }
+
+    private func loadServerStatus() async -> AdminStatusResponse? {
         guard store.isAuthenticated,
               let token = try? KeychainStore.deviceToken() else {
             return nil
@@ -50,7 +125,7 @@ struct StorageSummaryLink: View {
 
         do {
             return try await store.withAvailableAPIClient(token: token, preferLastReachable: true) { client in
-                try await client.adminStatus(timeoutInterval: 5).storage
+                try await client.adminStatus(timeoutInterval: 5)
             }
         } catch {
             return nil
@@ -78,6 +153,8 @@ private struct MacOperationsDiagnostics {
 }
 
 struct StorageDetailsView: View {
+    let module: StorageDiagnosticsModule
+
     @EnvironmentObject private var store: TimelineStore
     @Environment(\.appLanguage) private var appLanguage
     @State private var localStats: LocalStorageStats?
@@ -94,15 +171,21 @@ struct StorageDetailsView: View {
     var body: some View {
         Form {
             if let localStats {
-                summarySection(localStats, serverStatus: serverStatus)
-                diagnosticsMenuSection(localStats, serverStatus: serverStatus, macOperations: macOperations)
+                switch module {
+                case .storage:
+                    storageSummarySection(localStats, serverStatus: serverStatus)
+                    storageMenuSection(localStats, serverStatus: serverStatus)
+                case .diagnostics:
+                    diagnosticsSummarySection(localStats, serverStatus: serverStatus)
+                    diagnosticsMenuSection(localStats, serverStatus: serverStatus, macOperations: macOperations)
+                }
             } else {
                 Section(L10n.t("This iPhone", appLanguage)) {
                     ProgressView(L10n.t("Loading", appLanguage))
                 }
             }
         }
-        .navigationTitle(L10n.t("Storage & Diagnostics", appLanguage))
+        .navigationTitle(L10n.t(module.titleKey, appLanguage))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -135,10 +218,25 @@ struct StorageDetailsView: View {
         }
     }
 
-    private func summarySection(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> some View {
+    private func storageSummarySection(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> some View {
+        Section(L10n.t("Summary", appLanguage)) {
+            LabeledContent(L10n.t("This iPhone", appLanguage), value: StorageByteFormatter.string(from: stats.totalBytes))
+
+            if let serverStatus {
+                LabeledContent(L10n.t("Mac Storage", appLanguage), value: StorageByteFormatter.string(from: serverStatus.storage.totalBytes))
+
+                if let availableBytes = serverStatus.storage.availableBytes {
+                    LabeledContent(L10n.t("Available disk", appLanguage), value: StorageByteFormatter.string(from: availableBytes))
+                }
+            } else {
+                LabeledContent(L10n.t("Mac reachability", appLanguage), value: macReachabilityText(serverStatus: serverStatus))
+            }
+        }
+    }
+
+    private func diagnosticsSummarySection(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> some View {
         Section(L10n.t("Summary", appLanguage)) {
             LabeledContent(L10n.t("Status", appLanguage), value: syncStatusText(for: stats))
-            LabeledContent(L10n.t("This iPhone", appLanguage), value: StorageByteFormatter.string(from: stats.totalBytes))
             LabeledContent(L10n.t("Mac reachability", appLanguage), value: macReachabilityText(serverStatus: serverStatus))
 
             if let serverVersion = serverStatus?.sync?.latestServerChangeVersion {
@@ -158,12 +256,11 @@ struct StorageDetailsView: View {
         }
     }
 
-    private func diagnosticsMenuSection(
+    private func storageMenuSection(
         _ stats: LocalStorageStats,
-        serverStatus: AdminStatusResponse?,
-        macOperations: MacOperationsDiagnostics?
+        serverStatus: AdminStatusResponse?
     ) -> some View {
-        Section(L10n.t("Storage & Diagnostics", appLanguage)) {
+        Section(L10n.t("Storage", appLanguage)) {
             NavigationLink {
                 diagnosticsForm(title: "This iPhone") {
                     iPhoneSection(stats)
@@ -176,6 +273,27 @@ struct StorageDetailsView: View {
                 )
             }
 
+            if let serverStatus {
+                NavigationLink {
+                    diagnosticsForm(title: "Mac Storage") {
+                        macStorageSection(serverStatus)
+                    }
+                } label: {
+                    diagnosticsLinkLabel(
+                        title: "Mac Storage",
+                        detail: macStorageSummary(serverStatus)
+                    )
+                }
+            }
+        }
+    }
+
+    private func diagnosticsMenuSection(
+        _ stats: LocalStorageStats,
+        serverStatus: AdminStatusResponse?,
+        macOperations: MacOperationsDiagnostics?
+    ) -> some View {
+        Section(L10n.t("Diagnostics", appLanguage)) {
             NavigationLink {
                 diagnosticsForm(title: "Sync Health") {
                     syncHealthSection(stats, serverStatus: serverStatus)
@@ -282,7 +400,19 @@ struct StorageDetailsView: View {
     }
 
     private func macServerSummary(_ status: AdminStatusResponse) -> String {
-        "v\(status.serverVersion) · \(L10n.t("Schema", appLanguage)) \(status.schemaVersion) · \(StorageByteFormatter.string(from: status.storage.totalBytes))"
+        "v\(status.serverVersion) · \(L10n.t("Schema", appLanguage)) \(status.schemaVersion) · \(durationText(Double(status.uptimeSeconds)))"
+    }
+
+    private func macStorageSummary(_ status: AdminStatusResponse) -> String {
+        var parts = [
+            StorageByteFormatter.string(from: status.storage.totalBytes)
+        ]
+
+        if let availableBytes = status.storage.availableBytes {
+            parts.append("\(L10n.t("Available disk", appLanguage)) \(StorageByteFormatter.string(from: availableBytes))")
+        }
+
+        return parts.joined(separator: " · ")
     }
 
     private func macOperationsSummary(_ diagnostics: MacOperationsDiagnostics) -> String {
@@ -456,6 +586,14 @@ struct StorageDetailsView: View {
         Section(L10n.t("Mac Server", appLanguage)) {
             LabeledContent(L10n.t("Version", appLanguage), value: "v\(status.serverVersion)")
             LabeledContent(L10n.t("Schema", appLanguage), value: "\(status.schemaVersion)")
+            LabeledContent(L10n.t("Posts", appLanguage), value: "\(status.counts.posts)")
+            LabeledContent(L10n.t("Media", appLanguage), value: "\(status.counts.media)")
+            LabeledContent(L10n.t("Uptime", appLanguage), value: durationText(Double(status.uptimeSeconds)))
+        }
+    }
+
+    private func macStorageSection(_ status: AdminStatusResponse) -> some View {
+        Section(L10n.t("Mac Storage", appLanguage)) {
             LabeledContent(L10n.t("Total", appLanguage), value: StorageByteFormatter.string(from: status.storage.totalBytes))
 
             if let databaseBytes = status.storage.databaseBytes {
@@ -473,10 +611,6 @@ struct StorageDetailsView: View {
             if let availableBytes = status.storage.availableBytes {
                 LabeledContent(L10n.t("Available disk", appLanguage), value: StorageByteFormatter.string(from: availableBytes))
             }
-
-            LabeledContent(L10n.t("Posts", appLanguage), value: "\(status.counts.posts)")
-            LabeledContent(L10n.t("Media", appLanguage), value: "\(status.counts.media)")
-            LabeledContent(L10n.t("Uptime", appLanguage), value: durationText(Double(status.uptimeSeconds)))
         }
     }
 
