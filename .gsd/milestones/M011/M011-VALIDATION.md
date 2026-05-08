@@ -128,10 +128,13 @@ Simulator UI/interaction validation:
 - 2026-05-08 follow-up: rebuilt and reinstalled the worktree build into the dedicated simulator after changing the row-retention behavior. The simulator initially had a stale standalone Share Extension install conflict; uninstalling the dedicated simulator's test app/extension fixed installation without touching any real iPhone.
 - Seeded simulator-local SQLite with 5 pinned posts and 1 unpinned post. Accessibility hierarchy confirmed the unfiltered Timeline shows `Pinned 5`, then ordinary chronological rows including pinned rows such as `Pinned Alpha`, `Plain pinned title line`, `Pinned Delta`, and `Pinned Echo`; those pinned rows expose the `pin.fill` image with accessibility label `Pinned`.
 
-Known limitations:
+Main deploy and real-device UAT:
 
 - Main deploy follow-up on 2026-05-08: merged `codex/pinned-moments-design` into `main` as `49e3c5f`, applied `20260508130000_pinned_posts` to the live Mac SQLite database, restarted `com.private-moments.server`, and confirmed `GET /api/v1/health` returns `schemaVersion: 13`.
 - Before true-device install, created recovery checkpoint `.tmp/deploy-checkpoints/20260508-121602` with a Mac SQLite backup plus copied iPhone app data container. Pre-install iPhone checks showed 127 visible local posts, 0 pending/failed outbox operations, 0 missing visible media, and 3 pre-existing pending media uploads.
 - Installed and launched the merged main build on `wwz 的 iphone` with bundled fallback `https://moments.popcornnn.xyz`. Post-install iPhone database copy confirmed `local_posts.isPinned` and `local_posts.pinnedAt` exist, 127 visible posts remain, outbox remains 0, and the same 3 media uploads remain pending for the normal upload queue.
-- Real iPhone install is complete, but human UI UAT remains open until the owner confirms the pinned interactions on device.
+- 2026-05-08: the owner confirmed the Pinned Moments real-use UAT is complete; `docs/UAT-GATES.md` closed `UAT-M011-PINNED-MOMENTS`.
+
+Known limitations:
+
 - Context-menu pin/unpin visual presentation was implemented and compiled, but simulator validation focused on header, sheet, title-row expansion, and sheet detail navigation because those are the primary UI/interaction paths for this checkpoint.

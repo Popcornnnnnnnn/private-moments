@@ -114,6 +114,7 @@ Mac 通过 Tailscale 或私有 VPN 被 iPhone 访问，不直接暴露公网。
 - 键盘上方只提供紧凑的 H1、H2 输入辅助；按钮切换当前行格式，且中文等输入法组词期间不能被 Markdown 渲染打断。
 - Timeline、Detail 和 Day Review 统一渲染行首 `# ` 和 `## `；普通 `- ` / `• ` / numbered list 只做 plain-text continuation，不做 Markdown bullet 渲染。Timeline 标题尺寸更克制。
 - 粘贴真实剪贴板图片时进入下方 media grid，不解析 Markdown 图片语法；不支持 bold、quote 或 link preview。
+- 后续可以重新讨论更强 Markdown 编辑，但必须先明确支持语法、输入控件、阅读渲染和 IME 稳定性边界；在决策前不把 Moments 扩展成完整写作工具。
 
 ### 从其他 App 保存到 Moments
 
