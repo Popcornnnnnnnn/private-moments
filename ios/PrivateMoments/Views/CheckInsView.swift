@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct CheckInsView: View {
@@ -1052,6 +1053,7 @@ private struct CheckInContentEntryView: View {
     @State private var isSaving = false
     @State private var capturedImageData: Data?
     @State private var isCameraPresented = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
 
     init(item: CheckInItem) {
         self.item = item
@@ -1076,6 +1078,10 @@ private struct CheckInContentEntryView: View {
                         CheckInCapturedImagePreview(image: image) {
                             self.capturedImageData = nil
                         }
+                    }
+
+                    PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 1, matching: .images) {
+                        Label(L10n.t("Add Photos", appLanguage), systemImage: "photo.on.rectangle.angled")
                     }
 
                     Button {
@@ -1114,7 +1120,27 @@ private struct CheckInContentEntryView: View {
                     capturedImageData = data
                 }
             }
+            .onChange(of: selectedPhotoItems) { _, items in
+                guard !items.isEmpty else {
+                    return
+                }
+
+                Task {
+                    capturedImageData = await loadSelectedPhoto(from: items)
+                    selectedPhotoItems = []
+                }
+            }
         }
+    }
+
+    private func loadSelectedPhoto(from items: [PhotosPickerItem]) async -> Data? {
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                return data
+            }
+        }
+
+        return nil
     }
 
     private func save() {
@@ -1155,6 +1181,7 @@ struct CheckInEntryDetailView: View {
     @State private var capturedImageData: Data?
     @State private var removesExistingImage = false
     @State private var isCameraPresented = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
 
     var body: some View {
         NavigationStack {
@@ -1217,10 +1244,14 @@ struct CheckInEntryDetailView: View {
                                 .padding(.vertical, 4)
                             }
 
+                            PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 1, matching: .images) {
+                                Label(L10n.t("Add Photos", appLanguage), systemImage: "photo.on.rectangle.angled")
+                            }
+
                             Button {
                                 isCameraPresented = true
                             } label: {
-                                Label(L10n.t(existingMedia == nil && capturedImageData == nil ? "Use Camera" : "Replace Photo", appLanguage), systemImage: "camera")
+                                Label(L10n.t("Use Camera", appLanguage), systemImage: "camera")
                             }
                             .disabled(!CameraPicker.isAvailable)
 
@@ -1269,6 +1300,17 @@ struct CheckInEntryDetailView: View {
                     removesExistingImage = false
                 }
             }
+            .onChange(of: selectedPhotoItems) { _, items in
+                guard !items.isEmpty else {
+                    return
+                }
+
+                Task {
+                    capturedImageData = await loadSelectedPhoto(from: items)
+                    removesExistingImage = false
+                    selectedPhotoItems = []
+                }
+            }
             .alert(L10n.t("Cancel check-in?", appLanguage), isPresented: $isDeleteConfirmationPresented) {
                 Button(L10n.t("Keep", appLanguage), role: .cancel) {}
                 Button(L10n.t("Cancel check-in", appLanguage), role: .destructive) {
@@ -1294,6 +1336,16 @@ struct CheckInEntryDetailView: View {
                 return lhs.sortOrder < rhs.sortOrder
             }
             .first
+    }
+
+    private func loadSelectedPhoto(from items: [PhotosPickerItem]) async -> Data? {
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                return data
+            }
+        }
+
+        return nil
     }
 
     private func save() {

@@ -224,7 +224,6 @@ enum L10n {
         "No check-ins for this item": "这个项目还没有打卡",
         "Photo": "照片",
         "Remove photo": "移除照片",
-        "Replace Photo": "替换照片",
         "Filter calendar": "筛选日历",
         "Follow the audio language": "跟随音频主体语言",
         "Future date": "未来日期",
