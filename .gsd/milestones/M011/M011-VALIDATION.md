@@ -121,10 +121,12 @@ Simulator UI/interaction validation:
 
 - Rebuilt and installed only the simulator app into dedicated simulator `1FD6368F-8CB5-4736-9682-AE8DF38A0CC9`; no `npm run ios:device` was run.
 - Seeded simulator-local SQLite with pinned and unpinned local posts to validate UI state without touching live data.
-- Confirmed with accessibility hierarchy that with 4 pinned moments, unfiltered Timeline shows only `Pinned 4` plus ordinary unpinned rows; pinned full rows are suppressed from the ordinary list while the shelf is visible.
+- Confirmed with accessibility hierarchy that with 4 pinned moments, unfiltered Timeline shows `Pinned 4` plus ordinary chronological rows, including pinned rows that remain in place with pin state UI.
 - Tapping `Pinned 4` opened the `Pinned` sheet with four title rows: `Pinned Alpha`, `Pinned Beta`, `Plain pinned title line`, and `Pinned Delta`.
 - Selecting `Pinned Alpha` in the sheet pushed full `MomentDetailView` inside the sheet navigation stack.
 - After changing simulator-local data to 2 pinned moments, Timeline showed collapsed `Pinned 2`; tapping it expanded exactly the two title rows and kept them as title/date rows rather than full Timeline rows.
+- 2026-05-08 follow-up: rebuilt and reinstalled the worktree build into the dedicated simulator after changing the row-retention behavior. The simulator initially had a stale standalone Share Extension install conflict; uninstalling the dedicated simulator's test app/extension fixed installation without touching any real iPhone.
+- Seeded simulator-local SQLite with 5 pinned posts and 1 unpinned post. Accessibility hierarchy confirmed the unfiltered Timeline shows `Pinned 5`, then ordinary chronological rows including pinned rows such as `Pinned Alpha`, `Plain pinned title line`, `Pinned Delta`, and `Pinned Echo`; those pinned rows expose the `pin.fill` image with accessibility label `Pinned`.
 
 Known limitations:
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default to a collapsed summary header, are hidden from the ordinary unfiltered Timeline list while the shelf is visible, keep their original time semantics everywhere else, and sync as lightweight post metadata.
+Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default to a collapsed summary header, remain in the ordinary chronological Timeline with a lightweight status marker, keep their original time semantics everywhere, and sync as lightweight post metadata.
 
 ## Slices
 
@@ -30,9 +30,9 @@ Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default
 
 **Status:** Implemented.
 
-**Goal:** Render pinned moments as a quiet shortcut shelf without duplicating full rows at the top of the unfiltered Timeline.
+**Goal:** Render pinned moments as a quiet shortcut shelf while preserving their ordinary chronological Timeline rows.
 
-**Outcome:** `TimelinePost` carries pin metadata. Timeline derives `pinnedItems` only when no Timeline search/filter state is active, shows a top `Pinned · N` header when non-empty, defaults to collapsed, persists the one-to-three expanded/collapsed state locally, shows up to three title rows when expanded, and removes those pinned items from the ordinary unfiltered Timeline list while preserving them in search/filter, Calendar, Day Review, and review semantics.
+**Outcome:** `TimelinePost` carries pin metadata. Timeline derives `pinnedItems` only when no Timeline search/filter state is active, shows a top `Pinned · N` header when non-empty, defaults to collapsed, persists the one-to-three expanded/collapsed state locally, shows up to three title rows when expanded, and keeps those pinned items in the ordinary chronological Timeline list with a lightweight marker while preserving search/filter, Calendar, Day Review, and review semantics.
 
 **Primary requirements:** R003, R052.
 

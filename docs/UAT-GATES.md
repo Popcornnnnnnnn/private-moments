@@ -25,7 +25,7 @@ npm run verify:release-gates
 | UAT-M009-SYNC-HEALTH | closed | Sync Health | iOS Settings 和 Mac Admin 能区分 server unreachable、auth failure、cursor lag、pending outbox、failed media upload、missing media、AI non-ready，并且安全动作可恢复常见状态。 |
 | UAT-M010-WEEKLY-REVIEW | closed | Weekly Review | 真实最近 7 天数据生成 Review，语气是冷静观察 + 适度鼓励，不逐条过度解读；`Worth Revisiting` 低权重 anchors 能在 Review 内打开原 moment。 |
 | UAT-SHARE-EXTENSION | closed | Save to Moments | Photos 多图、Safari URL/text、Files/Voice Memos 音频、视频分享都能打开主 App Composer，发布成功后 import queue 被清理；真实 provisioning/App Group 正常。 |
-| UAT-M011-PINNED-MOMENTS | open | Pinned Moments | 合并/真机安装前先完成 Sync Health/outbox/recovery checkpoint；真实 iPhone 上确认 Detail `More` pin/unpin、Timeline 长按 pin/unpin、`Pinned · N` 默认折叠、1-3 条展开、超过 3 条 sheet、sheet 内 detail navigation、搜索/筛选隐藏 Pinned 且仍能找到原 moment。 |
+| UAT-M011-PINNED-MOMENTS | open | Pinned Moments | 合并/真机安装前先完成 Sync Health/outbox/recovery checkpoint；真实 iPhone 上确认 Detail `More` pin/unpin、Timeline 长按 pin/unpin、`Pinned · N` 默认折叠、1-3 条展开、超过 3 条 sheet、sheet 内 detail navigation、普通 Timeline 保留 pinned row 且显示 pin 标识、搜索/筛选隐藏 Pinned 且仍能找到原 moment。 |
 
 ## 验收记录
 

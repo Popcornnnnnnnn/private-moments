@@ -526,11 +526,7 @@ struct TimelineView: View {
     }
 
     private var timelineListItems: [TimelineItem] {
-        guard !pinnedItems.isEmpty, !hasPinnedSuppressionState else {
-            return filteredItems
-        }
-
-        return filteredItems.filter { !$0.post.isPinned }
+        filteredItems
     }
 
     private var pinnedItems: [TimelineItem] {

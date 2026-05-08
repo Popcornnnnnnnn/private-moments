@@ -57,7 +57,7 @@ The user can:
 - Pinning comments, reviews, tags, media items, or Calendar dates.
 - Hiding the original chronological occurrence.
 - Pinned entry points in Calendar, Day Review, or Weekly Review.
-- Pinned full preview rows in the Timeline top surface.
+- New permanent pin action buttons in ordinary Timeline rows.
 - Notification/reminder behavior.
 - Public/open-source screenshots or marketing work.
 

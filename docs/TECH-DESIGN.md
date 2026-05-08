@@ -114,7 +114,7 @@ Day Review 不使用 grouped `List` 或 sheet 的灰色大块背景，而是用 
 
 ### 2.1.3 Pinned Moments 设计
 
-Pinned Moments 是时间线顶部的快捷回看层，不是新的内容类型。它只改变主 Timeline 顶部的可达性：当 Pinned 区域可见时，置顶 moment 不再作为普通完整 row 重复出现在无筛选主列表里；它不改变 `occurredAt`、Calendar/Day Review 统计、Review 输入范围、搜索/筛选结果或原 moment 身份。
+Pinned Moments 是时间线顶部的快捷回看层，不是新的内容类型。它只增加主 Timeline 顶部的可达性：置顶 moment 仍保留在普通主列表的原时间位置，并用轻量 pin 图标提示状态；它不改变 `occurredAt`、Calendar/Day Review 统计、Review 输入范围、搜索/筛选结果或原 moment 身份。
 
 数据模型：
 
@@ -135,8 +135,8 @@ Timeline UI：
 
 - Pinned 只出现在主 Timeline，并且只在没有 active search/filter state 时出现；搜索、日期、Tag、Favorite、评论、内容类型、待同步或 match-source 筛选都会隐藏 Pinned。
 - Timeline 顶部默认只显示 `Pinned · N` 汇总 header。
-- 当 Pinned 区域可见时，已置顶 items 从普通 unfiltered Timeline list 中移除，避免 header 下方立刻重复出现完整置顶 row；active search/filter state 隐藏 Pinned 后，置顶 items 仍按普通筛选结果显示。
-- 当 active search/filter state 让置顶 items 作为普通 Timeline row 显示时，row 顶部 metadata 区显示一个低权重 `pin.fill` 图标，和 Favorite / sync badge 一样作为状态提示，不增加文字或新操作按钮。
+- 已置顶 items 保留在普通 Timeline list 的原时间位置；Pinned header/sheet 只是额外快捷入口，不搬移动态。
+- 当置顶 items 作为普通 Timeline row 显示时，row 顶部 metadata 区显示一个低权重 `pin.fill` 图标，和 Favorite / sync badge 一样作为状态提示，不增加文字或新操作按钮。
 - 当 pinned 数量为 1-3 条时，点击 header 展开/收起最多 3 条标题行。展开/收起状态只保存在本机 `UserDefaults`，不进入 sync。
 - 当 pinned 数量超过 3 条时，点击 header 打开底部 sheet，显示完整 pinned 标题列表。
 - 标题行只显示标题和轻量发生日期辅助信息；不显示正文、media grid、comments、AI summary、tag wall 或 sync success badge。
