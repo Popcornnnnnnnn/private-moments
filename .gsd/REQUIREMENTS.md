@@ -441,7 +441,7 @@ This file is the explicit capability and coverage contract for the project.
 ### R032 — Calendar Review must provide local month-grid time review without becoming a second editor or sync surface.
 - Class: functional
 - Status: active
-- Description: iOS must expose a bottom `Calendar` / `日历` tab beside Timeline. Calendar defaults to a local-derived month grid, supports continuous month navigation by arrows and horizontal swipe, uses quiet heatmap density from local moment counts, shows at most two media hints per day, supports Calendar-owned media/favorite filters, fades future dates, highlights today subtly, and has no Compose entry. Tapping a populated date opens Day Review first, and Day Review should remember its per-day scroll position.
+- Description: iOS must expose a bottom `Calendar` / `日历` tab beside Timeline. Calendar defaults to a local-derived month grid, supports continuous month navigation by arrows and horizontal swipe with direction-aware horizontal slide transitions, uses quiet heatmap density from local moment counts, shows at most two media hints per day, supports Calendar-owned media/favorite filters, fades future dates, highlights today subtly, and has no Compose entry. Tapping a populated date opens Day Review first, and Day Review should remember its per-day scroll position.
 - Why it matters: As the timeline grows, the user needs stronger回看 ability than scrolling or toolbar menus, but the main reading surface should remain Timeline and Calendar must not become a management dashboard.
 - Source: M008 Calendar Review discussion 2026-05-03
 - Primary owning slice: M008

@@ -15,6 +15,7 @@ struct CalendarView: View {
     @State private var navigationPath = NavigationPath()
     @State private var daySelectionFeedbackToken = 0
     @State private var showMonthStats = false
+    @State private var monthNavigationDirection = 1
     @State private var now = Date()
 
     private var calendar: Calendar {
@@ -49,19 +50,21 @@ struct CalendarView: View {
                     ProgressView()
                 } else {
                     VStack(spacing: 14) {
-                        CalendarMonthHeader(
-                            title: month.title,
-                            showToday: !isViewingCurrentMonth,
-                            onPrevious: { moveMonth(-1) },
-                            onNext: { moveMonth(1) },
-                            onToday: { jumpToToday() }
-                        )
-
-                        CalendarMonthGrid(
-                            month: month,
-                            calendar: calendar,
-                            onSelectDay: selectDay
-                        )
+                        ZStack {
+                            CalendarMonthPage(
+                                month: month,
+                                calendar: calendar,
+                                showToday: !isViewingCurrentMonth,
+                                onPrevious: { moveMonth(-1) },
+                                onNext: { moveMonth(1) },
+                                onToday: { jumpToToday() },
+                                onSelectDay: selectDay
+                            )
+                            .id(month.id)
+                            .transition(monthSlideTransition)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .top)
+                        .clipped()
 
                         if store.items.isEmpty {
                             Text(L10n.t("No moments yet", appLanguage))
@@ -202,7 +205,22 @@ struct CalendarView: View {
             }
     }
 
+    private var monthSlideTransition: AnyTransition {
+        let insertionEdge: Edge = monthNavigationDirection >= 0 ? .trailing : .leading
+        let removalEdge: Edge = monthNavigationDirection >= 0 ? .leading : .trailing
+
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge),
+            removal: .move(edge: removalEdge)
+        )
+    }
+
     private func moveMonth(_ offset: Int) {
+        guard offset != 0 else {
+            return
+        }
+
+        monthNavigationDirection = offset > 0 ? 1 : -1
         withAnimation(.easeInOut(duration: 0.22)) {
             visibleMonth = CalendarReviewBuilder.addMonths(offset, to: visibleMonth, calendar: calendar)
         }
@@ -210,8 +228,21 @@ struct CalendarView: View {
 
     private func jumpToToday() {
         now = Date()
+        let targetMonth = CalendarReviewBuilder.monthStart(for: now, calendar: calendar)
+        let monthOffset = calendar.dateComponents(
+            [.month],
+            from: CalendarReviewBuilder.monthStart(for: visibleMonth, calendar: calendar),
+            to: targetMonth
+        ).month ?? 0
+
+        guard monthOffset != 0 else {
+            visibleMonth = targetMonth
+            return
+        }
+
+        monthNavigationDirection = monthOffset > 0 ? 1 : -1
         withAnimation(.easeInOut(duration: 0.22)) {
-            visibleMonth = CalendarReviewBuilder.monthStart(for: now, calendar: calendar)
+            visibleMonth = targetMonth
         }
     }
 
@@ -281,6 +312,35 @@ private struct CalendarDayRoute: Hashable {
 }
 
 private struct CalendarReviewsRoute: Hashable {}
+
+private struct CalendarMonthPage: View {
+    let month: CalendarReviewMonth
+    let calendar: Calendar
+    let showToday: Bool
+    let onPrevious: () -> Void
+    let onNext: () -> Void
+    let onToday: () -> Void
+    let onSelectDay: (CalendarReviewDay) -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            CalendarMonthHeader(
+                title: month.title,
+                showToday: showToday,
+                onPrevious: onPrevious,
+                onNext: onNext,
+                onToday: onToday
+            )
+
+            CalendarMonthGrid(
+                month: month,
+                calendar: calendar,
+                onSelectDay: onSelectDay
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+}
 
 private struct CalendarMonthHeader: View {
     @Environment(\.appLanguage) private var appLanguage
