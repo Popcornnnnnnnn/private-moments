@@ -84,32 +84,17 @@ struct SettingsView: View {
                 }
 
                 Section(L10n.t("Language", appLanguage)) {
-                    ForEach(AppLanguageMode.allCases) { mode in
-                        Button {
-                            store.setAppLanguageMode(mode)
-                        } label: {
-                            LanguageModeRow(
-                                mode: mode,
-                                isSelected: store.appLanguageMode == mode
-                            )
+                    NavigationLink {
+                        LanguageSettingsView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(L10n.t("Language", appLanguage))
+                            Text(languageSummary)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(store.appLanguageMode == mode ? .isSelected : [])
-                    }
-                }
-
-                Section(L10n.t("AI Language", appLanguage)) {
-                    ForEach(AILanguageMode.allCases) { mode in
-                        Button {
-                            store.setAILanguageMode(mode)
-                        } label: {
-                            AILanguageModeRow(
-                                mode: mode,
-                                isSelected: store.aiLanguageMode == mode
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(store.aiLanguageMode == mode ? .isSelected : [])
+                        .padding(.vertical, 3)
                     }
                 }
 
@@ -207,6 +192,10 @@ struct SettingsView: View {
         store.pendingOperationCount > 0 || store.pendingUploadCount > 0
     }
 
+    private var languageSummary: String {
+        "\(store.appLanguageMode.title(language: appLanguage)) · \(store.aiLanguageMode.title(language: appLanguage))"
+    }
+
     private var syncButtonState: SyncButtonState {
         SyncButtonState.resolve(
             isAuthenticated: store.isAuthenticated,
@@ -227,6 +216,47 @@ struct SettingsView: View {
         }
 
         await store.syncNow()
+    }
+}
+
+private struct LanguageSettingsView: View {
+    @EnvironmentObject private var store: TimelineStore
+    @Environment(\.appLanguage) private var appLanguage
+
+    var body: some View {
+        Form {
+            Section(L10n.t("Language", appLanguage)) {
+                ForEach(AppLanguageMode.allCases) { mode in
+                    Button {
+                        store.setAppLanguageMode(mode)
+                    } label: {
+                        LanguageModeRow(
+                            mode: mode,
+                            isSelected: store.appLanguageMode == mode
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(store.appLanguageMode == mode ? .isSelected : [])
+                }
+            }
+
+            Section(L10n.t("AI Language", appLanguage)) {
+                ForEach(AILanguageMode.allCases) { mode in
+                    Button {
+                        store.setAILanguageMode(mode)
+                    } label: {
+                        AILanguageModeRow(
+                            mode: mode,
+                            isSelected: store.aiLanguageMode == mode
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(store.aiLanguageMode == mode ? .isSelected : [])
+                }
+            }
+        }
+        .navigationTitle(L10n.t("Language", appLanguage))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

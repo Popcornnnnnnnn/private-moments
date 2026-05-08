@@ -177,7 +177,7 @@ UI 边界：
 - Detail 在 `Show Tags in Timeline` 打开时只读显示完整标签，并提供单条标签编辑入口；tag badge 不做省略号截断，长标签在可用宽度内换行，normal read mode 不显示 `Manual` / `AI` 来源信息。关闭后 Detail 不露出标签展示或编辑操作。
 - Settings > Tags 管理词表：usage count、自定义主标签、主题标签新增/重命名/归档/恢复、Topic 批量归档/合并、Archived 批量恢复/永久删除、alias、topic merge，以及主标签颜色；颜色选择以预设调色盘为主，保留 6 个低饱和默认色，也提供一组更清晰的高饱和标准色，并预留 HEX 自定义输入。Edit 模式支持批量选择多个 primary tag 并统一修改颜色，但不批量修改名称。
 - Settings > Appearance 提供 `System`、`Light`、`Dark` 本机外观偏好，通过 SwiftUI `preferredColorScheme` 即时覆盖 Moments App 外观；该偏好不进入 sync，也不尝试修改 iOS 设备级系统外观。
-- Settings > Language 提供 App Language 和 AI Language。App Language 是本机 UI 偏好；AI Language 只影响之后生成或重新生成的 summary/title。
+- Settings 顶层只保留 `Language` 入口；二级页提供 App Language 和 AI Language。App Language 是本机 UI 偏好；AI Language 只影响之后生成或重新生成的 summary/title。
 - Mac Admin 只展示诊断，不作为标签内容管理入口。
 
 AI 边界：
@@ -190,7 +190,7 @@ AI 边界：
 
 ### 2.2.4 语言偏好与本地化边界
 
-iOS 第一版语言系统使用 App 内本地化层，而不是把语言作为 server-side profile 同步。`AppLocalization.swift` 定义 `AppLanguageMode`、`AILanguageMode`、`appLanguage` SwiftUI environment 和 `L10n.t(...)` 字典。`AppSettings` 把 App Language 和 AI Language 存在本机 `UserDefaults`；已有私人安装在没有显式语言偏好时默认 English，新安装默认 System。
+iOS 第一版语言系统使用 App 内本地化层，而不是把语言作为 server-side profile 同步。`AppLocalization.swift` 定义 `AppLanguageMode`、`AILanguageMode`、`appLanguage` SwiftUI environment 和 `L10n.t(...)` 字典。`AppSettings` 把 App Language 和 AI Language 存在本机 `UserDefaults`；已有私人安装在没有显式语言偏好时默认 English，新安装默认 System。Settings 顶层的 `Language` row 只显示当前偏好摘要，具体选项进入二级页。
 
 App Language 只影响 iOS 主 App 的 user-visible chrome：Timeline、Calendar、Composer、Detail/Edit、Settings、Tags、Summary sheet、Search/Filter、评论 UI、弹窗和时间/日期标签。它不翻译用户正文、评论、自定义标签、主题标签、alias、历史内容、AI summary 正文、API 字段或 server/admin 文案。新增 iOS 可见文案应走 `L10n.t(...)`，避免中文模式出现新的英文漏项。
 
