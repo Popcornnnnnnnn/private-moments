@@ -110,74 +110,73 @@ struct TimelineView: View {
                                             }
 
                                             ForEach(groupedItems) { group in
-                                                Section {
-                                                    monthAnchor(for: group)
+                                                monthAnchor(for: group)
 
-                                                    ForEach(group.items) { item in
-                                                        TimelineRow(
-                                                            item: item,
-                                                            isCommentsExpanded: expandedCommentPostIDs.contains(item.id),
-                                                            searchQuery: searchText,
-                                                            relativeTimeNow: relativeTimeNow,
-                                                            aiSummaryRequestMediaIDs: store.aiSummaryRequestsInFlight,
-                                                            searchResult: searchResult(for: item),
-                                                            showTagsInTimeline: store.showTagsInTimeline
-                                                        ) { media, index in
-                                                            openMedia(media, index: index)
-                                                        } onOpenDetail: {
-                                                            playbackCenter.pause()
-                                                            stopVideoAutoplay()
-                                                            detailRoute = DetailRoute(postId: item.id)
-                                                        } onComment: {
-                                                            beginComment(on: item, proxy: proxy)
-                                                        } onToggleComments: {
-                                                            toggleComments(for: item.id)
-                                                        } onDeleteComment: { comment in
-                                                            requestCommentDelete(comment)
-                                                        } onOpenSummary: { media in
-                                                            playbackCenter.pause()
-                                                            summaryRoute = AISummaryRoute(mediaId: media.id)
-                                                        }
-                                                        .id(item.id)
-                                                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                                                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                                            Button {
-                                                                Task {
-                                                                    await store.toggleFavorite(item)
-                                                                }
-                                                            } label: {
-                                                                Label(
-                                                                    L10n.t(item.post.isFavorite ? "Unfavorite" : "Favorite", appLanguage),
-                                                                    systemImage: item.post.isFavorite ? "star.slash" : "star"
-                                                                )
+                                                ForEach(group.items) { item in
+                                                    TimelineRow(
+                                                        item: item,
+                                                        isCommentsExpanded: expandedCommentPostIDs.contains(item.id),
+                                                        searchQuery: searchText,
+                                                        relativeTimeNow: relativeTimeNow,
+                                                        aiSummaryRequestMediaIDs: store.aiSummaryRequestsInFlight,
+                                                        searchResult: searchResult(for: item),
+                                                        showTagsInTimeline: store.showTagsInTimeline
+                                                    ) { media, index in
+                                                        openMedia(media, index: index)
+                                                    } onOpenDetail: {
+                                                        playbackCenter.pause()
+                                                        stopVideoAutoplay()
+                                                        detailRoute = DetailRoute(postId: item.id)
+                                                    } onComment: {
+                                                        beginComment(on: item, proxy: proxy)
+                                                    } onToggleComments: {
+                                                        toggleComments(for: item.id)
+                                                    } onDeleteComment: { comment in
+                                                        requestCommentDelete(comment)
+                                                    } onOpenSummary: { media in
+                                                        playbackCenter.pause()
+                                                        summaryRoute = AISummaryRoute(mediaId: media.id)
+                                                    }
+                                                    .id(item.id)
+                                                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                                        Button {
+                                                            Task {
+                                                                await store.toggleFavorite(item)
                                                             }
-                                                            .tint(.yellow)
+                                                        } label: {
+                                                            Label(
+                                                                L10n.t(item.post.isFavorite ? "Unfavorite" : "Favorite", appLanguage),
+                                                                systemImage: item.post.isFavorite ? "star.slash" : "star"
+                                                            )
                                                         }
-                                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                                            Button {
-                                                                requestDelete(item)
-                                                            } label: {
-                                                                Label(L10n.t("Delete", appLanguage), systemImage: "trash")
-                                                            }
-                                                            .tint(.red)
+                                                        .tint(.yellow)
+                                                    }
+                                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                                        Button {
+                                                            requestDelete(item)
+                                                        } label: {
+                                                            Label(L10n.t("Delete", appLanguage), systemImage: "trash")
                                                         }
-                                                        .contextMenu {
-                                                            Button {
-                                                                Task {
-                                                                    await store.togglePinned(item)
-                                                                }
-                                                            } label: {
-                                                                Label(
-                                                                    L10n.t(item.post.isPinned ? "Unpin moment" : "Pin moment", appLanguage),
-                                                                    systemImage: item.post.isPinned ? "pin.slash" : "pin"
-                                                                )
+                                                        .tint(.red)
+                                                    }
+                                                    .contextMenu {
+                                                        Button {
+                                                            Task {
+                                                                await store.togglePinned(item)
                                                             }
+                                                        } label: {
+                                                            Label(
+                                                                L10n.t(item.post.isPinned ? "Unpin moment" : "Pin moment", appLanguage),
+                                                                systemImage: item.post.isPinned ? "pin.slash" : "pin"
+                                                            )
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                         .listStyle(.plain)
+                                        .listSectionSpacing(0)
                                         .coordinateSpace(name: "timelineList")
                                         .onPreferenceChange(MonthAnchorPreferenceKey.self) { anchors in
                                             updateFloatingMonth(from: anchors)
@@ -1034,10 +1033,11 @@ struct TimelineView: View {
 
     private func monthAnchor(for group: TimelineDateJumpMonthGroup) -> some View {
         Color.clear
-            .frame(height: 1)
+            .frame(height: 0)
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
+            .environment(\.defaultMinListRowHeight, 0)
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(
