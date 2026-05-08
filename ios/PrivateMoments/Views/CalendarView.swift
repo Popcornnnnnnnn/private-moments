@@ -336,7 +336,7 @@ private struct CalendarMonthGrid: View {
     let calendar: Calendar
     let onSelectDay: (CalendarReviewDay) -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 6), count: 7)
 
     var body: some View {
         VStack(spacing: 8) {
@@ -357,8 +357,10 @@ private struct CalendarMonthGrid: View {
                         }
                     } label: {
                         CalendarDayCell(day: day, calendar: calendar)
+                            .frame(maxWidth: .infinity)
                             .aspectRatio(1, contentMode: .fit)
                     }
+                    .frame(maxWidth: .infinity)
                     .buttonStyle(CalendarDayButtonStyle(isEnabled: day.isSelectable))
                     .disabled(!day.isSelectable)
                 }
