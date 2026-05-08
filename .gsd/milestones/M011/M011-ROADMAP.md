@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default to a collapsed summary header, remain in their original chronological feed positions, and sync as lightweight post metadata.
+Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default to a collapsed summary header, are hidden from the ordinary unfiltered Timeline list while the shelf is visible, keep their original time semantics everywhere else, and sync as lightweight post metadata.
 
 ## Slices
 
@@ -18,7 +18,7 @@ Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default
 
 ### S01 — Pin Contract, Schema, And Sync
 
-**Status:** Planned.
+**Status:** Implemented.
 
 **Goal:** Represent pin state as synced post metadata.
 
@@ -28,17 +28,17 @@ Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default
 
 ### S02 — iOS Local Model And Pinned Shelf
 
-**Status:** Planned.
+**Status:** Implemented.
 
-**Goal:** Render pinned moments as a quiet shortcut shelf without disrupting Timeline chronology.
+**Goal:** Render pinned moments as a quiet shortcut shelf without duplicating full rows at the top of the unfiltered Timeline.
 
-**Outcome:** `TimelinePost` carries pin metadata. Timeline derives `pinnedItems` only when no Timeline search/filter state is active, shows a top `Pinned · N` header when non-empty, defaults to collapsed, persists the one-to-three expanded/collapsed state locally, shows up to three title rows when expanded, and keeps originals in the normal feed.
+**Outcome:** `TimelinePost` carries pin metadata. Timeline derives `pinnedItems` only when no Timeline search/filter state is active, shows a top `Pinned · N` header when non-empty, defaults to collapsed, persists the one-to-three expanded/collapsed state locally, shows up to three title rows when expanded, and removes those pinned items from the ordinary unfiltered Timeline list while preserving them in search/filter, Calendar, Day Review, and review semantics.
 
 **Primary requirements:** R003, R052.
 
 ### S03 — Pin And Unpin Actions
 
-**Status:** Planned.
+**Status:** Implemented.
 
 **Goal:** Add low-frequency controls for pin state changes.
 
@@ -48,7 +48,7 @@ Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default
 
 ### S04 — Title Derivation And Empty-State Handling
 
-**Status:** Planned.
+**Status:** Implemented.
 
 **Goal:** Make collapsed rows and pinned sheet rows useful even when a moment has no explicit heading.
 
@@ -58,7 +58,7 @@ Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default
 
 ### S04.5 — More-Than-Three Pinned Sheet
 
-**Status:** Planned.
+**Status:** Implemented.
 
 **Goal:** Keep the Timeline top surface compact when many moments are pinned.
 
@@ -68,7 +68,7 @@ Add a quiet pinned-moments shortcut shelf above Timeline. Pinned moments default
 
 ### S05 — Verification And UAT
 
-**Status:** Planned.
+**Status:** Implementation validation in progress.
 
 **Goal:** Prove the feature without putting live data at risk.
 

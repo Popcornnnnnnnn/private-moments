@@ -338,6 +338,8 @@ interface ExportedPostRecord {
   id: string;
   text: string;
   isFavorite: boolean;
+  isPinned: boolean;
+  pinnedAt: string | null;
   aiTagProcessedAt: string | null;
   tagsUserEditedAt: string | null;
   occurredAt: string;
@@ -381,6 +383,8 @@ function serializePostRecord(post: ExportPost): ExportedPostRecord {
     id: post.id,
     text: post.text,
     isFavorite: post.isFavorite,
+    isPinned: post.isPinned,
+    pinnedAt: post.pinnedAt?.toISOString() ?? null,
     aiTagProcessedAt: post.aiTagProcessedAt?.toISOString() ?? null,
     tagsUserEditedAt: post.tagsUserEditedAt?.toISOString() ?? null,
     occurredAt: post.occurredAt.toISOString(),
@@ -574,6 +578,8 @@ async function importPosts(tx: Prisma.TransactionClient, archive: ExportArchiveF
         id: post.id,
         text: post.text,
         isFavorite: post.isFavorite,
+        isPinned: post.isPinned ?? false,
+        pinnedAt: parseNullableDate(post.pinnedAt),
         aiTagProcessedAt: parseNullableDate(post.aiTagProcessedAt),
         tagsUserEditedAt: parseNullableDate(post.tagsUserEditedAt),
         occurredAt: parseDate(post.occurredAt),
@@ -745,6 +751,8 @@ async function rebuildServerChanges(tx: Prisma.TransactionClient, archive: Expor
               id: post.id,
               text: post.text,
               isFavorite: post.isFavorite,
+              isPinned: post.isPinned ?? false,
+              pinnedAt: post.pinnedAt ?? null,
               occurredAt: post.occurredAt,
               deletedAt: null,
             }),

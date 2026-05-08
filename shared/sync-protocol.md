@@ -59,6 +59,7 @@ The MVP server currently supports these operation types:
 - `upsert_tag_alias`: create or update one searchable alias for a tag.
 - `delete_tag_alias`: soft-delete one alias.
 - `set_post_tags`: replace one post's primary tag and topic tag set, marking the moment as user-edited.
+- `update_post_pin`: set or clear one post's lightweight pinned shortcut state.
 - `tag_updated`: server-originated vocabulary change.
 - `tag_deleted`: server-originated permanent tag deletion.
 - `tag_alias_updated` / `tag_alias_deleted`: server-originated alias changes.
@@ -67,7 +68,6 @@ The MVP server currently supports these operation types:
 
 Future operation types:
 
-- `update_post_pin`
 - `upsert_media`
 - media status reconciliation
 
@@ -250,31 +250,35 @@ Favorite state is synced as metadata on the post, but it uses a separate lightwe
 
 The server updates `Post.isFavorite`, emits `post_favorite_updated`, and assigns a new `serverVersion`. Clients should keep the time line visually quiet: favorites are a small marker and filter target, not a prominent content block.
 
-## Planned Pinned Moments
+## Pinned Moments
 
-M011 plans a lightweight pin metadata operation. This is not implemented in the current protocol yet.
+Pinned moments use lightweight post metadata. Pinning does not change `occurredAt`, does not rewrite post text, does not set user-edit metadata, and does not interact with favorite state.
 
 `update_post_pin` payload:
 
 ```json
 {
   "isPinned": true,
-  "pinnedAt": "2026-05-08T12:00:00Z"
+  "pinnedAt": "2026-05-08T12:00:00Z",
+  "updatedAt": "2026-05-08T12:00:00Z"
 }
 ```
 
-Planned server behavior:
+Server behavior:
 
 - Validates that the post exists and is not deleted.
 - Updates `Post.isPinned` and `Post.pinnedAt`.
 - Emits `post_pin_updated` with `id`, `isPinned`, nullable `pinnedAt`, and `updatedAt`.
 - Includes pin fields in `post_created` and `post_updated` payloads for baseline recovery.
+- Uses last server-accepted operation wins for pin/unpin conflicts.
 
-Planned iOS behavior:
+iOS behavior:
 
 - Applies `post_pin_updated` into `local_posts.isPinned` / `local_posts.pinnedAt`.
-- Shows pinned moments in a collapsed title-only Timeline shelf when they match active filters.
-- Keeps pinned moments in their original chronological Timeline, Calendar, and Day Review positions.
+- Shows pinned moments only on the unfiltered Timeline. Active search/filter state hides the pinned surface.
+- Defaults to a collapsed `Pinned · N` header; one to three pinned moments can expand into title rows, while more than three open a bottom sheet list.
+- Removes pinned items from the ordinary unfiltered Timeline list while the Pinned surface is visible, so the top shelf is the only unfiltered Timeline entry point for them.
+- Keeps pinned moments in their original chronological Calendar, Day Review, search/filter, review input, and detail positions.
 - Treats pin/unpin like favorite in edit semantics: it does not set user edited metadata and does not change post text or `occurredAt`.
 
 ## Comments

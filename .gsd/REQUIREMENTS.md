@@ -461,7 +461,7 @@ This file is the explicit capability and coverage contract for the project.
 ### R052 — Pinned Moments must stay a quiet shortcut layer over the chronological Timeline.
 - Class: functional
 - Status: active
-- Description: The user can pin several moments. Timeline shows a top `Pinned` section when matching pinned moments exist, defaulting to collapsed one-line title rows. Pinned moments remain in their normal chronological positions, use existing content to derive a title, and open the original moment detail rather than creating duplicate content.
+- Description: The user can pin several moments. The unfiltered main Timeline shows a top `Pinned` section when matching pinned moments exist, defaulting to a collapsed summary row. When that shelf is visible, pinned items are removed from the ordinary unfiltered Timeline list to avoid duplicate full rows; they still appear in search/filter results and keep original chronology in Calendar, Day Review, review input, and detail identity. Pinned rows use existing content to derive a title and open the original moment detail rather than creating duplicate content.
 - Why it matters: The user wants fast access to important moments, but the product's main value is still a quiet lived-time feed. Pinning should not turn Timeline into a dashboard or break Calendar/Day Review chronology.
 - Source: Pinned Moments design 2026-05-08
 - Primary owning slice: M011/S02

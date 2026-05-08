@@ -265,6 +265,11 @@ async function applyOperation(
     return;
   }
 
+  if (operation.type === "update_post_pin" && operation.entityType === "post") {
+    await applyUpdatePostPin(tx, device, operation);
+    return;
+  }
+
   if (operation.type === "delete_post" && operation.entityType === "post") {
     await applyDeletePost(tx, device, operation);
     return;
@@ -336,6 +341,8 @@ async function applyCreatePost(
   const text = getStringAllowingEmpty(operation.payload, "text");
   const occurredAt = getDate(operation.payload, "occurredAt");
   const isFavorite = getBoolean(operation.payload, "isFavorite") ?? false;
+  const isPinned = getBoolean(operation.payload, "isPinned") ?? false;
+  const pinnedAt = getNullableDate(operation.payload, "pinnedAt") ?? (isPinned ? operation.clientCreatedAt : null);
   const primaryTagId = getNullableString(operation.payload, "primaryTagId");
 
   if (text === null) {
@@ -361,6 +368,8 @@ async function applyCreatePost(
       id: operation.entityId,
       text,
       isFavorite,
+      isPinned,
+      pinnedAt,
       occurredAt,
       clientCreatedAt: operation.clientCreatedAt,
       clientUpdatedAt: operation.clientCreatedAt,
@@ -378,6 +387,8 @@ async function applyCreatePost(
         id: operation.entityId,
         text,
         isFavorite,
+        isPinned,
+        pinnedAt: pinnedAt?.toISOString() ?? null,
         occurredAt: occurredAt.toISOString(),
         deletedAt: null,
       }),
@@ -536,6 +547,8 @@ async function applyUpdatePost(
         id: operation.entityId,
         text,
         isFavorite: existingPost.isFavorite,
+        isPinned: existingPost.isPinned,
+        pinnedAt: existingPost.pinnedAt?.toISOString() ?? null,
         occurredAt: occurredAt.toISOString(),
         updatedAt: updatedAt.toISOString(),
         media: mediaOrder,
@@ -664,6 +677,8 @@ async function applyInsertAITitle(
         id: post.id,
         text,
         isFavorite: post.isFavorite,
+        isPinned: post.isPinned,
+        pinnedAt: post.pinnedAt?.toISOString() ?? null,
         occurredAt: post.occurredAt.toISOString(),
         updatedAt: insertedAt.toISOString(),
         updateSource: "ai_title",
@@ -724,6 +739,69 @@ async function applyUpdatePostFavorite(
       payloadJson: JSON.stringify({
         id: operation.entityId,
         isFavorite,
+        updatedAt: updatedAt.toISOString(),
+      }),
+    },
+  });
+
+  await tx.post.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      serverVersion: change.version,
+    },
+  });
+}
+
+async function applyUpdatePostPin(
+  tx: Prisma.TransactionClient,
+  device: Device,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const isPinned = getBoolean(operation.payload, "isPinned");
+  const updatedAt = getDate(operation.payload, "updatedAt") ?? operation.clientCreatedAt;
+  const pinnedAt = getNullableDate(operation.payload, "pinnedAt") ?? (isPinned ? updatedAt : null);
+
+  if (isPinned === null) {
+    throw new OperationRejectedError("update_post_pin.payload.isPinned must be a boolean");
+  }
+
+  if (isPinned && !pinnedAt) {
+    throw new OperationRejectedError("update_post_pin.payload.pinnedAt must be an ISO date when isPinned is true");
+  }
+
+  const existingPost = await tx.post.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (!existingPost || existingPost.deletedAt) {
+    throw new OperationRejectedError("Post not found");
+  }
+
+  await tx.post.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      isPinned,
+      pinnedAt: isPinned ? pinnedAt : null,
+      clientUpdatedAt: updatedAt,
+      updatedByDeviceId: device.id,
+    },
+  });
+
+  const change = await tx.serverChange.create({
+    data: {
+      entityType: "post",
+      entityId: operation.entityId,
+      changeType: "post_pin_updated",
+      payloadJson: JSON.stringify({
+        id: operation.entityId,
+        isPinned,
+        pinnedAt: isPinned ? pinnedAt!.toISOString() : null,
         updatedAt: updatedAt.toISOString(),
       }),
     },
@@ -1720,6 +1798,14 @@ function getDate(body: Record<string, unknown>, key: string): Date | null {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getNullableDate(body: Record<string, unknown>, key: string): Date | null {
+  if (body[key] === null || body[key] === undefined) {
+    return null;
+  }
+
+  return getDate(body, key);
 }
 
 function getBoolean(body: Record<string, unknown>, key: string): boolean | null {

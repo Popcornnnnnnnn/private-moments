@@ -108,6 +108,43 @@ extension LocalDatabase {
         }
     }
 
+    func updatePinned(
+        postId: String,
+        isPinned: Bool,
+        pinnedAt: Date?,
+        updatedAt: Date,
+        operation: OutboxOperation
+    ) throws {
+        try transaction {
+            let statement = try prepare(
+                """
+                UPDATE local_posts
+                SET isPinned = ?,
+                    pinnedAt = ?,
+                    syncStatus = 'pending',
+                    localUpdatedAt = ?
+                WHERE id = ?
+                  AND deletedAt IS NULL
+                """
+            )
+            defer {
+                sqlite3_finalize(statement)
+            }
+
+            try bind(isPinned ? 1 : 0, to: 1, in: statement)
+            try bind(isPinned ? pinnedAt : nil, to: 2, in: statement)
+            try bind(updatedAt, to: 3, in: statement)
+            try bind(postId, to: 4, in: statement)
+            try stepDone(statement)
+
+            guard sqlite3_changes(handle) > 0 else {
+                return
+            }
+
+            try insert(operation)
+        }
+    }
+
     func updatePost(
         postId: String,
         text: String,

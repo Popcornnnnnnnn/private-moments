@@ -228,6 +228,8 @@ final class CalendarReviewModelsTests: XCTestCase {
                 id: id,
                 text: text,
                 isFavorite: isFavorite,
+                isPinned: false,
+                pinnedAt: nil,
                 aiTagProcessedAt: nil,
                 tagsUserEditedAt: nil,
                 occurredAt: occurredAt,

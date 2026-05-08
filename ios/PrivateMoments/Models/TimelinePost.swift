@@ -4,6 +4,8 @@ struct TimelinePost: Identifiable, Codable {
     var id: String
     var text: String
     var isFavorite: Bool
+    var isPinned: Bool
+    var pinnedAt: Date?
     var aiTagProcessedAt: Date?
     var tagsUserEditedAt: Date?
     var occurredAt: Date

@@ -34,6 +34,8 @@ extension TimelineStore {
                 id: postId,
                 text: trimmedText,
                 isFavorite: false,
+                isPinned: false,
+                pinnedAt: nil,
                 aiTagProcessedAt: nil,
                 tagsUserEditedAt: nil,
                 occurredAt: occurredAt,
@@ -130,6 +132,46 @@ extension TimelineStore {
             try database.updateFavorite(
                 postId: item.post.id,
                 isFavorite: nextValue,
+                updatedAt: now,
+                operation: operation
+            )
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func togglePinned(_ item: TimelineItem) async {
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let nextValue = !item.post.isPinned
+            let pinnedAt = nextValue ? now : nil
+            let payload = try makePinPayload(isPinned: nextValue, pinnedAt: pinnedAt, updatedAt: now)
+            let operation = OutboxOperation(
+                id: UUID().uuidString,
+                opId: UUID().uuidString,
+                type: "update_post_pin",
+                entityType: "post",
+                entityId: item.post.id,
+                payloadJson: payload,
+                status: "pending",
+                attemptCount: 0,
+                lastError: nil,
+                createdAt: now,
+                updatedAt: now,
+                sentAt: nil
+            )
+
+            try database.updatePinned(
+                postId: item.post.id,
+                isPinned: nextValue,
+                pinnedAt: pinnedAt,
                 updatedAt: now,
                 operation: operation
             )

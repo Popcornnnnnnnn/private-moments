@@ -200,6 +200,8 @@ function serializePost(post: PostWithMedia): Record<string, unknown> {
     id: post.id,
     text: post.text,
     isFavorite: post.isFavorite,
+    isPinned: post.isPinned,
+    pinnedAt: post.pinnedAt?.toISOString() ?? null,
     occurredAt: post.occurredAt.toISOString(),
     createdAt: post.createdAt.toISOString(),
     updatedAt: post.updatedAt.toISOString(),

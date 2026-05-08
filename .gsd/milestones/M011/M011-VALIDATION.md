@@ -75,3 +75,58 @@ Resolved decisions:
 - Calendar, Day Review, and Weekly Review do not gain pinned entry points.
 - Conflicts use last server-accepted operation wins.
 - Implementation verification uses simulator UI/interaction validation plus isolated server/test validation, with no real-device install by default.
+
+## 2026-05-08 Implementation Validation Checkpoint
+
+Scope: implemented M011 in the dedicated feature worktree. No real-device install was run, and the live `3210` server/archive was not touched.
+
+Automated verification:
+
+- `npm run server:typecheck` passed.
+- `npm run server:test` passed: 30 server tests, 0 failures.
+- `npm run server:build` passed.
+- `npm run admin:build` passed.
+- `git diff --check` passed.
+- `npm run verify:uat-gates` passed as a report command and showed 11 gates total, 1 open: `UAT-M011-PINNED-MOMENTS`.
+- Generic iOS Debug build passed:
+
+```bash
+cd ios
+xcodegen generate
+xcodebuild -project PrivateMoments.xcodeproj \
+  -scheme PrivateMoments \
+  -destination generic/platform=iOS \
+  -configuration Debug \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+- iOS simulator tests passed on `Private Moments Pinned iPhone 17` (`1FD6368F-8CB5-4736-9682-AE8DF38A0CC9`): 41 tests, 0 failures.
+
+Isolated server/data smoke:
+
+- Applied all 14 Prisma migrations into isolated SQLite:
+
+```bash
+DATABASE_URL=file:../../.tmp/pinned-smoke-data/app.sqlite \
+  npx prisma migrate deploy --schema server/prisma/schema.prisma
+```
+
+- Started compiled server on isolated `PORT=3211` with isolated `PRIVATE_MOMENTS_DATA_DIR=/Users/popcornnnnnn/.codex/worktrees/private-moments-pinned/.tmp/pinned-smoke-data`.
+- `GET http://127.0.0.1:3211/api/v1/health` returned `schemaVersion: 13` and the isolated data directory.
+- Authenticated sync smoke accepted `create_post` and `update_post_pin` with 0 rejected operations.
+- `update_post_pin` emitted `post_pin_updated`; `GET /api/v1/posts/post-pin-smoke-1` returned `isPinned: true` and `pinnedAt: 2026-05-08T03:37:00.000Z`.
+
+Simulator UI/interaction validation:
+
+- Rebuilt and installed only the simulator app into dedicated simulator `1FD6368F-8CB5-4736-9682-AE8DF38A0CC9`; no `npm run ios:device` was run.
+- Seeded simulator-local SQLite with pinned and unpinned local posts to validate UI state without touching live data.
+- Confirmed with accessibility hierarchy that with 4 pinned moments, unfiltered Timeline shows only `Pinned 4` plus ordinary unpinned rows; pinned full rows are suppressed from the ordinary list while the shelf is visible.
+- Tapping `Pinned 4` opened the `Pinned` sheet with four title rows: `Pinned Alpha`, `Pinned Beta`, `Plain pinned title line`, and `Pinned Delta`.
+- Selecting `Pinned Alpha` in the sheet pushed full `MomentDetailView` inside the sheet navigation stack.
+- After changing simulator-local data to 2 pinned moments, Timeline showed collapsed `Pinned 2`; tapping it expanded exactly the two title rows and kept them as title/date rows rather than full Timeline rows.
+
+Known limitations:
+
+- Real iPhone install/UAT is intentionally deferred for this worktree. Before any true-device install, run Sync Health/outbox checks and create a recovery checkpoint.
+- Context-menu pin/unpin visual presentation was implemented and compiled, but simulator validation focused on header, sheet, title-row expansion, and sheet detail navigation because those are the primary UI/interaction paths for this checkpoint.

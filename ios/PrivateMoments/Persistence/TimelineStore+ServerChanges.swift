@@ -18,6 +18,8 @@ extension TimelineStore {
                 id: id,
                 text: text,
                 isFavorite: change.payload["isFavorite"]?.boolValue ?? false,
+                isPinned: change.payload["isPinned"]?.boolValue ?? false,
+                pinnedAt: change.payload["pinnedAt"]?.stringValue.flatMap(Self.parseServerDate),
                 aiTagProcessedAt: change.payload["aiTagProcessedAt"]?.stringValue.flatMap(Self.parseServerDate),
                 tagsUserEditedAt: change.payload["tagsUserEditedAt"]?.stringValue.flatMap(Self.parseServerDate),
                 occurredAt: occurredAt,
@@ -43,6 +45,8 @@ extension TimelineStore {
                 id: id,
                 text: text,
                 isFavorite: change.payload["isFavorite"]?.boolValue,
+                isPinned: change.payload["isPinned"]?.boolValue,
+                pinnedAt: change.payload["pinnedAt"]?.stringValue.flatMap(Self.parseServerDate),
                 occurredAt: occurredAt,
                 editedAt: editedAt,
                 isUserEdit: isUserEdit,
@@ -61,6 +65,24 @@ extension TimelineStore {
             try database.applyPostFavoriteUpdated(
                 id: id,
                 isFavorite: isFavorite,
+                updatedAt: updatedAt,
+                serverVersion: change.version
+            )
+
+        case "post_pin_updated":
+            guard let id = change.payload["id"]?.stringValue,
+                  let isPinned = change.payload["isPinned"]?.boolValue else {
+                return
+            }
+
+            let pinnedAtValue = change.payload["pinnedAt"]?.stringValue
+            let updatedAtValue = change.payload["updatedAt"]?.stringValue
+            let pinnedAt = pinnedAtValue.flatMap(Self.parseServerDate)
+            let updatedAt = updatedAtValue.flatMap(Self.parseServerDate) ?? Date()
+            try database.applyPostPinUpdated(
+                id: id,
+                isPinned: isPinned,
+                pinnedAt: pinnedAt,
                 updatedAt: updatedAt,
                 serverVersion: change.version
             )

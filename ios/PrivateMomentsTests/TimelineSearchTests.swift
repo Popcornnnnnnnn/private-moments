@@ -95,6 +95,8 @@ final class TimelineSearchTests: XCTestCase {
                 id: "post",
                 text: text,
                 isFavorite: false,
+                isPinned: false,
+                pinnedAt: nil,
                 aiTagProcessedAt: nil,
                 tagsUserEditedAt: nil,
                 occurredAt: now,

@@ -407,6 +407,8 @@ extension LocalDatabase {
         id: String,
         text: String,
         isFavorite: Bool,
+        isPinned: Bool,
+        pinnedAt: Date?,
         aiTagProcessedAt: Date?,
         tagsUserEditedAt: Date?,
         occurredAt: Date,
@@ -419,9 +421,9 @@ extension LocalDatabase {
             let statement = try prepare(
                 """
                 INSERT INTO local_posts
-                    (id, text, isFavorite, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
+                    (id, text, isFavorite, isPinned, pinnedAt, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
                      localCreatedAt, localUpdatedAt, localEditedAt, serverVersion, syncStatus, deletedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'synced', NULL)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'synced', NULL)
                 """
             )
             defer {
@@ -431,12 +433,14 @@ extension LocalDatabase {
             try bind(id, to: 1, in: statement)
             try bind(text, to: 2, in: statement)
             try bind(isFavorite ? 1 : 0, to: 3, in: statement)
-            try bind(aiTagProcessedAt, to: 4, in: statement)
-            try bind(tagsUserEditedAt, to: 5, in: statement)
-            try bind(occurredAt, to: 6, in: statement)
-            try bind(now, to: 7, in: statement)
-            try bind(now, to: 8, in: statement)
-            try bind(serverVersion, to: 9, in: statement)
+            try bind(isPinned ? 1 : 0, to: 4, in: statement)
+            try bind(isPinned ? pinnedAt : nil, to: 5, in: statement)
+            try bind(aiTagProcessedAt, to: 6, in: statement)
+            try bind(tagsUserEditedAt, to: 7, in: statement)
+            try bind(occurredAt, to: 8, in: statement)
+            try bind(now, to: 9, in: statement)
+            try bind(now, to: 10, in: statement)
+            try bind(serverVersion, to: 11, in: statement)
             try stepDone(statement)
             return
         }
@@ -446,6 +450,8 @@ extension LocalDatabase {
             UPDATE local_posts
             SET text = ?,
                 isFavorite = ?,
+                isPinned = ?,
+                pinnedAt = ?,
                 aiTagProcessedAt = ?,
                 tagsUserEditedAt = ?,
                 occurredAt = ?,
@@ -465,12 +471,14 @@ extension LocalDatabase {
 
         try bind(text, to: 1, in: statement)
         try bind(isFavorite ? 1 : 0, to: 2, in: statement)
-        try bind(aiTagProcessedAt, to: 3, in: statement)
-        try bind(tagsUserEditedAt, to: 4, in: statement)
-        try bind(occurredAt, to: 5, in: statement)
-        try bind(serverVersion, to: 6, in: statement)
-        try bind(now, to: 7, in: statement)
-        try bind(id, to: 8, in: statement)
+        try bind(isPinned ? 1 : 0, to: 3, in: statement)
+        try bind(isPinned ? pinnedAt : nil, to: 4, in: statement)
+        try bind(aiTagProcessedAt, to: 5, in: statement)
+        try bind(tagsUserEditedAt, to: 6, in: statement)
+        try bind(occurredAt, to: 7, in: statement)
+        try bind(serverVersion, to: 8, in: statement)
+        try bind(now, to: 9, in: statement)
+        try bind(id, to: 10, in: statement)
         try stepDone(statement)
         try refreshPostSyncStatus(postId: id)
     }
@@ -502,6 +510,8 @@ extension LocalDatabase {
         id: String,
         text: String,
         isFavorite: Bool?,
+        isPinned: Bool?,
+        pinnedAt: Date?,
         occurredAt: Date,
         editedAt: Date,
         isUserEdit: Bool = true,
@@ -518,6 +528,8 @@ extension LocalDatabase {
                     ? """
                     UPDATE local_posts
                     SET text = ?,
+                        isPinned = COALESCE(?, isPinned),
+                        pinnedAt = CASE WHEN ? = 1 THEN ? ELSE pinnedAt END,
                         occurredAt = ?,
                         localEditedAt = CASE WHEN ? = 1 THEN ? ELSE localEditedAt END,
                         serverVersion = ?,
@@ -528,6 +540,8 @@ extension LocalDatabase {
                     UPDATE local_posts
                     SET text = ?,
                         isFavorite = ?,
+                        isPinned = COALESCE(?, isPinned),
+                        pinnedAt = CASE WHEN ? = 1 THEN ? ELSE pinnedAt END,
                         occurredAt = ?,
                         localEditedAt = CASE WHEN ? = 1 THEN ? ELSE localEditedAt END,
                         serverVersion = ?,
@@ -541,21 +555,28 @@ extension LocalDatabase {
 
             let now = Date()
             try bind(text, to: 1, in: statement)
+            let shouldUpdatePin = isPinned != nil
             if let isFavorite {
                 try bind(isFavorite ? 1 : 0, to: 2, in: statement)
-                try bind(occurredAt, to: 3, in: statement)
-                try bind(isUserEdit ? 1 : 0, to: 4, in: statement)
-                try bind(editedAt, to: 5, in: statement)
-                try bind(serverVersion, to: 6, in: statement)
-                try bind(now, to: 7, in: statement)
-                try bind(id, to: 8, in: statement)
+                try bind(isPinned.map { $0 ? 1 : 0 }, to: 3, in: statement)
+                try bind(shouldUpdatePin ? 1 : 0, to: 4, in: statement)
+                try bind(isPinned == true ? pinnedAt : nil, to: 5, in: statement)
+                try bind(occurredAt, to: 6, in: statement)
+                try bind(isUserEdit ? 1 : 0, to: 7, in: statement)
+                try bind(editedAt, to: 8, in: statement)
+                try bind(serverVersion, to: 9, in: statement)
+                try bind(now, to: 10, in: statement)
+                try bind(id, to: 11, in: statement)
             } else {
-                try bind(occurredAt, to: 2, in: statement)
-                try bind(isUserEdit ? 1 : 0, to: 3, in: statement)
-                try bind(editedAt, to: 4, in: statement)
-                try bind(serverVersion, to: 5, in: statement)
-                try bind(now, to: 6, in: statement)
-                try bind(id, to: 7, in: statement)
+                try bind(isPinned.map { $0 ? 1 : 0 }, to: 2, in: statement)
+                try bind(shouldUpdatePin ? 1 : 0, to: 3, in: statement)
+                try bind(isPinned == true ? pinnedAt : nil, to: 4, in: statement)
+                try bind(occurredAt, to: 5, in: statement)
+                try bind(isUserEdit ? 1 : 0, to: 6, in: statement)
+                try bind(editedAt, to: 7, in: statement)
+                try bind(serverVersion, to: 8, in: statement)
+                try bind(now, to: 9, in: statement)
+                try bind(id, to: 10, in: statement)
             }
             try stepDone(statement)
 
@@ -594,6 +615,40 @@ extension LocalDatabase {
         try bind(updatedAt, to: 2, in: statement)
         try bind(serverVersion, to: 3, in: statement)
         try bind(id, to: 4, in: statement)
+        try stepDone(statement)
+        try refreshPostSyncStatus(postId: id)
+    }
+
+    func applyPostPinUpdated(
+        id: String,
+        isPinned: Bool,
+        pinnedAt: Date?,
+        updatedAt: Date,
+        serverVersion: Int
+    ) throws {
+        guard try fetchPost(id: id) != nil else {
+            return
+        }
+
+        let statement = try prepare(
+            """
+            UPDATE local_posts
+            SET isPinned = ?,
+                pinnedAt = ?,
+                localUpdatedAt = ?,
+                serverVersion = ?
+            WHERE id = ?
+            """
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        try bind(isPinned ? 1 : 0, to: 1, in: statement)
+        try bind(isPinned ? pinnedAt : nil, to: 2, in: statement)
+        try bind(updatedAt, to: 3, in: statement)
+        try bind(serverVersion, to: 4, in: statement)
+        try bind(id, to: 5, in: statement)
         try stepDone(statement)
         try refreshPostSyncStatus(postId: id)
     }

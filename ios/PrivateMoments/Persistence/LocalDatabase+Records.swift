@@ -5,7 +5,7 @@ extension LocalDatabase {
     func fetchPosts() throws -> [TimelinePost] {
         let statement = try prepare(
             """
-            SELECT id, text, isFavorite, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
+            SELECT id, text, isFavorite, isPinned, pinnedAt, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
                    localCreatedAt, localUpdatedAt, localEditedAt, serverVersion, syncStatus, deletedAt
             FROM local_posts
             WHERE deletedAt IS NULL
@@ -24,15 +24,17 @@ extension LocalDatabase {
                     id: try text(statement, 0),
                     text: try text(statement, 1),
                     isFavorite: sqlite3_column_int(statement, 2) == 1,
-                    aiTagProcessedAt: try optionalDate(statement, 3),
-                    tagsUserEditedAt: try optionalDate(statement, 4),
-                    occurredAt: try date(statement, 5),
-                    localCreatedAt: try date(statement, 6),
-                    localUpdatedAt: try date(statement, 7),
-                    localEditedAt: try optionalDate(statement, 8),
-                    serverVersion: optionalInt(statement, 9),
-                    syncStatus: try text(statement, 10),
-                    deletedAt: try optionalDate(statement, 11)
+                    isPinned: sqlite3_column_int(statement, 3) == 1,
+                    pinnedAt: try optionalDate(statement, 4),
+                    aiTagProcessedAt: try optionalDate(statement, 5),
+                    tagsUserEditedAt: try optionalDate(statement, 6),
+                    occurredAt: try date(statement, 7),
+                    localCreatedAt: try date(statement, 8),
+                    localUpdatedAt: try date(statement, 9),
+                    localEditedAt: try optionalDate(statement, 10),
+                    serverVersion: optionalInt(statement, 11),
+                    syncStatus: try text(statement, 12),
+                    deletedAt: try optionalDate(statement, 13)
                 )
             )
         }
@@ -442,9 +444,9 @@ extension LocalDatabase {
         let statement = try prepare(
             """
             INSERT INTO local_posts
-                (id, text, isFavorite, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
+                (id, text, isFavorite, isPinned, pinnedAt, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
                  localCreatedAt, localUpdatedAt, localEditedAt, serverVersion, syncStatus, deletedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
         )
         defer {
@@ -454,15 +456,17 @@ extension LocalDatabase {
         try bind(post.id, to: 1, in: statement)
         try bind(post.text, to: 2, in: statement)
         try bind(post.isFavorite ? 1 : 0, to: 3, in: statement)
-        try bind(post.aiTagProcessedAt, to: 4, in: statement)
-        try bind(post.tagsUserEditedAt, to: 5, in: statement)
-        try bind(post.occurredAt, to: 6, in: statement)
-        try bind(post.localCreatedAt, to: 7, in: statement)
-        try bind(post.localUpdatedAt, to: 8, in: statement)
-        try bind(post.localEditedAt, to: 9, in: statement)
-        try bind(post.serverVersion, to: 10, in: statement)
-        try bind(post.syncStatus, to: 11, in: statement)
-        try bind(post.deletedAt, to: 12, in: statement)
+        try bind(post.isPinned ? 1 : 0, to: 4, in: statement)
+        try bind(post.pinnedAt, to: 5, in: statement)
+        try bind(post.aiTagProcessedAt, to: 6, in: statement)
+        try bind(post.tagsUserEditedAt, to: 7, in: statement)
+        try bind(post.occurredAt, to: 8, in: statement)
+        try bind(post.localCreatedAt, to: 9, in: statement)
+        try bind(post.localUpdatedAt, to: 10, in: statement)
+        try bind(post.localEditedAt, to: 11, in: statement)
+        try bind(post.serverVersion, to: 12, in: statement)
+        try bind(post.syncStatus, to: 13, in: statement)
+        try bind(post.deletedAt, to: 14, in: statement)
         try stepDone(statement)
     }
 
@@ -622,7 +626,7 @@ extension LocalDatabase {
     func fetchPost(id: String) throws -> TimelinePost? {
         let statement = try prepare(
             """
-            SELECT id, text, isFavorite, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
+            SELECT id, text, isFavorite, isPinned, pinnedAt, aiTagProcessedAt, tagsUserEditedAt, occurredAt,
                    localCreatedAt, localUpdatedAt, localEditedAt, serverVersion, syncStatus, deletedAt
             FROM local_posts
             WHERE id = ?
@@ -639,15 +643,17 @@ extension LocalDatabase {
                 id: try text(statement, 0),
                 text: try text(statement, 1),
                 isFavorite: sqlite3_column_int(statement, 2) == 1,
-                aiTagProcessedAt: try optionalDate(statement, 3),
-                tagsUserEditedAt: try optionalDate(statement, 4),
-                occurredAt: try date(statement, 5),
-                localCreatedAt: try date(statement, 6),
-                localUpdatedAt: try date(statement, 7),
-                localEditedAt: try optionalDate(statement, 8),
-                serverVersion: optionalInt(statement, 9),
-                syncStatus: try text(statement, 10),
-                deletedAt: try optionalDate(statement, 11)
+                isPinned: sqlite3_column_int(statement, 3) == 1,
+                pinnedAt: try optionalDate(statement, 4),
+                aiTagProcessedAt: try optionalDate(statement, 5),
+                tagsUserEditedAt: try optionalDate(statement, 6),
+                occurredAt: try date(statement, 7),
+                localCreatedAt: try date(statement, 8),
+                localUpdatedAt: try date(statement, 9),
+                localEditedAt: try optionalDate(statement, 10),
+                serverVersion: optionalInt(statement, 11),
+                syncStatus: try text(statement, 12),
+                deletedAt: try optionalDate(statement, 13)
             )
         }
 
