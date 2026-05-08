@@ -1,15 +1,11 @@
-import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat } from "node:fs/promises";
-import { Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { MultipartFields, MultipartFile, MultipartValue } from "@fastify/multipart";
 
 import { enqueueMediaSummaryJob } from "../ai/media-summary-service.js";
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
@@ -22,21 +18,30 @@ import {
 import type { DataPaths } from "../storage/data-dir.js";
 import { sendBadRequest, sendNotFound, sendUnauthorized } from "./http-errors.js";
 import {
-  MEDIA_KINDS,
-  MEDIA_VARIANTS,
+  extensionForMediaMimeType,
+  isAllowedMediaUpload,
+  parseMediaUploadFields,
+  relativeMediaPath,
+  type MediaUploadFields as UploadFields,
+} from "./media-upload-fields.js";
+import {
   contentTypeForMediaPath,
   mediaUploadErrorCode,
   parseMediaIds,
   parseMediaVariant,
   pathForMediaVariant,
-  type MediaKind,
   type MediaVariant,
 } from "./media-helpers.js";
+import {
+  fileExists,
+  isPathInside,
+  parseContentLength,
+  writeUploadedFile,
+} from "./upload-helpers.js";
 
 const execFileAsync = promisify(execFile);
 const THUMBNAIL_MAX_EDGE = "800";
 const THUMBNAIL_MAX_BYTES = 180_000;
-const MAX_TRANSCRIPTION_LENGTH = 100_000;
 const UPLOAD_STREAM_TIMEOUT_MS = 240_000;
 
 interface MediaRouteContext {
@@ -45,21 +50,6 @@ interface MediaRouteContext {
   paths: DataPaths;
   fileLogger: FileLogger;
   maintenanceMode: MaintenanceModeService;
-}
-
-interface UploadFields {
-  mediaId: string;
-  postId: string;
-  variant: MediaVariant;
-  kind: MediaKind;
-  mimeType: string | null;
-  durationSeconds: number | null;
-  transcriptionText: string | null;
-  width: number | null;
-  height: number | null;
-  originalPreserved: boolean;
-  sortOrder: number;
-  aiLanguage: "auto" | "zh" | "en";
 }
 
 export async function registerMediaRoutes(
@@ -218,7 +208,7 @@ export async function registerMediaRoutes(
       return reply;
     }
 
-    if (!isAllowedUpload(file.mimetype, fields.kind, fields.variant)) {
+    if (!isAllowedMediaUpload(file.mimetype, fields.kind, fields.variant)) {
       file.file.resume();
       return sendBadRequest(reply, "Unsupported media upload type");
     }
@@ -234,7 +224,7 @@ export async function registerMediaRoutes(
       return sendNotFound(reply, "Post not found");
     }
 
-    const extension = extensionForMimeType(file.mimetype, file.filename);
+    const extension = extensionForMediaMimeType(file.mimetype, file.filename);
     const relativePath = relativeMediaPath(fields.variant, fields.mediaId, extension);
     const absolutePath = path.join(context.paths.dataDir, relativePath);
 
@@ -250,7 +240,10 @@ export async function registerMediaRoutes(
 
     let writeResult: { sizeBytes: number; checksum: string };
     try {
-      writeResult = await writeUploadedFile(file, absolutePath);
+      writeResult = await writeUploadedFile(file, absolutePath, {
+        timeoutMs: UPLOAD_STREAM_TIMEOUT_MS,
+        timeoutMessage: "Media upload timed out",
+      });
       await context.fileLogger.info("media.upload_received", {
         mediaId: fields.mediaId,
         postId: fields.postId,
@@ -416,91 +409,6 @@ async function generateThumbnailFromCompressed(
   return relativePath;
 }
 
-async function fileExists(absolutePath: string): Promise<boolean> {
-  try {
-    await access(absolutePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function isPathInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
-}
-
-async function writeUploadedFile(
-  file: MultipartFile,
-  absolutePath: string,
-): Promise<{ sizeBytes: number; checksum: string }> {
-  const tracker = createUploadHashTracker();
-  const tempPath = tempUploadPath(absolutePath);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort(new Error("Media upload timed out"));
-  }, UPLOAD_STREAM_TIMEOUT_MS);
-  timeout.unref();
-
-  let output: ReturnType<typeof createWriteStream> | null = null;
-  try {
-    await mkdir(path.dirname(absolutePath), { recursive: true });
-    output = createWriteStream(tempPath, { flags: "wx" });
-    await pipeline(file.file, tracker.stream, output, { signal: controller.signal });
-    await rename(tempPath, absolutePath);
-  } catch (error) {
-    file.file.destroy();
-    output?.destroy();
-    await rm(tempPath, { force: true });
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  return tracker.result();
-}
-
-function createUploadHashTracker(): {
-  stream: Transform;
-  result: () => { sizeBytes: number; checksum: string };
-} {
-  const hash = createHash("sha256");
-  let sizeBytes = 0;
-
-  const stream = new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      sizeBytes += chunk.length;
-      hash.update(chunk);
-      callback(null, chunk);
-    },
-  });
-
-  return {
-    stream,
-    result: () => ({
-      sizeBytes,
-      checksum: hash.digest("hex"),
-    }),
-  };
-}
-
-function tempUploadPath(absolutePath: string): string {
-  const directory = path.dirname(absolutePath);
-  const extension = path.extname(absolutePath) || ".upload";
-  const baseName = path.basename(absolutePath, extension);
-  return path.join(directory, `.${baseName}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
-}
-
-function parseContentLength(value: string | string[] | undefined): number | null {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  if (!rawValue) {
-    return null;
-  }
-
-  const parsed = Number(rawValue);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
 async function upsertMediaRecord(
   prisma: PrismaClient,
   fields: UploadFields,
@@ -628,200 +536,14 @@ function pathDataForVariant(
 }
 
 function parseUploadFields(
-  fields: MultipartFields,
+  fields: Parameters<typeof parseMediaUploadFields>[0],
   reply: FastifyReply,
 ): UploadFields | null {
-  const mediaId = getMultipartString(fields, "mediaId");
-  const postId = getMultipartString(fields, "postId");
-  const variant = getMultipartString(fields, "variant");
-  const kind = getMultipartString(fields, "kind") ?? "image";
-  const mimeType = getMultipartString(fields, "mimeType");
-  const durationSeconds = getMultipartFloat(fields, "durationSeconds");
-  const transcriptionText = normalizeTranscriptionText(
-    getMultipartString(fields, "transcriptionText"),
-    reply,
-  );
-  const width = getMultipartInteger(fields, "width");
-  const height = getMultipartInteger(fields, "height");
-  const originalPreserved = getMultipartBoolean(fields, "originalPreserved") ?? false;
-  const sortOrder = getMultipartInteger(fields, "sortOrder") ?? 0;
-  const aiLanguage = parseAILanguage(getMultipartString(fields, "aiLanguage"));
-
-  if (!mediaId || !postId || !variant) {
-    sendBadRequest(reply, "mediaId, postId, and variant are required");
+  const parsed = parseMediaUploadFields(fields);
+  if (!parsed.ok) {
+    sendBadRequest(reply, parsed.message);
     return null;
   }
 
-  if (!MEDIA_VARIANTS.has(variant)) {
-    sendBadRequest(reply, "variant must be one of: compressed, original, thumbnail");
-    return null;
-  }
-
-  if (!MEDIA_KINDS.has(kind)) {
-    sendBadRequest(reply, "kind must be one of: image, video, audio");
-    return null;
-  }
-
-  if (durationSeconds !== null && (durationSeconds < 0 || durationSeconds > 24 * 60 * 60)) {
-    sendBadRequest(reply, "durationSeconds is invalid");
-    return null;
-  }
-
-  if (transcriptionText === false) {
-    return null;
-  }
-
-  return {
-    mediaId,
-    postId,
-    variant: variant as MediaVariant,
-    kind: kind as MediaKind,
-    mimeType,
-    durationSeconds,
-    transcriptionText,
-    width,
-    height,
-    originalPreserved,
-    sortOrder,
-    aiLanguage,
-  };
-}
-
-function parseAILanguage(value: string | null): "auto" | "zh" | "en" {
-  if (value === "zh" || value === "en") {
-    return value;
-  }
-
-  return "auto";
-}
-
-function getMultipartString(fields: MultipartFields, key: string): string | null {
-  const field = firstField(fields[key]);
-  if (!field || field.type !== "field" || typeof field.value !== "string") {
-    return null;
-  }
-
-  const trimmed = field.value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizeTranscriptionText(
-  value: string | null,
-  reply: FastifyReply,
-): string | null | false {
-  if (!value) {
-    return null;
-  }
-
-  if (value.length > MAX_TRANSCRIPTION_LENGTH) {
-    sendBadRequest(reply, `transcriptionText cannot exceed ${MAX_TRANSCRIPTION_LENGTH} characters`);
-    return false;
-  }
-
-  return value;
-}
-
-function getMultipartBoolean(fields: MultipartFields, key: string): boolean | null {
-  const value = getMultipartString(fields, key);
-  if (value === null) {
-    return null;
-  }
-
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  return null;
-}
-
-function getMultipartInteger(fields: MultipartFields, key: string): number | null {
-  const value = getMultipartString(fields, key);
-  if (value === null) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function getMultipartFloat(fields: MultipartFields, key: string): number | null {
-  const value = getMultipartString(fields, key);
-  if (value === null) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function firstField(
-  field: MultipartFields[string],
-): MultipartValue | MultipartFile | undefined {
-  return Array.isArray(field) ? field[0] : field;
-}
-
-function relativeMediaPath(
-  variant: MediaVariant,
-  mediaId: string,
-  extension: string,
-): string {
-  const dir = variant === "original" ? "originals" : variant === "thumbnail" ? "thumbnails" : "compressed";
-  return path.join("media", dir, `${mediaId}${extension}`);
-}
-
-function extensionForMimeType(mimetype: string, filename: string): string {
-  if (mimetype === "image/jpeg") {
-    return ".jpg";
-  }
-
-  if (mimetype === "image/png") {
-    return ".png";
-  }
-
-  if (mimetype === "image/heic") {
-    return ".heic";
-  }
-
-  if (mimetype === "image/webp") {
-    return ".webp";
-  }
-
-  if (mimetype === "video/mp4") {
-    return ".mp4";
-  }
-
-  if (mimetype === "video/quicktime") {
-    return ".mov";
-  }
-
-  if (mimetype === "audio/mp4" || mimetype === "audio/x-m4a") {
-    return ".m4a";
-  }
-
-  if (mimetype === "audio/aac") {
-    return ".aac";
-  }
-
-  const extension = path.extname(filename).toLowerCase();
-  return extension.length > 0 && extension.length <= 10 ? extension : ".bin";
-}
-
-function isAllowedUpload(mimetype: string, kind: MediaKind, variant: MediaVariant): boolean {
-  if (variant === "thumbnail") {
-    return mimetype.startsWith("image/");
-  }
-
-  if (kind === "image") {
-    return mimetype.startsWith("image/");
-  }
-
-  if (kind === "video") {
-    return mimetype.startsWith("video/") || mimetype === "application/octet-stream";
-  }
-
-  return mimetype.startsWith("audio/") || mimetype === "application/octet-stream";
+  return parsed.fields;
 }

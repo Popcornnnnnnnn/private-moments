@@ -1,6 +1,6 @@
 # Private Moments 交接说明
 
-Last reconciled: 2026-05-08
+Last reconciled: 2026-05-09
 
 ## 当前工作状态
 
@@ -9,6 +9,7 @@ Last reconciled: 2026-05-08
 - Admin UI 可通过 `npm run admin:build` 构建，并由 server 在 `/admin/` 提供访问。
 - 项目工作流已写入 `docs/WORKFLOW.md`，agent 强制规则写入 `AGENTS.md`。
 - `.gsd/` 是结构化事实源，记录当前项目事实、requirements、decisions 和 milestone state；`docs/` 是给人阅读的稳定文档层。
+- 2026-05-09 工程瘦身与回归测试 checkpoint：server test 入口改为自动发现 `src/**/*.test.ts`，并新增 sync payload、AI title 插入、shared upload helpers、ordinary media upload fields、check-in media upload fields 的 Node 回归测试。`sync.ts` 的 request parsing / AI title helper / Check-ins sync operations 已拆到独立模块；ordinary media 与 check-in media 共享上传 stream/hash/path safety/content-length helper；Admin API types/client 已从 `admin/src/App.tsx` 拆到 `admin/src/adminApi.ts`；Moment Detail tag editor/badge/layout 已拆到 `MomentDetailTags.swift`。本轮不改变 SQLite schema、sync protocol、API route 或用户可见产品行为。验证：`server:typecheck`、`server:test` 49/49、`admin:build`、`verify:ios:generic`、`verify:all`、`git diff --check` 已通过；`npm run ios:device` 已 build/sign/install/launch 到 `wwz 的 iphone`。
 - 2026-05-08 Check-in photo failed sync 根因修复：真实 iPhone 的 check-in item/entry 已同步成功，failed count 来自 `local_checkin_media` 照片上传；iPhone 优先使用上次可达的 `https://moments.popcornnn.xyz`，但本机 Cloudflare Tunnel allowlist 漏了新增 `/api/v1/checkin-media/*`，导致 fallback endpoint 返回空 body `404`，客户端没有继续尝试 primary Tailscale URL。已备份并更新本机 ignored tunnel config，重载后公网 `/api/v1/checkin-media/upload` 不再 404；iOS 端也改为把空 body 404 当作 fallback route miss 继续尝试下一个 server candidate。随后已 build/sign/install/launch 到 `wwz 的 iphone`，server 记录 `checkin_media.upload_completed`，iPhone container 复查 active failed/pending check-in media 均为 0。该照片随后由 iPhone 发出 `delete_checkin_media` 并被 server 接受，当前 entry 已 synced 且没有活动照片附件；这看起来是一次后续编辑/保存动作，不再是 upload failed。
 - 2026-05-08 Check-in icon picker follow-up：Check-in item 图标仍只同步 `symbolName` 字符串，不新增 icon 表。iOS 编辑器改为精选 SF Symbol catalog，支持类别、搜索、当前预览和高级 `SF Symbol name` 输入；自定义值保存前用系统 symbol lookup 校验，store 侧也会把无效值兜底为 `checkmark.circle`。验证：`npm run verify:ios:generic` 通过；真实 iPhone 安装前已复制 Library checkpoint 到 `.tmp/device-app-library-before-checkin-icon-picker-20260508-231340`，检查 outbox pending/failed 为 0、active check-in media pending/failed 为 0、普通 post media pending 仍有 3 个；随后 `npm run ios:device` build/sign/install/launch 到 `wwz 的 iphone` 成功。
 - 2026-05-08 Settings 顶层 `Appearance` 已收成二级页：顶层只显示当前外观模式摘要，具体 `System` / `Light` / `Dark` 选择进入 `Settings > Appearance`。
