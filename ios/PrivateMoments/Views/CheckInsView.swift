@@ -676,26 +676,10 @@ private struct CheckInManageView: View {
                             dismiss()
                             onEdit(item)
                         } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: item.symbolName)
-                                    .foregroundStyle(Color(hex: item.colorHex) ?? .accentColor)
-                                    .frame(width: 28)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(item.name)
-                                        .font(.body.weight(.semibold))
-                                    Text(item.recordMode.title(language: appLanguage))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if item.isArchived {
-                                    Text(L10n.t("Archived", appLanguage))
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
+                            CheckInManageRow(item: item)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(CheckInManageRowButtonStyle())
+                        .accessibilityLabel("\(L10n.t("Edit check-in", appLanguage)): \(item.name)")
                     }
                 }
             }
@@ -718,6 +702,67 @@ private struct CheckInManageView: View {
                 }
             }
         }
+    }
+}
+
+private struct CheckInManageRow: View {
+    @Environment(\.appLanguage) private var appLanguage
+
+    let item: CheckInItem
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: item.symbolName)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 30, height: 30)
+                .background(iconColor.opacity(0.13), in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(item.recordMode.title(language: appLanguage))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            if item.isArchived {
+                Text(L10n.t("Archived", appLanguage))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+    }
+
+    private var iconColor: Color {
+        Color(hex: item.colorHex) ?? .accentColor
+    }
+}
+
+private struct CheckInManageRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.vertical, 6)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(configuration.isPressed ? Color.secondary.opacity(0.12) : Color.clear)
+            }
+            .scaleEffect(configuration.isPressed ? 0.99 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
