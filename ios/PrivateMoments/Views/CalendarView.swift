@@ -356,9 +356,11 @@ private struct CalendarMonthGrid: View {
                             onSelectDay(day)
                         }
                     } label: {
-                        CalendarDayCell(day: day, calendar: calendar)
-                            .frame(maxWidth: .infinity)
+                        Color.clear
                             .aspectRatio(1, contentMode: .fit)
+                            .overlay {
+                                CalendarDayCell(day: day, calendar: calendar)
+                            }
                     }
                     .frame(maxWidth: .infinity)
                     .buttonStyle(CalendarDayButtonStyle(isEnabled: day.isSelectable))
@@ -396,45 +398,46 @@ private struct CalendarDayCell: View {
     let calendar: Calendar
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(dayNumber)
-                .font(.subheadline.weight(day.isToday ? .bold : .medium))
-                .fontDesign(.rounded)
-                .foregroundStyle(day.isInDisplayedMonth ? Color.primary : Color.secondary)
-
-            Spacer(minLength: 0)
-
-            if !day.mediaHints.isEmpty || day.activityCount > 0 {
-                HStack(spacing: 4) {
-                    if !day.mediaHints.isEmpty {
-                        HStack(spacing: 3) {
-                            ForEach(day.mediaHints, id: \.rawValue) { hint in
-                                Image(systemName: hint.systemImage)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-
-                    if day.activityCount > 0 {
-                        Text("\(day.activityCount)")
-                            .font(.caption2.weight(.bold).monospacedDigit())
-                            .foregroundStyle(.primary.opacity(0.72))
-                            .minimumScaleFactor(0.72)
-                            .lineLimit(1)
-                    }
-                }
-            }
-        }
-        .padding(6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background {
+        ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(dayBackground)
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text(dayNumber)
+                    .font(.subheadline.weight(day.isToday ? .bold : .medium))
+                    .fontDesign(.rounded)
+                    .foregroundStyle(day.isInDisplayedMonth ? Color.primary : Color.secondary)
+
+                Spacer(minLength: 0)
+
+                if !day.mediaHints.isEmpty || day.activityCount > 0 {
+                    HStack(spacing: 4) {
+                        if !day.mediaHints.isEmpty {
+                            HStack(spacing: 3) {
+                                ForEach(day.mediaHints, id: \.rawValue) { hint in
+                                    Image(systemName: hint.systemImage)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+
+                        if day.activityCount > 0 {
+                            Text("\(day.activityCount)")
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .foregroundStyle(.primary.opacity(0.72))
+                                .minimumScaleFactor(0.72)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .padding(6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             if day.isToday {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
