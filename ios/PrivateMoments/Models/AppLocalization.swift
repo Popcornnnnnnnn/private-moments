@@ -298,7 +298,7 @@ enum L10n {
         "Progress": "进展",
         "Progress and Open Loops": "进展与开放循环",
         "Publish as Moment": "发布为 Moment",
-        "Publish Weekly Review to Moments": "发布每周回顾到 Moments",
+        "Publish Weekly Review": "发布每周回顾",
         "Pull Server Changes": "拉取服务器变更",
         "Posts": "内容",
         "Primary": "主标签",

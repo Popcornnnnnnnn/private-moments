@@ -496,6 +496,17 @@ enum APIError: LocalizedError {
     case missingUploadFile
     case httpStatus(Int, String)
 
+    var shouldTryAlternateServerURL: Bool {
+        switch self {
+        case .invalidResponse:
+            return true
+        case .httpStatus(let status, let body):
+            return status >= 500 || (status == 404 && body.looksLikeRouteNotFound)
+        case .invalidURL, .missingToken, .missingUploadFile:
+            return false
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .invalidURL:
@@ -509,6 +520,14 @@ enum APIError: LocalizedError {
         case .httpStatus(let status, let body):
             return "HTTP \(status): \(body)"
         }
+    }
+}
+
+private extension String {
+    var looksLikeRouteNotFound: Bool {
+        let normalized = lowercased()
+        return normalized.contains("route")
+            && normalized.contains("not found")
     }
 }
 

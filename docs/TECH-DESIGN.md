@@ -202,7 +202,7 @@ AI Language 与 App Language 分离。iOS 在 `/api/v1/media/upload` 和 `/api/v
 
 AI Periodic Reviews 是通用回看系统。第一版是 `Weekly Review`，但 schema、API 和服务层不命名为 `weekly_reviews`，而是使用 `reviews.kind`、`rangeMode`、`rangeStart` 和 `rangeEnd`，为后续 monthly/custom review 复用同一基础。
 
-Weekly Review 放在 Calendar 的 `Reviews` 入口下，而不是 Timeline。它是 generated review artifact，不默认成为 moment；用户只能通过显式 `Publish as Moment` 把 ready review 转成一条普通 server post。Settings > Feature Modules 提供 `Auto-generate Weekly Review` 和 `Publish Weekly Review to Moments`，两个默认关闭。自动生成由 Mac server 在本地时间每周日 21:00 后触发，生成 rolling 7 days，不通知、不自动发布。
+Weekly Review 放在 Calendar 的 `Reviews` 入口下，而不是 Timeline。它是 generated review artifact，不默认成为 moment；用户只能通过显式 `Publish as Moment` 把 ready review 转成一条普通 server post。Settings > Feature Modules 提供 `Auto-generate Weekly Review` 和 `Publish Weekly Review`，两个默认关闭。自动生成由 Mac server 在本地时间每周日 21:00 后触发，生成 rolling 7 days，不通知、不自动发布。
 
 Review 输入由 server 构建：
 

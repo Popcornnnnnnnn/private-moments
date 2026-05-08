@@ -1,6 +1,6 @@
 # Private Moments 交接说明
 
-Last reconciled: 2026-05-07
+Last reconciled: 2026-05-08
 
 ## 当前工作状态
 
@@ -12,6 +12,7 @@ Last reconciled: 2026-05-07
 - 2026-05-08 Settings > Storage & Diagnostics 已做首轮分级：第一页只保留 `Summary`、本机占用、Mac reachability 和异常摘要，详细计数/操作进入 `This iPhone`、`Sync Health`、`Mac Server`、`Mac Operations`、`AI & Tags` 子页；刷新仍是只读，显式同步/重试动作保留在 `Sync Health` 子页。
 - 2026-05-07 新增统一质量门禁：`docs/UAT-GATES.md` 集中记录真实 iPhone、Mac Archive、Share Extension、AI Summary、Smart Tags、Weekly Review 等人工/真机门禁；`npm run verify:uat-gates` 报告 open gates，`npm run verify:release-gates` 在 open gates 存在时失败；`npm run verify:all` 作为日常 checkpoint 入口串联 server/admin/iOS generic build、focused tests、UAT gate 报告和 diff check。
 - 2026-05-07 用户确认当前 10 个 UAT gate 先全部验收通过；`docs/UAT-GATES.md` 已全部改为 `closed`，后续 release gate 应以 `npm run verify:release-gates` 复查是否仍为 0 open。
+- 2026-05-08 修复 Settings > Feature Modules 中 Weekly Review 两个开关的 404 体验：iOS API client 对“Route ... not found”这类路由级 404 会继续尝试下一个 server candidate，避免上次可达的旧 fallback/隧道地址挡住当前主地址；publish 开关文案缩短为 `Publish Weekly Review`，Feature Modules toggle 标签优先单行显示。
 - 2026-05-07 Admin 迁移继续落地：iOS Settings > Storage & Diagnostics 新增只读 `Mac Operations`，展示 maintenance mode、running/recent failed job、Archive repository、restic availability/version、last backup/snapshot 和 next backup；Mac Server 区域也补充 server version、schema version、data dir 和 uptime。该刷新仍是只读，不触发隐藏 `/sync` 或 Mac 恢复动作。
 - 2026-05-07 AI topic tag 去重修复：新 summary prompt version 提升到 `media-summary-v4`，每次生成/标签 fallback 都会带入 active topic tag 和 alias 词表，要求 provider 优先返回已有 canonical topic name；server 落库前也按 exact/alias/明显包含关系复用旧 topic，避免 `HTTPS 中间人攻击` 和 `中间人攻击` 这类近义窄化 topic 继续分裂。当前 live DB 已把 `HTTPS 中间人攻击` 合并到 `中间人攻击`，旧名作为 alias 保留并发出同步变更。
 - 2026-05-07 iOS tag merge 同步修复：真实 iPhone 收到上面 live DB `merge_tag` 后可能弹出 `UNIQUE constraint failed: local_post_tags.id`，根因是本地 `post_tag_updated` 只处理 `(postId, tagId)` upsert，没有按 assignment `id` 接住“同一关联从 source topic 移到 target topic”的服务器变更。现在 iOS 优先按 assignment `id` 更新 `local_post_tags`，并在目标 topic 已有本地关联时先清理冲突行；新增回归测试覆盖该路径。已 build/sign/install 到 iPhone，启动阶段因手机锁屏被系统拒绝。

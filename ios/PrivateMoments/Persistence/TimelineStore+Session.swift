@@ -125,8 +125,8 @@ extension TimelineStore {
             switch apiError {
             case .invalidResponse:
                 return true
-            case .httpStatus(let status, _):
-                return status >= 500
+            case .httpStatus:
+                return apiError.shouldTryAlternateServerURL
             case .invalidURL, .missingToken, .missingUploadFile:
                 return false
             }

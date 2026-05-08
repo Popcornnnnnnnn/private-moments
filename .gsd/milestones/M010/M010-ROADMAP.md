@@ -62,7 +62,7 @@ Deliver an extensible AI review system whose first artifact is a Weekly Review: 
 
 **Goal:** Add default-off controls and feedback that feeds review memory.
 
-**Outcome:** Settings exposes `Auto-generate Weekly Review` and `Publish Weekly Review to Moments`. Detail supports useful / too much inference / too dry / missed point / hide theme feedback.
+**Outcome:** Settings exposes `Auto-generate Weekly Review` and `Publish Weekly Review`. Detail supports useful / too much inference / too dry / missed point / hide theme feedback.
 
 **Primary requirements:** R044, R046.
 

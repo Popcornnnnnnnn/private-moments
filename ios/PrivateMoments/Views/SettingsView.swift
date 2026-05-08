@@ -114,32 +114,32 @@ struct SettingsView: View {
                 }
 
                 Section(L10n.t("Feature Modules", appLanguage)) {
-                    Toggle(
-                        L10n.t("Show Tags in Timeline", appLanguage),
+                    featureToggle(
+                        "Show Tags in Timeline",
                         isOn: Binding(
                             get: { store.showTagsInTimeline },
                             set: { store.setShowTagsInTimeline($0) }
                         )
                     )
 
-                    Toggle(
-                        L10n.t("AI Title Auto-Insert", appLanguage),
+                    featureToggle(
+                        "AI Title Auto-Insert",
                         isOn: Binding(
                             get: { store.aiTitleAutoInsertEnabled },
                             set: { store.setAITitleAutoInsertEnabled($0) }
                         )
                     )
 
-                    Toggle(
-                        L10n.t("Auto-generate Weekly Review", appLanguage),
+                    featureToggle(
+                        "Auto-generate Weekly Review",
                         isOn: Binding(
                             get: { store.autoWeeklyReviewEnabled },
                             set: { store.setAutoWeeklyReviewEnabled($0) }
                         )
                     )
 
-                    Toggle(
-                        L10n.t("Publish Weekly Review to Moments", appLanguage),
+                    featureToggle(
+                        "Publish Weekly Review",
                         isOn: Binding(
                             get: { store.publishWeeklyReviewToMoments },
                             set: { store.setPublishWeeklyReviewToMoments($0) }
@@ -161,6 +161,15 @@ struct SettingsView: View {
             get: { store.errorMessage != nil },
             set: { _ in store.clearError() }
         )
+    }
+
+    private func featureToggle(_ titleKey: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(L10n.t(titleKey, appLanguage))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .allowsTightening(true)
+        }
     }
 
     private var connectionSummary: String {
