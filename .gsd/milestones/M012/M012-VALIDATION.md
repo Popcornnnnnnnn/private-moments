@@ -1,8 +1,9 @@
 # M012 Validation: Check-ins
 
 **Validated:** 2026-05-08
-**Worktree:** `/Users/popcornnnnnn/.codex/worktrees/c75e/private-moments`
-**Branch:** `codex/checkins-module`
+**Feature worktree:** `/Users/popcornnnnnn/.codex/worktrees/c75e/private-moments`
+**Feature branch:** `codex/checkins-module`
+**Main merge commit:** `1ae0313 Merge check-ins module`
 **Scope:** Current checkpoint implements local-first check-in items/entries/image media, sync metadata, independent check-in media upload/recovery, iOS Check-ins UI, Timeline publishing, Calendar/Day Review/Month Stats/Photos filter integration, History item filtering, and lightweight iOS diagnostics. Check-in audio/video media remains out of scope.
 
 ## Automated Verification
@@ -16,6 +17,19 @@
 - `xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination id=1FD6368F-8CB5-4736-9682-AE8DF38A0CC9 -only-testing:PrivateMomentsTests/CalendarReviewModelsTests` passed: 8/8 tests.
 - `xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination id=1FD6368F-8CB5-4736-9682-AE8DF38A0CC9 -only-testing:PrivateMomentsTests/TimelineDateJumpModelsTests` passed: 5/5 tests.
 - `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build` passed.
+- After merge to `main`, `npm run server:prisma:generate && npm run verify:server` passed.
+- After merge to `main`, `npm run verify:ios:generic` passed.
+
+## Main Deployment Verification
+
+- Merged `codex/checkins-module` into `main` as `1ae0313 Merge check-ins module`.
+- Created a live SQLite backup before migration: `server/data/backups/manual/app-before-checkins-20260508-221014.sqlite`.
+- Ran `npm run server:prisma:deploy` against the live server database; migrations `20260508160000_checkins` and `20260508190000_checkin_media` applied successfully.
+- Restarted the LaunchAgent-managed server with `launchctl kickstart -k gui/$(id -u)/com.private-moments.server`.
+- `GET http://127.0.0.1:3210/api/v1/health` returned `schemaVersion: 15` after restart.
+- `npm run ios:device` built, signed, installed, and launched `com.popcornnnnnn.privatemoments` on `wwz 的 iphone`.
+- Device install reported bundle id `com.popcornnnnnn.privatemoments` and installation URL `file:///private/var/containers/Bundle/Application/2B8340D6-8DF2-4BC4-9D42-915C2063E638/PrivateMoments.app/`.
+- Device launch succeeded through `xcrun devicectl device process launch`.
 
 ## Simulator Mock-Data Verification
 
@@ -78,4 +92,4 @@ This proves:
 
 Simulator cannot exercise the real camera hardware picker. The camera path compiled and the UI reserves it for real devices; simulator validation used seeded mock image media and direct SQLite/file checks. Check-in audio/video media is intentionally not implemented in this checkpoint.
 
-No real iPhone install was performed from this feature worktree, by design.
+No real iPhone install was performed from the feature worktree, by design. Real-device deployment happened only after merge to `main`.

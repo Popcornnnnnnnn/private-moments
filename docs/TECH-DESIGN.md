@@ -181,9 +181,9 @@ Sync 使用四个独立 operation：
 
 这些 operation 的 `entityType` 分别是 `checkin_item` 和 `checkin_entry`。Server changes 对应 `checkin_item_updated/deleted` 和 `checkin_entry_updated/deleted`。删除 item 会 soft-delete 其 entries；客户端应用 item delete 时本地级联即可。
 
-v1 明确不做 reminders、streak、missed count、completion rate、preset templates、Mac Admin management、separate export、AI tags、OCR、transcription 或 AI summary。Optional tag 默认 none，并且是 item-level secondary metadata；AI、语音和普通 composer 流程不应自动给 check-ins 打 tag。
+Check-in 照片使用独立的 `checkin_media` / `local_checkin_media` 父对象，不复用 ordinary post media。当前只启用 still image，来源是相册 `Add Photos` 或相机 `Use Camera`；上传和恢复走 `/api/v1/checkin-media/upload`、`/api/v1/checkin-media/batch-download` 和 `GET /api/v1/checkin-media/:mediaId`。照片会出现在 Check-ins History、Calendar Day Review、Month Stats 和 Photos filter 中，即使对应 entry 不发布到 Timeline。
 
-当前 checkpoint 的限制：check-in media attachment 尚未接入。原因是现有媒体管线、上传路由、AI summary 和恢复逻辑都以 `postId` 为父对象；为了保持“check-ins 不是 ordinary posts”的边界，后续应新增 check-in-owned media 表/上传语义，而不是复用假 post。
+v1 明确不做 reminders、streak、missed count、completion rate、preset templates、Mac Admin management、separate export、AI tags、OCR、transcription 或 AI summary。Optional tag 默认 none，并且是 item-level secondary metadata；AI、语音和普通 composer 流程不应自动给 check-ins 打 tag。Audio/video check-in media 只保留入口和数据边界，尚未启用；后续扩展必须继续使用 check-in-owned media，而不是把 check-ins 写成 ordinary posts。
 
 ## 2.2 详情与编辑决策
 
@@ -402,7 +402,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 {
   "app": "PrivateMoments",
   "dataVersion": 1,
-  "schemaVersion": 13,
+  "schemaVersion": 15,
   "createdAt": "2026-04-28T00:00:00.000Z",
   "mediaLayoutVersion": 1
 }
@@ -1052,7 +1052,7 @@ POST   /api/v1/admin/archive/jobs/import
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 13,
+  "schemaVersion": 15,
   "acceptedOps": ["op-uuid-1", "op-uuid-2"],
   "rejectedOps": [],
   "serverChanges": [
