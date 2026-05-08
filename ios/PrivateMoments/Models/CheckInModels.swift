@@ -68,10 +68,35 @@ struct CheckInEntry: Identifiable, Codable, Equatable {
     }
 }
 
+struct CheckInMedia: Identifiable, Codable, Equatable {
+    var id: String
+    var entryId: String
+    var kind: String
+    var localCompressedPath: String
+    var remoteCompressedPath: String?
+    var uploadStatus: String
+    var uploadError: String?
+    var mimeType: String?
+    var sortOrder: Int
+    var checksum: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+
+    var isImage: Bool {
+        kind == "image"
+    }
+
+    var hasLocalDisplayFile: Bool {
+        !localCompressedPath.isEmpty && FileManager.default.fileExists(atPath: localCompressedPath)
+    }
+}
+
 struct CheckInFeedEntry: Identifiable {
     let entry: CheckInEntry
     let item: CheckInItem
     let tag: TimelineTag?
+    let media: [CheckInMedia]
 
     var id: String {
         entry.id
@@ -82,7 +107,23 @@ struct CheckInFeedEntry: Identifiable {
     }
 
     var syncStatus: String {
-        entry.syncStatus == "synced" ? item.syncStatus : entry.syncStatus
+        if entry.syncStatus != "synced" {
+            return entry.syncStatus
+        }
+
+        if item.syncStatus != "synced" {
+            return item.syncStatus
+        }
+
+        if media.contains(where: { $0.uploadStatus == "failed" }) {
+            return "failed"
+        }
+
+        if media.contains(where: { $0.uploadStatus == "pending" }) {
+            return "partial"
+        }
+
+        return "synced"
     }
 
     var isDeleted: Bool {

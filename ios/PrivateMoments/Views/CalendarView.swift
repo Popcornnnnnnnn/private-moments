@@ -1219,10 +1219,11 @@ private struct CalendarDayReviewHeader: View {
 
     private var mediaCompositionTitle: String {
         let media = day.items.flatMap(\.media)
+        let checkInMedia = day.checkIns.flatMap(\.media)
         let textCount = day.items.filter { item in
             item.media.isEmpty && !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }.count
-        let imageCount = media.filter(\.isImage).count
+        let imageCount = media.filter(\.isImage).count + checkInMedia.filter(\.isImage).count
         let audioCount = media.filter(\.isAudio).count
         let videoCount = media.filter(\.isVideo).count
         let checkInCount = day.checkIns.count

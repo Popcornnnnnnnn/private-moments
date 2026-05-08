@@ -10,6 +10,7 @@ struct CheckInsView: View {
     @State private var contentItem: CheckInItem?
     @State private var detailRoute: CheckInEntryDetailRoute?
     @State private var undoEntry: CheckInEntry?
+    @State private var historyFilterItemId: String?
 
     private var today: Date {
         Date()
@@ -17,6 +18,18 @@ struct CheckInsView: View {
 
     private var activeItems: [CheckInItem] {
         store.checkInItems.filter { $0.deletedAt == nil && $0.archivedAt == nil }
+    }
+
+    private var historyFilterItems: [CheckInItem] {
+        store.checkInItems
+            .filter { $0.deletedAt == nil }
+            .sorted { lhs, rhs in
+                if lhs.sortOrder == rhs.sortOrder {
+                    return lhs.name < rhs.name
+                }
+
+                return lhs.sortOrder < rhs.sortOrder
+            }
     }
 
     var body: some View {
@@ -153,35 +166,64 @@ struct CheckInsView: View {
 
     @ViewBuilder
     private var historySections: some View {
-        let entries = store.checkInFeedEntries.sorted { lhs, rhs in
+        let allEntries = store.checkInFeedEntries.sorted { lhs, rhs in
             if lhs.occurredAt == rhs.occurredAt {
                 return lhs.id > rhs.id
             }
 
             return lhs.occurredAt > rhs.occurredAt
         }
+        let entries = allEntries.filter { entry in
+            historyFilterItemId == nil || entry.item.id == historyFilterItemId
+        }
 
-        if entries.isEmpty {
+        if allEntries.isEmpty {
             Section {
                 ContentUnavailableView(L10n.t("No check-ins yet", appLanguage), systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity)
             }
         } else {
             Section {
-                CheckInHistorySummary(entries: entries)
+                CheckInHistoryFilterBar(
+                    items: historyFilterItems,
+                    selectedItemId: $historyFilterItemId
+                )
             }
 
             Section {
-                ForEach(entries) { entry in
-                    Button {
-                        detailRoute = CheckInEntryDetailRoute(entryId: entry.id)
-                    } label: {
-                        CheckInHistoryRow(entry: entry)
+                CheckInHistorySummary(entries: entries)
+            }
+
+            if entries.isEmpty {
+                Section {
+                    ContentUnavailableView(
+                        L10n.t("No check-ins for this item", appLanguage),
+                        systemImage: selectedHistoryFilterSymbol
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+            } else {
+                Section {
+                    ForEach(entries) { entry in
+                        Button {
+                            detailRoute = CheckInEntryDetailRoute(entryId: entry.id)
+                        } label: {
+                            CheckInHistoryRow(entry: entry)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
+    }
+
+    private var selectedHistoryFilterSymbol: String {
+        guard let historyFilterItemId,
+              let item = store.checkInItem(id: historyFilterItemId) else {
+            return "line.3.horizontal.decrease.circle"
+        }
+
+        return item.symbolName
     }
 
     private func handlePrimaryTap(_ row: CheckInTodayRowModel) {
@@ -355,27 +397,25 @@ struct CheckInTimelineRow: View {
                         .background(iconColor.opacity(0.14), in: Circle())
 
                     VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(checkIn.item.name)
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text(L10n.t("Check-in", appLanguage))
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 6)
-                                .frame(height: 18)
-                                .background(Color.secondary.opacity(0.08), in: Capsule())
-                        }
+                        Text(checkIn.item.name)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
 
                         if checkIn.entry.hasNote {
                             Text(checkIn.entry.note)
                                 .font(.body)
                                 .foregroundStyle(.primary)
                                 .lineLimit(5)
-                        } else {
-                            Text(L10n.t("Checked in", appLanguage))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                        }
+
+                        if !checkIn.media.isEmpty {
+                            LazyVGrid(columns: imageGridColumns, alignment: .leading, spacing: 6) {
+                                ForEach(checkIn.media.filter(\.isImage)) { media in
+                                    CheckInImageThumbnail(media: media)
+                                        .frame(width: 58, height: 58)
+                                }
+                            }
+                            .padding(.top, checkIn.entry.hasNote ? 4 : 2)
                         }
                     }
                 }
@@ -387,6 +427,12 @@ struct CheckInTimelineRow: View {
 
     private var iconColor: Color {
         Color(hex: checkIn.item.colorHex) ?? .accentColor
+    }
+
+    private var imageGridColumns: [GridItem] {
+        [
+            GridItem(.adaptive(minimum: 58, maximum: 72), spacing: 6)
+        ]
     }
 }
 
@@ -428,6 +474,66 @@ private struct CheckInSummaryPill: View {
     }
 }
 
+private struct CheckInHistoryFilterBar: View {
+    @Environment(\.appLanguage) private var appLanguage
+
+    let items: [CheckInItem]
+    @Binding var selectedItemId: String?
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                CheckInHistoryFilterChip(
+                    title: L10n.t("All", appLanguage),
+                    symbolName: "tray.full",
+                    color: .accentColor,
+                    isSelected: selectedItemId == nil
+                ) {
+                    selectedItemId = nil
+                }
+
+                ForEach(items) { item in
+                    CheckInHistoryFilterChip(
+                        title: item.name,
+                        symbolName: item.symbolName,
+                        color: Color(hex: item.colorHex) ?? .accentColor,
+                        isSelected: selectedItemId == item.id
+                    ) {
+                        selectedItemId = item.id
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+}
+
+private struct CheckInHistoryFilterChip: View {
+    let title: String
+    let symbolName: String
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            } icon: {
+                Image(systemName: symbolName)
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(isSelected ? color : Color.secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(isSelected ? color.opacity(0.16) : Color.secondary.opacity(0.08), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct CheckInHistoryRow: View {
     let entry: CheckInFeedEntry
 
@@ -449,6 +555,12 @@ private struct CheckInHistoryRow: View {
             }
 
             Spacer(minLength: 0)
+
+            if let media = entry.media.first(where: \.isImage) {
+                CheckInImageThumbnail(media: media)
+                    .frame(width: 44, height: 44)
+            }
+
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
@@ -462,6 +574,59 @@ private struct CheckInHistoryRow: View {
         }
 
         return date
+    }
+}
+
+private struct CheckInImageThumbnail: View {
+    let media: CheckInMedia
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color(.secondarySystemBackground)
+
+                if let image = UIImage(contentsOfFile: media.localCompressedPath) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                } else {
+                    PlaceholderImage()
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
+private struct CheckInCapturedImagePreview: View {
+    let image: UIImage
+    let onRemove: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 180)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.55))
+                    .padding(8)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove photo")
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -596,16 +761,31 @@ private struct CheckInItemEditorView: View {
             Form {
                 Section {
                     TextField(L10n.t("Name", appLanguage), text: $name)
-                    TextField(L10n.t("Icon", appLanguage), text: $symbolName)
-                        .textInputAutocapitalization(.never)
-                    TextField("HEX", text: $colorHex)
-                        .textInputAutocapitalization(.characters)
                     Picker(L10n.t("Mode", appLanguage), selection: $recordMode) {
                         ForEach(CheckInRecordMode.allCases) { mode in
                             Label(mode.title(language: appLanguage), systemImage: mode.systemImage)
                                 .tag(mode)
                         }
                     }
+                }
+
+                Section(L10n.t("Icon", appLanguage)) {
+                    CheckInIconPresetGrid(selection: $symbolName)
+                    DisclosureGroup(L10n.t("Custom icon", appLanguage)) {
+                        TextField("SF Symbol", text: $symbolName)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
+
+                Section(L10n.t("Color", appLanguage)) {
+                    CheckInColorPresetGrid(selection: $colorHex)
+                    TextField("HEX", text: $colorHex)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .onChange(of: colorHex) { _, newValue in
+                            colorHex = normalizedHexInput(newValue)
+                        }
                 }
 
                 Section(L10n.t("Schedule", appLanguage)) {
@@ -700,6 +880,129 @@ private struct CheckInItemEditorView: View {
             }
         }
     }
+
+    private func normalizedHexInput(_ value: String) -> String {
+        var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if !trimmed.isEmpty && !trimmed.hasPrefix("#") {
+            trimmed = "#\(trimmed)"
+        }
+        if trimmed.count > 7 {
+            trimmed = String(trimmed.prefix(7))
+        }
+        return trimmed
+    }
+}
+
+private struct CheckInIconPreset: Identifiable {
+    let symbolName: String
+    let title: String
+
+    var id: String {
+        symbolName
+    }
+
+    static let all: [CheckInIconPreset] = [
+        CheckInIconPreset(symbolName: "fork.knife", title: "Meal"),
+        CheckInIconPreset(symbolName: "figure.run", title: "Workout"),
+        CheckInIconPreset(symbolName: "sun.max", title: "Wake up"),
+        CheckInIconPreset(symbolName: "drop", title: "Water"),
+        CheckInIconPreset(symbolName: "pills", title: "Medicine"),
+        CheckInIconPreset(symbolName: "book.closed", title: "Read"),
+        CheckInIconPreset(symbolName: "bed.double", title: "Sleep"),
+        CheckInIconPreset(symbolName: "heart", title: "Health"),
+        CheckInIconPreset(symbolName: "leaf", title: "Diet"),
+        CheckInIconPreset(symbolName: "figure.mind.and.body", title: "Mindful"),
+        CheckInIconPreset(symbolName: "cup.and.saucer", title: "Coffee"),
+        CheckInIconPreset(symbolName: "checkmark.circle", title: "Check")
+    ]
+}
+
+private struct CheckInIconPresetGrid: View {
+    @Binding var selection: String
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(CheckInIconPreset.all) { preset in
+                Button {
+                    selection = preset.symbolName
+                } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: preset.symbolName)
+                            .font(.body.weight(.semibold))
+                        Text(preset.title)
+                            .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 54)
+                    .foregroundStyle(selection == preset.symbolName ? Color.accentColor : Color.secondary)
+                    .background(
+                        selection == preset.symbolName ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct CheckInColorPreset: Identifiable {
+    let hex: String
+
+    var id: String {
+        hex
+    }
+
+    static let all: [CheckInColorPreset] = [
+        CheckInColorPreset(hex: "#D94F45"),
+        CheckInColorPreset(hex: "#E07A2F"),
+        CheckInColorPreset(hex: "#F2B705"),
+        CheckInColorPreset(hex: "#2EAD67"),
+        CheckInColorPreset(hex: "#008C7A"),
+        CheckInColorPreset(hex: "#2F80ED"),
+        CheckInColorPreset(hex: "#7B61FF"),
+        CheckInColorPreset(hex: "#C23883"),
+        CheckInColorPreset(hex: "#5C6670"),
+        CheckInColorPreset(hex: "#111827")
+    ]
+}
+
+private struct CheckInColorPresetGrid: View {
+    @Binding var selection: String
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
+            ForEach(CheckInColorPreset.all) { preset in
+                Button {
+                    selection = preset.hex
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color(hex: preset.hex) ?? .accentColor)
+                            .frame(width: 32, height: 32)
+                        if selection.uppercased() == preset.hex {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .background(
+                        selection.uppercased() == preset.hex ? Color(hex: preset.hex)?.opacity(0.14) ?? Color.accentColor.opacity(0.14) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
+    }
 }
 
 private struct WeekdayToggleGrid: View {
@@ -747,6 +1050,8 @@ private struct CheckInContentEntryView: View {
     @State private var showInTimeline: Bool
     @State private var occurredAt = Date()
     @State private var isSaving = false
+    @State private var capturedImageData: Data?
+    @State private var isCameraPresented = false
 
     init(item: CheckInItem) {
         self.item = item
@@ -765,6 +1070,30 @@ private struct CheckInContentEntryView: View {
                     TextEditor(text: $note)
                         .frame(minHeight: 110)
                 }
+
+                Section(L10n.t("Photo", appLanguage)) {
+                    if let capturedImageData, let image = UIImage(data: capturedImageData) {
+                        CheckInCapturedImagePreview(image: image) {
+                            self.capturedImageData = nil
+                        }
+                    }
+
+                    Button {
+                        isCameraPresented = true
+                    } label: {
+                        Label(L10n.t("Use Camera", appLanguage), systemImage: "camera")
+                    }
+                    .disabled(!CameraPicker.isAvailable)
+
+                    Menu {
+                        Button(L10n.t("Add Video", appLanguage), systemImage: "video") {}
+                            .disabled(true)
+                        Button(L10n.t("Record Audio", appLanguage), systemImage: "mic") {}
+                            .disabled(true)
+                    } label: {
+                        Label(L10n.t("More media", appLanguage), systemImage: "plus.circle")
+                    }
+                }
             }
             .navigationTitle(item.name)
             .toolbar {
@@ -780,6 +1109,11 @@ private struct CheckInContentEntryView: View {
                     .disabled(isSaving)
                 }
             }
+            .sheet(isPresented: $isCameraPresented) {
+                CameraPicker { data in
+                    capturedImageData = data
+                }
+            }
         }
     }
 
@@ -790,7 +1124,8 @@ private struct CheckInContentEntryView: View {
                 item: item,
                 note: note,
                 occurredAt: occurredAt,
-                showInTimeline: showInTimeline
+                showInTimeline: showInTimeline,
+                imageData: capturedImageData
             ) != nil {
                 dismiss()
             }
@@ -817,6 +1152,9 @@ struct CheckInEntryDetailView: View {
     @State private var draft: CheckInEntry?
     @State private var isSaving = false
     @State private var isDeleteConfirmationPresented = false
+    @State private var capturedImageData: Data?
+    @State private var removesExistingImage = false
+    @State private var isCameraPresented = false
 
     var body: some View {
         NavigationStack {
@@ -852,6 +1190,50 @@ struct CheckInEntryDetailView: View {
                             .frame(minHeight: 120)
                         }
 
+                        Section(L10n.t("Photo", appLanguage)) {
+                            if let capturedImageData, let image = UIImage(data: capturedImageData) {
+                                CheckInCapturedImagePreview(image: image) {
+                                    self.capturedImageData = nil
+                                    self.removesExistingImage = false
+                                }
+                            } else if let existingMedia, !removesExistingImage {
+                                ZStack(alignment: .topTrailing) {
+                                    CheckInImageThumbnail(media: existingMedia)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 180)
+
+                                    Button {
+                                        removesExistingImage = true
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, .black.opacity(0.55))
+                                            .padding(8)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(L10n.t("Remove photo", appLanguage))
+                                }
+                                .padding(.vertical, 4)
+                            }
+
+                            Button {
+                                isCameraPresented = true
+                            } label: {
+                                Label(L10n.t(existingMedia == nil && capturedImageData == nil ? "Use Camera" : "Replace Photo", appLanguage), systemImage: "camera")
+                            }
+                            .disabled(!CameraPicker.isAvailable)
+
+                            Menu {
+                                Button(L10n.t("Add Video", appLanguage), systemImage: "video") {}
+                                    .disabled(true)
+                                Button(L10n.t("Record Audio", appLanguage), systemImage: "mic") {}
+                                    .disabled(true)
+                            } label: {
+                                Label(L10n.t("More media", appLanguage), systemImage: "plus.circle")
+                            }
+                        }
+
                         Section {
                             Button(L10n.t("Cancel check-in", appLanguage), role: .destructive) {
                                 isDeleteConfirmationPresented = true
@@ -881,6 +1263,12 @@ struct CheckInEntryDetailView: View {
             .onAppear {
                 draft = store.checkInEntry(id: entryId)
             }
+            .sheet(isPresented: $isCameraPresented) {
+                CameraPicker { data in
+                    capturedImageData = data
+                    removesExistingImage = false
+                }
+            }
             .alert(L10n.t("Cancel check-in?", appLanguage), isPresented: $isDeleteConfirmationPresented) {
                 Button(L10n.t("Keep", appLanguage), role: .cancel) {}
                 Button(L10n.t("Cancel check-in", appLanguage), role: .destructive) {
@@ -895,6 +1283,19 @@ struct CheckInEntryDetailView: View {
         }
     }
 
+    private var existingMedia: CheckInMedia? {
+        store.checkInMedia
+            .filter { $0.entryId == entryId && $0.deletedAt == nil && $0.isImage }
+            .sorted { lhs, rhs in
+                if lhs.sortOrder == rhs.sortOrder {
+                    return lhs.createdAt < rhs.createdAt
+                }
+
+                return lhs.sortOrder < rhs.sortOrder
+            }
+            .first
+    }
+
     private func save() {
         guard let draft else {
             return
@@ -902,9 +1303,19 @@ struct CheckInEntryDetailView: View {
 
         isSaving = true
         Task {
-            if await store.updateCheckInEntry(draft) {
-                dismiss()
+            guard await store.updateCheckInEntry(draft) else {
+                isSaving = false
+                return
             }
+
+            if capturedImageData != nil || removesExistingImage {
+                guard await store.replaceCheckInEntryImage(entry: draft, imageData: capturedImageData) else {
+                    isSaving = false
+                    return
+                }
+            }
+
+            dismiss()
             isSaving = false
         }
     }

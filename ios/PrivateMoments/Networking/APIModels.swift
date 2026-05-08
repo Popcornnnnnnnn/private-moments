@@ -73,6 +73,20 @@ struct UploadedMedia: Decodable {
     let checksum: String
 }
 
+struct CheckInMediaUploadResponse: Decodable {
+    let media: UploadedCheckInMedia
+}
+
+struct UploadedCheckInMedia: Decodable {
+    let id: String
+    let entryId: String
+    let variant: String
+    let status: String
+    let path: String
+    let sizeBytes: Int
+    let checksum: String
+}
+
 struct AdminStatusResponse: Decodable {
     let serverVersion: String
     let schemaVersion: Int

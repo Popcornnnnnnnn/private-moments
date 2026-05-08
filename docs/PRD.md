@@ -187,14 +187,15 @@ Mac 通过 Tailscale 或私有 VPN 被 iPhone 访问，不直接暴露公网。
 - 底部主入口为 `Timeline`、`Calendar`、`Check-ins`；默认启动界面仍然是 `Timeline`。
 - `Check-ins` 默认显示 `Today`；可以在同一界面切到 `History`，查看最近一周、一个月和按 item 的概况。
 - 点击 Today 中某个 check-in item 的主区域会立即打卡，不弹出必填表单。
-- 需要补充内容时，使用独立入口添加 note、发生时间和 `Show in Timeline` 开关；默认打卡可以什么内容都没有。
-- 新建 item 时可以选择一天一次或一天多次，设置名称、图标、颜色、活跃星期和默认是否显示到 Timeline。
+- 需要补充内容时，使用独立入口添加 note、发生时间、照片和 `Show in Timeline` 开关；默认打卡可以什么内容都没有。
+- 新建 item 时可以选择一天一次或一天多次，设置名称、SF Symbol 图标、HEX 或预设高对比度颜色、活跃星期和默认是否显示到 Timeline。
 - 每条 check-in entry 的 `Show in Timeline` 与 entry 是否存在相互独立；即使不显示到 Timeline，仍然进入 Check-ins History、Calendar heatmap、Day Review 和 Month Stats。
 - Timeline 只显示 `Show in Timeline` 打开的 check-in entry，并使用紧凑 check-in row，不提供 favorite、pin 或 comments。
-- Calendar heatmap、Day Review 和 Month Stats 把 check-ins 作为生活 activity 计入，并区分普通 moments 和 check-ins。
+- Calendar heatmap、Day Review 和 Month Stats 把 check-ins 作为生活 activity 计入，并区分普通 moments 和 check-ins；带照片的 check-ins 也计入 Photos 相关过滤和回看。
+- Check-ins History 支持按 item 过滤，例如只看 `Meal` 的历史记录。
 - Check-ins 可以关联一个 secondary tag，但默认不使用任何 tag；入口应隐藏、低频，不走 AI 自动打 tag。
-- Check-ins 不做语音转写、AI summary、OCR、提醒、streak、遗漏统计、预设模板或 Mac Admin 管理。
-- 进入 entry detail 后可以修改 note、发生时间、Timeline 显示开关，或取消打卡。
+- Check-ins 不做语音转写、AI summary、OCR、提醒、streak、遗漏统计、预设模板或 Mac Admin 管理；当前媒体只启用拍照/图片，audio/video 入口可以预留但不启用。
+- 进入 entry detail 后可以修改 note、照片、发生时间、Timeline 显示开关，或取消打卡。
 
 ### 置顶动态
 

@@ -74,7 +74,7 @@ private-moments/
 
 当前仓库已经包含 `ios/`、`server/`、`admin/`、`shared/` 的 MVP 骨架和可编译实现。
 
-当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，系统 Share Sheet 导入入口，主时间线单用户私密评论，独立 Check-ins 生活活动记录，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、App Language-aware 人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、Calendar Review、详情页、编辑、软删除同步、iOS 本机语言偏好，以及 Mac 本地 Archive/恢复运维面。
+当前实现已经覆盖第一版本地构建：iOS 本地优先发布文字、图片、语音和短视频，系统 Share Sheet 导入入口，主时间线单用户私密评论，独立 Check-ins 生活活动记录，check-in 照片附件，手动选择发生时间、草稿保存、离线 outbox、自动延迟重试、图片上传压缩、视频压缩与 poster、音频录制与播放、server-side 语音/视频 AI summary、远端媒体缓存、设置页存储诊断、App Language-aware 人性化时间标签、滚动月份浮层提示、时间线搜索、收藏、筛选、Calendar Review、详情页、编辑、软删除同步、iOS 本机语言偏好，以及 Mac 本地 Archive/恢复运维面。
 
 iOS 还提供本机 `Automatic Sync` 开关。打开时沿用启动、前台、发布/编辑、失败重试和 AI follow-up 的自动同步路径；关闭时进入严格 local-only 模式：发布、编辑、评论、标签和媒体草稿仍写入本地 SQLite/outbox，但不会自动连接 Mac server、上传媒体、拉取远端 AI summary/tag/media 变更或执行后台 retry。Settings 里的显式 `Sync Now` 仍是用户主动联网动作；Settings 根页的同步转圈只表示这类用户主动动作，不表示后台空闲检查。
 
@@ -82,7 +82,7 @@ v0.1 owner reliability layer 增加 Mac Admin `Archive` 和 Sync Health。Archiv
 
 当前 UI 设计原则是保持主时间线安静：筛选、Calendar 回看、收藏和管理能力应尽量藏在 toolbar menu、底部 review tab、滑动操作或详情页里，避免把主界面做成后台管理界面。详细原则见 `docs/DESIGN-PRINCIPLES.md`。
 
-iOS 主要模块已经按职责拆分。`TimelineStore` 按 session、mutations、sync、server changes、media、payloads 和 sync retry 拆分；`LocalDatabase` 按 schema、records、timeline、sync、storage stats 和 SQLite helper 拆分；`TimelineView` 拆出 `TimelineRow`、`MomentDateFormatter`、`MediaGalleryView` 和 `ZoomableLocalImage`。设置页存储诊断拆在 `StorageStats.swift` 和 `StorageSettingsView.swift`。后续继续加功能时优先扩展这些小文件，不再把同步、数据库或主界面逻辑塞回单一大文件。
+iOS 主要模块已经按职责拆分。`TimelineStore` 按 session、mutations、sync、server changes、media、check-ins、payloads 和 sync retry 拆分；`LocalDatabase` 按 schema、records、timeline、sync、storage stats、check-ins/check-in media 和 SQLite helper 拆分；`TimelineView` 拆出 `TimelineRow`、`MomentDateFormatter`、`MediaGalleryView` 和 `ZoomableLocalImage`。设置页存储诊断拆在 `StorageStats.swift` 和 `StorageSettingsView.swift`。后续继续加功能时优先扩展这些小文件，不再把同步、数据库或主界面逻辑塞回单一大文件。
 
 ## 2.1 时间线交互决策
 

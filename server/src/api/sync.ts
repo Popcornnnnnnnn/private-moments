@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { CheckInEntry, CheckInItem, Device, Prisma, PrismaClient } from "@prisma/client";
+import type { CheckInEntry, CheckInItem, CheckInMedia, Device, Prisma, PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
 
 import { authenticateDevice, UnauthorizedError } from "../auth/request-auth.js";
@@ -349,6 +349,11 @@ async function applyOperation(
 
   if (operation.type === "delete_checkin_entry" && operation.entityType === "checkin_entry") {
     await applyDeleteCheckInEntry(tx, operation);
+    return;
+  }
+
+  if (operation.type === "delete_checkin_media" && operation.entityType === "checkin_media") {
+    await applyDeleteCheckInMedia(tx, operation);
     return;
   }
 
@@ -1788,6 +1793,15 @@ async function applyDeleteCheckInItem(
     },
   });
 
+  const itemEntryIds = await tx.checkInEntry.findMany({
+    where: {
+      itemId: item.id,
+    },
+    select: {
+      id: true,
+    },
+  });
+
   await tx.checkInEntry.updateMany({
     where: {
       itemId: item.id,
@@ -1795,6 +1809,20 @@ async function applyDeleteCheckInItem(
     },
     data: {
       deletedAt,
+      updatedAt: deletedAt,
+    },
+  });
+
+  await tx.checkInMedia.updateMany({
+    where: {
+      entryId: {
+        in: itemEntryIds.map((entry) => entry.id),
+      },
+      deletedAt: null,
+    },
+    data: {
+      deletedAt,
+      status: "deleted",
       updatedAt: deletedAt,
     },
   });
@@ -1901,7 +1929,52 @@ async function applyDeleteCheckInEntry(
     },
   });
 
+  await tx.checkInMedia.updateMany({
+    where: {
+      entryId: entry.id,
+      deletedAt: null,
+    },
+    data: {
+      deletedAt,
+      status: "deleted",
+      updatedAt: deletedAt,
+    },
+  });
+
   await emitCheckInEntryChange(tx, entry, "checkin_entry_deleted");
+}
+
+async function applyDeleteCheckInMedia(
+  tx: Prisma.TransactionClient,
+  operation: SyncOperationInput,
+): Promise<void> {
+  const deletedAt = getDate(operation.payload, "deletedAt") ?? operation.clientCreatedAt;
+  const existing = await tx.checkInMedia.findUnique({
+    where: {
+      id: operation.entityId,
+    },
+  });
+
+  if (!existing) {
+    throw new OperationRejectedError("Check-in media not found");
+  }
+
+  if (existing.deletedAt) {
+    return;
+  }
+
+  const media = await tx.checkInMedia.update({
+    where: {
+      id: operation.entityId,
+    },
+    data: {
+      deletedAt,
+      status: "deleted",
+      updatedAt: deletedAt,
+    },
+  });
+
+  await emitCheckInMediaDeletedChange(tx, media, deletedAt);
 }
 
 async function emitCheckInItemChange(
@@ -1985,6 +2058,34 @@ async function emitCheckInEntryChange(
   await tx.checkInEntry.update({
     where: {
       id: entry.id,
+    },
+    data: {
+      serverVersion: change.version,
+    },
+  });
+}
+
+async function emitCheckInMediaDeletedChange(
+  tx: Prisma.TransactionClient,
+  media: CheckInMedia,
+  deletedAt: Date,
+): Promise<void> {
+  const change = await tx.serverChange.create({
+    data: {
+      entityType: "checkin_media",
+      entityId: media.id,
+      changeType: "checkin_media_deleted",
+      payloadJson: JSON.stringify({
+        id: media.id,
+        entryId: media.entryId,
+        deletedAt: deletedAt.toISOString(),
+      }),
+    },
+  });
+
+  await tx.checkInEntry.update({
+    where: {
+      id: media.entryId,
     },
     data: {
       serverVersion: change.version,

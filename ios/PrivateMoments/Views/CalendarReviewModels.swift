@@ -183,8 +183,15 @@ enum CalendarDayReviewFilter: String, CaseIterable, Identifiable, Hashable {
         switch item {
         case .moment(let moment):
             return includes(moment)
-        case .checkIn:
-            return self == .all
+        case .checkIn(let checkIn):
+            switch self {
+            case .all:
+                return true
+            case .photos:
+                return checkIn.media.contains { $0.isImage }
+            case .audio, .video, .favorites, .comments:
+                return false
+            }
         }
     }
 }
@@ -353,6 +360,7 @@ struct CalendarReviewMonthStats: Equatable {
         let reviewableItems = reviewableDays.flatMap(\.items)
         let reviewableCheckIns = reviewableDays.flatMap(\.checkIns)
         let media = reviewableItems.flatMap(\.media)
+        let checkInMedia = reviewableCheckIns.flatMap(\.media)
 
         totalMoments = reviewableItems.count
         totalCheckIns = reviewableCheckIns.count
@@ -363,7 +371,7 @@ struct CalendarReviewMonthStats: Equatable {
         textOnlyMoments = reviewableItems.filter { item in
             item.media.isEmpty && !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }.count
-        imageCount = media.filter(\.isImage).count
+        imageCount = media.filter(\.isImage).count + checkInMedia.filter(\.isImage).count
         audioCount = media.filter(\.isAudio).count
         videoCount = media.filter(\.isVideo).count
         favoriteMoments = reviewableItems.filter { $0.post.isFavorite }.count
@@ -515,7 +523,7 @@ enum CalendarReviewBuilder {
                 isFuture: dayStart > nowStart,
                 items: items,
                 checkIns: checkIns,
-                mediaHints: mediaHints(for: items)
+                mediaHints: mediaHints(for: items, checkIns: checkIns)
             )
         }
 
@@ -556,12 +564,13 @@ enum CalendarReviewBuilder {
         }
     }
 
-    private static func mediaHints(for items: [TimelineItem]) -> [CalendarReviewMediaHint] {
+    private static func mediaHints(for items: [TimelineItem], checkIns: [CheckInFeedEntry]) -> [CalendarReviewMediaHint] {
         CalendarReviewMediaHint.allCases
             .filter { hint in
                 switch hint {
                 case .image:
                     return items.contains { $0.media.contains { $0.isImage } }
+                        || checkIns.contains { $0.media.contains { $0.isImage } }
                 case .audio:
                     return items.contains { $0.media.contains { $0.isAudio } }
                 case .video:

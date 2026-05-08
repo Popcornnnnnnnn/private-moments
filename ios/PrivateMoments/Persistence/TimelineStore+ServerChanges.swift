@@ -270,6 +270,33 @@ extension TimelineStore {
             }
             try database.applyCheckInEntryDeleted(id: id, deletedAt: deletedAt)
 
+        case "checkin_media_uploaded":
+            guard let id = change.payload["id"]?.stringValue,
+                  let entryId = change.payload["entryId"]?.stringValue,
+                  let kind = change.payload["kind"]?.stringValue,
+                  let variant = change.payload["variant"]?.stringValue,
+                  let path = change.payload["path"]?.stringValue else {
+                throw StoreError.invalidServerChange("checkin_media_uploaded is missing required fields")
+            }
+            try database.applyCheckInMediaUploaded(
+                mediaId: id,
+                entryId: entryId,
+                kind: kind,
+                variant: variant,
+                remotePath: path,
+                sortOrder: change.payload["sortOrder"]?.intValue ?? 0,
+                checksum: change.payload["checksum"]?.stringValue,
+                mimeType: change.payload["mimeType"]?.stringValue
+            )
+
+        case "checkin_media_deleted":
+            guard let id = change.payload["id"]?.stringValue,
+                  let deletedAtValue = change.payload["deletedAt"]?.stringValue,
+                  let deletedAt = Self.parseServerDate(deletedAtValue) else {
+                throw StoreError.invalidServerChange("checkin_media_deleted is missing required fields")
+            }
+            try database.applyCheckInMediaDeleted(id: id, deletedAt: deletedAt)
+
         default:
             return
         }

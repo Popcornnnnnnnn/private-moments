@@ -184,6 +184,26 @@ extension LocalDatabase {
             CREATE INDEX IF NOT EXISTS idx_local_checkin_entries_occurredAt ON local_checkin_entries(occurredAt);
             CREATE INDEX IF NOT EXISTS idx_local_checkin_entries_deletedAt ON local_checkin_entries(deletedAt);
 
+            CREATE TABLE IF NOT EXISTS local_checkin_media (
+                id TEXT PRIMARY KEY,
+                entryId TEXT NOT NULL REFERENCES local_checkin_entries(id) ON DELETE CASCADE,
+                kind TEXT NOT NULL DEFAULT 'image',
+                localCompressedPath TEXT NOT NULL,
+                remoteCompressedPath TEXT,
+                uploadStatus TEXT NOT NULL,
+                uploadError TEXT,
+                mimeType TEXT,
+                sortOrder INTEGER NOT NULL,
+                checksum TEXT,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                deletedAt TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_media_entryId ON local_checkin_media(entryId);
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_media_uploadStatus ON local_checkin_media(uploadStatus);
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_media_deletedAt ON local_checkin_media(deletedAt);
+
             CREATE TABLE IF NOT EXISTS outbox_operations (
                 id TEXT PRIMARY KEY,
                 opId TEXT NOT NULL UNIQUE,

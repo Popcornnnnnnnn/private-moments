@@ -20,6 +20,7 @@ test("supported sync operation matrix includes all current client operation pair
       "create_post:post",
       "delete_checkin_entry:checkin_entry",
       "delete_checkin_item:checkin_item",
+      "delete_checkin_media:checkin_media",
       "delete_comment:comment",
       "delete_post:post",
       "delete_tag:tag",

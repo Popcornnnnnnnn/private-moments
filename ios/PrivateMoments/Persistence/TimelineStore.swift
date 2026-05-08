@@ -6,6 +6,7 @@ final class TimelineStore: ObservableObject {
     @Published var items: [TimelineItem] = []
     @Published var checkInItems: [CheckInItem] = []
     @Published var checkInEntries: [CheckInEntry] = []
+    @Published var checkInMedia: [CheckInMedia] = []
     @Published var isReady = false
     @Published var errorMessage: String?
     @Published var syncMessage: String?
@@ -78,6 +79,7 @@ final class TimelineStore: ObservableObject {
         items = try database.fetchTimelineItems()
         checkInItems = try database.fetchCheckInItems(includeArchived: true)
         checkInEntries = try database.fetchCheckInEntries()
+        checkInMedia = try database.fetchCheckInMedia()
         tags = try database.fetchTags(includeArchived: true)
         tagAliases = try database.fetchTagAliases()
         tagUsageCounts = try database.fetchTagUsageCounts()
@@ -102,6 +104,7 @@ final class TimelineStore: ObservableObject {
     var checkInFeedEntries: [CheckInFeedEntry] {
         let itemById = Dictionary(uniqueKeysWithValues: checkInItems.map { ($0.id, $0) })
         let tagById = Dictionary(uniqueKeysWithValues: tags.map { ($0.id, $0) })
+        let mediaByEntryId = Dictionary(grouping: checkInMedia.filter { $0.deletedAt == nil }, by: \.entryId)
         return checkInEntries.compactMap { entry in
             guard let item = itemById[entry.itemId],
                   entry.deletedAt == nil,
@@ -109,7 +112,12 @@ final class TimelineStore: ObservableObject {
                 return nil
             }
 
-            return CheckInFeedEntry(entry: entry, item: item, tag: item.tagId.flatMap { tagById[$0] })
+            return CheckInFeedEntry(
+                entry: entry,
+                item: item,
+                tag: item.tagId.flatMap { tagById[$0] },
+                media: mediaByEntryId[entry.id] ?? []
+            )
         }
     }
 

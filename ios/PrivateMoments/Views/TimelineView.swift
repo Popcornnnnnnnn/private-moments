@@ -1271,7 +1271,12 @@ private enum TimelineContentFilter: String, CaseIterable, Identifiable {
                 return checkIn.entry.hasNote
             }
         case .photos:
-            return item.media.contains { $0.isImage }
+            switch item {
+            case .moment(let moment):
+                return moment.media.contains { $0.isImage }
+            case .checkIn(let checkIn):
+                return checkIn.media.contains { $0.isImage }
+            }
         case .audio:
             return item.media.contains { $0.isAudio }
         case .video:

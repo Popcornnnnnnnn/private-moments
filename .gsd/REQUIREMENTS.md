@@ -532,6 +532,16 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R036,R037,R050,R051
 - Validation: Future implementation should prove classification behavior with focused model/unit tests, verify iOS copy and actions in Simulator or real-device Settings, and run server/admin build or HTTP checks only if the flow changes server status data.
 
+### R054 — Check-ins must support independent image media without becoming ordinary Moments.
+- Class: functional
+- Status: validated
+- Description: Check-in entries can optionally attach still images through the richer entry path and entry detail. Image media must be parented by check-in entries, sync through separate check-in media upload/recovery routes, appear in Check-ins History, Calendar Day Review, Month Stats, and Photos filters regardless of Timeline visibility, and remain independent from ordinary `Post`/`Media` rows. Check-in audio/video media remains out of scope for this checkpoint.
+- Why it matters: Meal-style check-ins need photos for later review, but check-ins must stay a fast independent activity record. Reusing ordinary moment media would break the user's explicit separation between check-in existence and Timeline publication.
+- Source: M012 check-in media follow-up 2026-05-08
+- Primary owning slice: M012
+- Supporting slices: R021,R032,R036,R048
+- Validation: Validated on 2026-05-08 with server typecheck/test/build, isolated check-in media upload/download smoke, generic iOS build, simulator mock UI checks for History filter/photo/Day Review, and simulator SQLite/file inspection showing one `local_checkin_media` row with a local image file.
+
 ## Validated
 
 ### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
@@ -637,10 +647,11 @@ This file is the explicit capability and coverage contract for the project.
 | R051 | constraint | active | maintenance | R036,R037,R047,R050 | Mac Admin opens Archive first and should retain only Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency while daily operations migrate to iOS. |
 | R052 | functional | validated | M011/S02 | M011/S01,M011/S03,M011/S04,M011/S05,R048 | Pinned Moments passed automated/simulator/isolated sync validation, main deploy, real-device install/data checks, and user UAT acceptance on 2026-05-08. |
 | R053 | functional | active | maintenance | R036,R037,R050,R051 | Sync Doctor should classify Sync Health evidence into safe recovery recommendations or actions without moving destructive Mac recovery into iOS. |
+| R054 | functional | validated | M012 | R021,R032,R036,R048 | Check-in image media passed independent upload/download smoke, generic iOS build, simulator History/Day Review/photo checks, and SQLite/file inspection on 2026-05-08. |
 
 ## Coverage Summary
 
 - Active requirements: 46
-- Mapped to slices: 42 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053)
-- Validated: 7 (R004, R005, R006, R007, R017, R049, R052)
+- Mapped to slices: 43 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054)
+- Validated: 8 (R004, R005, R006, R007, R017, R049, R052, R054)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

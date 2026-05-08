@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 extension TimelineStore {
     func createCheckInItem(
@@ -144,7 +145,8 @@ extension TimelineStore {
         item: CheckInItem,
         note: String = "",
         occurredAt: Date = Date(),
-        showInTimeline: Bool? = nil
+        showInTimeline: Bool? = nil,
+        imageData: Data? = nil
     ) async -> CheckInEntry? {
         do {
             guard let database else {
@@ -169,13 +171,26 @@ extension TimelineStore {
                 deletedAt: nil,
                 syncStatus: "pending"
             )
+            let media = try imageData.flatMap { data in
+                try Self.persistCheckInImage(
+                    entryId: entry.id,
+                    mediaId: UUID().uuidString,
+                    data: data,
+                    sortOrder: 0,
+                    createdAt: now
+                )
+            }
             let operation = try makeCheckInOperation(
                 type: "upsert_checkin_entry",
                 entityType: "checkin_entry",
                 entityId: entry.id,
                 payloadJson: makeUpsertCheckInEntryPayload(entry)
             )
-            try database.upsertCheckInEntry(entry, operation: operation)
+            if let media {
+                try database.upsertCheckInEntry(entry, media: media, operation: operation)
+            } else {
+                try database.upsertCheckInEntry(entry, operation: operation)
+            }
             try await reload()
             try refreshPendingCounts()
             syncSoonIfAuthenticated()
@@ -215,6 +230,49 @@ extension TimelineStore {
                 payloadJson: makeUpsertCheckInEntryPayload(updated)
             )
             try database.upsertCheckInEntry(updated, operation: operation)
+            try await reload()
+            try refreshPendingCounts()
+            syncSoonIfAuthenticated()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func replaceCheckInEntryImage(entry: CheckInEntry, imageData: Data?) async -> Bool {
+        do {
+            guard let database else {
+                throw StoreError.notReady
+            }
+
+            let now = Date()
+            let existingMedia = try database.fetchCheckInMedia(entryId: entry.id)
+            let deleteOperations = try existingMedia
+                .filter { $0.uploadStatus == "uploaded" && $0.remoteCompressedPath != nil }
+                .map { media in
+                    try makeCheckInOperation(
+                        type: "delete_checkin_media",
+                        entityType: "checkin_media",
+                        entityId: media.id,
+                        payloadJson: makeDeleteCheckInPayload(deletedAt: now)
+                    )
+                }
+            let media = try imageData.flatMap { data in
+                try Self.persistCheckInImage(
+                    entryId: entry.id,
+                    mediaId: UUID().uuidString,
+                    data: data,
+                    sortOrder: 0,
+                    createdAt: now
+                )
+            }
+
+            try database.replaceCheckInMedia(
+                entryId: entry.id,
+                media: media,
+                deleteOperations: deleteOperations
+            )
             try await reload()
             try refreshPendingCounts()
             syncSoonIfAuthenticated()
@@ -303,5 +361,37 @@ extension TimelineStore {
     private func normalizedWeekdays(_ value: [Int]) -> [Int] {
         let weekdays = value.filter { (1...7).contains($0) }
         return weekdays.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : Array(Set(weekdays)).sorted()
+    }
+
+    nonisolated static func persistCheckInImage(
+        entryId: String,
+        mediaId: String,
+        data: Data,
+        sortOrder: Int,
+        createdAt: Date
+    ) throws -> CheckInMedia? {
+        guard let image = UIImage(data: data), let jpegData = ImageCompression.uploadJPEGData(from: image) else {
+            return nil
+        }
+
+        let directory = try AppDirectories.mediaDirectory()
+        let fileURL = directory.appending(path: "\(mediaId).jpg")
+        try jpegData.write(to: fileURL, options: [.atomic])
+
+        return CheckInMedia(
+            id: mediaId,
+            entryId: entryId,
+            kind: "image",
+            localCompressedPath: fileURL.path,
+            remoteCompressedPath: nil,
+            uploadStatus: "pending",
+            uploadError: nil,
+            mimeType: "image/jpeg",
+            sortOrder: sortOrder,
+            checksum: nil,
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            deletedAt: nil
+        )
     }
 }

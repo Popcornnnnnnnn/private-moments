@@ -245,12 +245,35 @@ model CheckInEntry {
   serverVersion Int       @default(0) @map("server_version")
 
   item CheckInItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  media CheckInMedia[]
 
   @@index([itemId])
   @@index([occurredAt])
   @@index([deletedAt])
   @@index([serverVersion])
   @@map("checkin_entries")
+}
+
+model CheckInMedia {
+  id                  String    @id
+  entryId             String    @map("entry_id")
+  kind                String
+  status              String
+  compressedPath      String?   @map("compressed_path")
+  mimeType            String?   @map("mime_type")
+  compressedSizeBytes Int?      @map("compressed_size_bytes")
+  checksum            String?
+  sortOrder           Int       @default(0) @map("sort_order")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  entry CheckInEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("checkin_media")
 }
 
 model Media {

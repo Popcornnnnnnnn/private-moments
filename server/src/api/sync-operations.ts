@@ -25,6 +25,7 @@ export const SUPPORTED_SYNC_OPERATIONS: ReadonlyArray<SyncOperationShape> = [
   { type: "delete_checkin_item", entityType: "checkin_item" },
   { type: "upsert_checkin_entry", entityType: "checkin_entry" },
   { type: "delete_checkin_entry", entityType: "checkin_entry" },
+  { type: "delete_checkin_media", entityType: "checkin_media" },
 ];
 
 export function isSupportedSyncOperation(operation: SyncOperationShape): boolean {

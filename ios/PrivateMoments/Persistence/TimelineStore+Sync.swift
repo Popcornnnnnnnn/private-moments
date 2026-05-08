@@ -231,6 +231,7 @@ extension TimelineStore {
         try apply(sync: firstSync, database: database)
 
         let pendingMedia = try database.fetchPendingMediaReadyForUpload()
+        let pendingCheckInMedia = try database.fetchPendingCheckInMediaReadyForUpload()
         var didUploadSummarizableMedia = false
         for media in pendingMedia {
             do {
@@ -263,7 +264,22 @@ extension TimelineStore {
             }
         }
 
-        if !pendingMedia.isEmpty {
+        for media in pendingCheckInMedia {
+            do {
+                let uploaded = try await withAvailableAPIClient(token: token) { client in
+                    try await client.uploadCheckInMedia(media, variant: "compressed")
+                }
+                try database.markCheckInMediaUploaded(
+                    mediaId: media.id,
+                    remotePath: uploaded.path,
+                    checksum: uploaded.checksum
+                )
+            } catch {
+                try database.markCheckInMediaUploadFailed(mediaId: media.id, error: error.localizedDescription)
+            }
+        }
+
+        if !pendingMedia.isEmpty || !pendingCheckInMedia.isEmpty {
             let followUpOperations = try database.fetchPendingOperations()
             let followUpRequest = SyncRequestBody(
                     deviceId: deviceId,

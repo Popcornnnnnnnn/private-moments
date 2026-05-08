@@ -97,7 +97,8 @@ extension LocalDatabase {
             """
             SELECT
                 (SELECT COUNT(*) FROM local_checkin_items) +
-                (SELECT COUNT(*) FROM local_checkin_entries)
+                (SELECT COUNT(*) FROM local_checkin_entries) +
+                (SELECT COUNT(*) FROM local_checkin_media)
             """
         )
     }
@@ -122,14 +123,16 @@ extension LocalDatabase {
             """
             SELECT
                 (SELECT COUNT(*) FROM local_checkin_items WHERE syncStatus = 'pending') +
-                (SELECT COUNT(*) FROM local_checkin_entries WHERE syncStatus = 'pending')
+                (SELECT COUNT(*) FROM local_checkin_entries WHERE syncStatus = 'pending') +
+                (SELECT COUNT(*) FROM local_checkin_media WHERE uploadStatus = 'pending' AND deletedAt IS NULL)
             """
         )
         let failedChanges = try count(
             """
             SELECT
                 (SELECT COUNT(*) FROM local_checkin_items WHERE syncStatus = 'failed') +
-                (SELECT COUNT(*) FROM local_checkin_entries WHERE syncStatus = 'failed')
+                (SELECT COUNT(*) FROM local_checkin_entries WHERE syncStatus = 'failed') +
+                (SELECT COUNT(*) FROM local_checkin_media WHERE uploadStatus = 'failed' AND deletedAt IS NULL)
             """
         )
 
@@ -198,6 +201,30 @@ extension LocalDatabase {
             try bind(itemId, to: 3, in: entryStatement)
             try stepDone(entryStatement)
 
+            let mediaStatement = try prepare(
+                """
+                UPDATE local_checkin_media
+                SET deletedAt = ?,
+                    updatedAt = ?,
+                    uploadStatus = 'deleted',
+                    uploadError = NULL
+                WHERE entryId IN (
+                    SELECT id
+                    FROM local_checkin_entries
+                    WHERE itemId = ?
+                )
+                  AND deletedAt IS NULL
+                """
+            )
+            defer {
+                sqlite3_finalize(mediaStatement)
+            }
+
+            try bind(deletedAt, to: 1, in: mediaStatement)
+            try bind(deletedAt, to: 2, in: mediaStatement)
+            try bind(itemId, to: 3, in: mediaStatement)
+            try stepDone(mediaStatement)
+
             if let operation {
                 try insert(operation)
             }
@@ -250,6 +277,8 @@ extension LocalDatabase {
             try bind(deletedAt, to: 2, in: statement)
             try bind(entryId, to: 3, in: statement)
             try stepDone(statement)
+
+            try softDeleteCheckInMediaForEntry(entryId: entryId, deletedAt: deletedAt)
 
             if let operation {
                 try insert(operation)
@@ -443,6 +472,11 @@ extension LocalDatabase {
             ),
         ]
 
+        let mockMedia = try makeMockCheckInMedia(
+            entryId: "mock-checkin-entry-meal-hidden",
+            createdAt: now
+        )
+
         try transaction {
             for item in items {
                 try upsertCheckInItemOnly(item)
@@ -450,7 +484,39 @@ extension LocalDatabase {
             for entry in entries {
                 try upsertCheckInEntryOnly(entry)
             }
+            if let mockMedia {
+                try upsertCheckInMediaOnly(mockMedia)
+            }
         }
+    }
+
+    private func makeMockCheckInMedia(entryId: String, createdAt: Date) throws -> CheckInMedia? {
+        let base64PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+        guard let data = Data(base64Encoded: base64PNG) else {
+            return nil
+        }
+
+        let mediaId = "mock-checkin-media-meal-photo"
+        let fileURL = try AppDirectories.mediaDirectory().appending(path: "\(mediaId).png")
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            try data.write(to: fileURL, options: [.atomic])
+        }
+
+        return CheckInMedia(
+            id: mediaId,
+            entryId: entryId,
+            kind: "image",
+            localCompressedPath: fileURL.path,
+            remoteCompressedPath: nil,
+            uploadStatus: "uploaded",
+            uploadError: nil,
+            mimeType: "image/png",
+            sortOrder: 0,
+            checksum: nil,
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            deletedAt: nil
+        )
     }
 
     private func upsertCheckInItemOnly(_ item: CheckInItem) throws {
@@ -496,7 +562,7 @@ extension LocalDatabase {
         try stepDone(statement)
     }
 
-    private func upsertCheckInEntryOnly(_ entry: CheckInEntry) throws {
+    func upsertCheckInEntryOnly(_ entry: CheckInEntry) throws {
         let statement = try prepare(
             """
             INSERT INTO local_checkin_entries

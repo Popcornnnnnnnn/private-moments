@@ -53,7 +53,7 @@ The user can:
 - Weekday scheduling.
 - Per-item default `Show in Timeline`.
 - Per-entry override and later edit of `Show in Timeline`.
-- Entry note plus one media kind using the existing media cardinality rule: up to 9 images, or 1 video, or 1 audio.
+- Entry note plus check-in-owned image media for this checkpoint. The UI may reserve audio/video entry affordances, but audio/video check-in capture is not active yet.
 - Empty-content semantic entries.
 - Independent `Check-in Entry Detail`.
 - Timeline and Day Review mixed rendering with compact rows for empty entries and richer rows for entries with note/media.
@@ -61,7 +61,8 @@ The user can:
 - Month Stats combined activity breakdown with `Moments`, `Check-ins`, and per-item completion counts.
 - Check-ins History descending feed with item filtering.
 - Timeline and Day Review `Check-ins` content-type filter.
-- Check-ins search over item name, entry note, manual item tag, and media type.
+- Check-ins History item filtering, with photo thumbnails when entries have image media.
+- Check-ins search over item name, entry note, manual item tag, and media type when search is expanded later.
 - Optional item-level Smart Tag association, defaulting to none.
 - iOS Settings diagnostics for check-in sync/media issues.
 - Weekly Review structure signal from item names, dates, and counts only.
@@ -189,9 +190,9 @@ Check-in items may optionally associate one Smart Tag. Default is no tag. Tags a
 
 Check-in row identity uses item color/icon first. Smart Tag color does not override item color/icon.
 
-Target behavior: check-in media should be stored, synced, viewed, and played, but must not enter AI summary, transcription, OCR, or AI tag pipelines.
+Target behavior: check-in media should be stored, synced, and viewed, but must not enter AI summary, transcription, OCR, or AI tag pipelines.
 
-Current implementation checkpoint: check-in note/empty entries are implemented first. Media attachment remains a follow-up because the existing media/upload/recovery pipeline is post-owned through `postId`; implementing check-in media without breaking the "check-ins are not ordinary Moments" boundary requires a separate check-in media parent model and upload/recovery semantics.
+Current implementation checkpoint: check-in image media is implemented with a separate `checkin_media` parent model, separate upload/recovery routes, and local `local_checkin_media` storage. It deliberately does not reuse ordinary post-owned `media`.
 
 Media upload failure does not make the entry feel failed. Ordinary Check-ins, Timeline, and Day Review should not show strong upload failure warnings. Entry detail may show a light `Media not archived` style state. Full diagnosis/retry belongs in iOS Settings > Storage & Diagnostics / Sync diagnostics.
 
@@ -203,7 +204,7 @@ Check-ins are complete local-first data:
 
 - iPhone can create/edit/archive/delete items offline.
 - iPhone can create/edit/cancel entries offline.
-- Current checkpoint syncs item/entry metadata first; check-in media requires a follow-up media model before file sync.
+- Current checkpoint syncs item/entry metadata first, then uploads check-in image media after the parent entry exists on the server.
 - Operations enter the existing outbox and sync later.
 
 Do not add multi-device conflict UI in v1. Apply operations in existing sync order / last-write-wins style.
@@ -228,12 +229,12 @@ Do not run `npm run ios:device` from this feature worktree by default.
 Implementation is complete only when:
 
 - M012 design context and key decisions are committed.
-- Server and iOS schemas include Check-in item/entry support.
+- Server and iOS schemas include Check-in item/entry/media support.
 - Local-first item/entry creation, update, cancel, archive/delete, sorting, and Timeline visibility are implemented.
 - Timeline and Day Review render mixed check-in rows correctly.
 - Calendar heatmap and Month Stats include Check-ins with the decided semantics.
-- Check-ins tab supports Today, History, Manage Items, one-tap creation, content creation path, Undo, and entry detail.
+- Check-ins tab supports Today, History item filtering, Manage Items, one-tap creation, content creation path, image attachment, Undo, and entry detail.
 - Check-ins do not run AI summary/transcription/tag pipelines.
-- Settings diagnostics include check-in sync state at least at a lightweight level; media diagnostics remain follow-up with check-in media.
-- Simulator mock-data validation proves Today, History, Timeline mixed rows, Calendar heatmap/Day Review inclusion, and entry detail editing.
+- Settings diagnostics include check-in sync/media state at a lightweight level.
+- Simulator mock-data validation proves Today, History filtering with image thumbnails, Timeline mixed rows, Calendar heatmap/Day Review inclusion, and entry detail editing.
 - Fresh build/test evidence is recorded in the final handoff.

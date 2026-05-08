@@ -56,6 +56,9 @@ Authorization: Bearer <device-token>
 | `POST` | `/api/v1/media/upload` | 用 multipart form data 上传 image/audio/video media file。 |
 | `POST` | `/api/v1/media/batch-download` | 以 base64 JSON 下载多个 media variants。 |
 | `GET` | `/api/v1/media/:mediaId?variant=thumbnail` | 下载单个 media file。 |
+| `POST` | `/api/v1/checkin-media/upload` | 上传 check-in entry 的 image media。 |
+| `POST` | `/api/v1/checkin-media/batch-download` | 以 base64 JSON 下载多个 check-in image media。 |
+| `GET` | `/api/v1/checkin-media/:mediaId` | 下载单个 check-in image media。 |
 | `GET` | `/api/v1/timeline` | 读取 server timeline，用于 diagnostics。 |
 | `GET` | `/api/v1/posts/:postId` | 读取单个 post。 |
 | `GET` | `/api/v1/search?q=...` | 搜索 server archive text、comments，并兼容搜索历史 audio/video transcription metadata。 |
@@ -131,8 +134,9 @@ Request shape：
 - `delete_checkin_item`
 - `upsert_checkin_entry`
 - `delete_checkin_entry`
+- `delete_checkin_media`
 
-Check-in operations 也使用同一个 sync endpoint。`checkin_item` 定义活动本身，`checkin_entry` 定义某一次打卡。它们不会创建 ordinary post；只有 entry payload 的 `showInTimeline` 为 `true` 时，iOS Timeline 会直接渲染 compact check-in row。Calendar 和 Day Review 会读取所有未删除 check-in entries，不受 `showInTimeline` 影响。
+Check-in operations 也使用同一个 sync endpoint。`checkin_item` 定义活动本身，`checkin_entry` 定义某一次打卡，`checkin_media` 只表示 check-in entry 自己的照片附件。它们不会创建 ordinary post；只有 entry payload 的 `showInTimeline` 为 `true` 时，iOS Timeline 会直接渲染 compact check-in row。Calendar 和 Day Review 会读取所有未删除 check-in entries，不受 `showInTimeline` 影响。
 
 Comment operations 使用同一个 sync endpoint。`create_comment` 的 `entityType` 是 `comment`，`entityId` 是 comment id，payload 至少包含父 `postId` 和 `text`：
 
@@ -360,6 +364,22 @@ curl -X POST http://127.0.0.1:3210/api/v1/media/upload \
 
 Server 会把文件存到 configured data directory，只把 relative file paths 和 metadata 写入 SQLite。`kind` 支持 `image`、`video`、`audio`；视频 poster 用同一 endpoint 上传为 `variant=thumbnail`，完整音频/视频用 `variant=compressed`。音频/视频可附带 `durationSeconds`。新 iOS 不再附带 `transcriptionText`；完整 audio/video 上传后 server 会异步启动 AI summary job。Admin 和 iOS timeline 会显示轻量时长。
 
+Check-in 照片使用独立父对象，不复用 ordinary post media：
+
+```bash
+curl -X POST http://127.0.0.1:3210/api/v1/checkin-media/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F mediaId=checkin-media-uuid \
+  -F entryId=checkin-entry-uuid \
+  -F variant=compressed \
+  -F kind=image \
+  -F mimeType=image/jpeg \
+  -F sortOrder=0 \
+  -F file=@meal.jpg
+```
+
+当前只启用 still image。上传成功后 server 写入 `checkin_media`，发出 `checkin_media_uploaded`；删除已上传照片用 `delete_checkin_media` sync operation。Check-in media 不进入 AI summary、transcription、OCR 或 AI tag 流程。
+
 ## Media Batch Download
 
 iOS 使用 batch download 做 remote image thumbnail 和 video poster cache recovery：
@@ -389,6 +409,8 @@ Response：
   ]
 }
 ```
+
+Check-in 照片恢复使用同样的 base64 JSON shape，但 endpoint 是 `/api/v1/checkin-media/batch-download`，目前只接受 `variant=compressed`。
 
 Server 使用 `sips` 按需生成 image thumbnail variants。视频 poster 由 iOS 上传为 `thumbnail` variant。当前 image thumbnail policy 是 max edge `800px`；如果已有 thumbnail 超过 server threshold，会重新生成。
 

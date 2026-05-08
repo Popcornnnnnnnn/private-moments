@@ -3,7 +3,7 @@
 **Validated:** 2026-05-08
 **Worktree:** `/Users/popcornnnnnn/.codex/worktrees/c75e/private-moments`
 **Branch:** `codex/checkins-module`
-**Scope:** Current checkpoint implements local-first check-in items/entries, sync metadata, iOS Check-ins UI, Timeline publishing, Calendar/Day Review/Month Stats integration, and lightweight iOS diagnostics. Check-in-owned media attachment is intentionally left as a follow-up because the existing media pipeline is post-owned.
+**Scope:** Current checkpoint implements local-first check-in items/entries/image media, sync metadata, independent check-in media upload/recovery, iOS Check-ins UI, Timeline publishing, Calendar/Day Review/Month Stats/Photos filter integration, History item filtering, and lightweight iOS diagnostics. Check-in audio/video media remains out of scope.
 
 ## Automated Verification
 
@@ -11,7 +11,8 @@
 - `npm run server:test` passed: 30/30 Node tests.
 - `npm run server:build` passed.
 - `npm run admin:build` passed.
-- `DATABASE_URL='file:/tmp/private-moments-m012-verify.db' npm run server:prisma:deploy` passed after pre-creating the temporary SQLite file, applying all 15 migrations through `20260508160000_checkins`.
+- Isolated check-in media upload smoke passed against a temporary SQLite/data directory initialized from migrations: login, `/api/v1/sync` created a check-in item and entry, `/api/v1/checkin-media/upload` uploaded one PNG, and `/api/v1/checkin-media/batch-download` returned the uploaded image as base64.
+- Local `sqlite3` migration replay passed through `20260508190000_checkin_media`. `prisma migrate deploy` against a temporary SQLite URL returned a blank local schema-engine error in this environment, so the runtime smoke used direct migration replay for the isolated database.
 - `xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination id=1FD6368F-8CB5-4736-9682-AE8DF38A0CC9 -only-testing:PrivateMomentsTests/CalendarReviewModelsTests` passed: 8/8 tests.
 - `xcodebuild test -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination id=1FD6368F-8CB5-4736-9682-AE8DF38A0CC9 -only-testing:PrivateMomentsTests/TimelineDateJumpModelsTests` passed: 5/5 tests.
 - `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination generic/platform=iOS -configuration Debug CODE_SIGNING_ALLOWED=NO build` passed.
@@ -31,12 +32,15 @@ Observed UI evidence:
 
 - Default launch opened `Timeline`, not `Check-ins`.
 - Timeline rendered compact check-in rows for `Wake up` and prior `Workout`.
+- Timeline and Day Review no longer show a redundant gray `Check-in` label, and entries without note/media no longer show `Checked in` fallback text.
 - Hidden `Meal` check-in did not render in Timeline.
 - `Check-ins` tab opened `Today` by default with `Workout`, `Meal`, and `Wake up`.
 - `History` switch showed weekly/month/item counts and all three mock entries, including hidden `Meal`.
+- `History` item filter selected `Meal` and reduced the list to the single Meal entry.
+- Hidden `Meal` included a mock image media thumbnail in History.
 - `Manage` opened item management with `Wake up`, `Workout`, and `Meal`.
 - Calendar heatmap showed May 7 with 1 item and May 8 with 2 items before the one-tap interaction.
-- Calendar Day Review for May 8 showed `2 items` and `2 check-ins`, including hidden `Meal`.
+- Calendar Day Review for May 8 showed `2 items`, `1 photo`, and `2 check-ins`, including hidden `Meal` with its image.
 - Calendar Month Stats showed `3 check-ins`, `0 moments`, active days, busiest day, and daily rhythm bars.
 - One-tap on today's `Workout` recorded immediately without opening a sheet and displayed the `Checked in` undo bar.
 
@@ -53,6 +57,7 @@ SQLite evidence after one-tap:
 ```text
 items|3
 entries|4
+checkin_media|1
 Workout|Evening run|1
 Wake up||1
 Meal|Lunch|0
@@ -67,9 +72,10 @@ This proves:
 - Entry-level Timeline visibility is separate from entry existence.
 - Hidden entries remain present in local history and Calendar-derived counts.
 - One-tap records an empty semantic check-in.
+- Check-in image media is separate from ordinary post media and appears in History/Day Review/Photos surfaces even when the entry is hidden from Timeline.
 
 ## Known Limitation
 
-Check-in media attachment is not implemented in this checkpoint. The current app media model, upload route, recovery logic, and server-side AI summary pipeline are owned by ordinary `postId` media. A correct follow-up should add check-in-owned media semantics instead of creating fake posts or reusing ordinary post media in a way that would break Timeline visibility independence.
+Simulator cannot exercise the real camera hardware picker. The camera path compiled and the UI reserves it for real devices; simulator validation used seeded mock image media and direct SQLite/file checks. Check-in audio/video media is intentionally not implemented in this checkpoint.
 
 No real iPhone install was performed from this feature worktree, by design.

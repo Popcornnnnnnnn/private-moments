@@ -52,6 +52,24 @@ struct APIClient: Sendable {
         return response.media
     }
 
+    func uploadCheckInMedia(_ media: CheckInMedia, variant: String = "compressed") async throws -> UploadedCheckInMedia {
+        var request = try authorizedRequest(url: endpoint("api/v1/checkin-media/upload"))
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let body = try multipartBodyFile(for: media, variant: variant, boundary: boundary)
+        defer {
+            try? FileManager.default.removeItem(at: body.url)
+        }
+
+        request.httpMethod = "POST"
+        request.timeoutInterval = uploadTimeout(for: media, bodyBytes: body.sizeBytes)
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("\(body.sizeBytes)", forHTTPHeaderField: "Content-Length")
+        request.setValue("close", forHTTPHeaderField: "Connection")
+
+        let response: CheckInMediaUploadResponse = try await upload(request, fileURL: body.url)
+        return response.media
+    }
+
     func downloadMedia(mediaId: String, variant: String = "compressed") async throws -> Data {
         var components = URLComponents(url: endpoint("api/v1/media/\(mediaId)"), resolvingAgainstBaseURL: false)
         components?.queryItems = [
@@ -96,6 +114,17 @@ struct APIClient: Sendable {
 
     func downloadMediaBatch(mediaIds: [String], variant: String = "thumbnail") async throws -> [DownloadedMediaPayload] {
         var request = try authorizedRequest(url: endpoint("api/v1/media/batch-download"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        request.httpBody = try encoder.encode(MediaBatchDownloadRequest(mediaIds: mediaIds, variant: variant))
+
+        let response: MediaBatchDownloadResponse = try await send(request)
+        return response.media
+    }
+
+    func downloadCheckInMediaBatch(mediaIds: [String], variant: String = "compressed") async throws -> [DownloadedMediaPayload] {
+        var request = try authorizedRequest(url: endpoint("api/v1/checkin-media/batch-download"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 120
@@ -368,6 +397,47 @@ struct APIClient: Sendable {
         }
     }
 
+    private func multipartBodyFile(
+        for media: CheckInMedia,
+        variant: String,
+        boundary: String
+    ) throws -> (url: URL, sizeBytes: Int64) {
+        let upload = try uploadFile(for: media, variant: variant)
+        let bodyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-moments-checkin-upload-\(UUID().uuidString).multipart")
+        FileManager.default.createFile(atPath: bodyURL.path, contents: nil)
+
+        do {
+            let handle = try FileHandle(forWritingTo: bodyURL)
+            defer {
+                try? handle.close()
+            }
+
+            try writeMultipartField("mediaId", value: media.id, boundary: boundary, to: handle)
+            try writeMultipartField("entryId", value: media.entryId, boundary: boundary, to: handle)
+            try writeMultipartField("variant", value: variant, boundary: boundary, to: handle)
+            try writeMultipartField("kind", value: media.kind, boundary: boundary, to: handle)
+            try writeMultipartField("mimeType", value: upload.mimeType, boundary: boundary, to: handle)
+            try writeMultipartField("sortOrder", value: "\(media.sortOrder)", boundary: boundary, to: handle)
+            try writeMultipartFileHeader(
+                "file",
+                filename: upload.filename,
+                mimeType: upload.mimeType,
+                boundary: boundary,
+                to: handle
+            )
+            try writeCheckInUploadFileData(from: upload.url, media: media, variant: variant, to: handle)
+            try handle.write(contentsOf: Data("\r\n--\(boundary)--\r\n".utf8))
+
+            let size = try FileManager.default
+                .attributesOfItem(atPath: bodyURL.path)[.size] as? NSNumber
+            return (bodyURL, size?.int64Value ?? 0)
+        } catch {
+            try? FileManager.default.removeItem(at: bodyURL)
+            throw error
+        }
+    }
+
     private func uploadFile(for media: TimelineMedia, variant: String) throws -> (url: URL, filename: String, mimeType: String) {
         if variant == "thumbnail" {
             guard let thumbnailPath = media.localThumbnailPath, !thumbnailPath.isEmpty else {
@@ -387,6 +457,20 @@ struct APIClient: Sendable {
             URL(fileURLWithPath: media.localCompressedPath),
             "\(media.id).\(ext)",
             media.mimeType ?? defaultMimeType(for: media)
+        )
+    }
+
+    private func uploadFile(for media: CheckInMedia, variant: String) throws -> (url: URL, filename: String, mimeType: String) {
+        guard variant == "compressed", media.isImage, !media.localCompressedPath.isEmpty else {
+            throw APIError.missingUploadFile
+        }
+
+        let fileExtension = URL(fileURLWithPath: media.localCompressedPath).pathExtension
+        let ext = fileExtension.isEmpty ? "jpg" : fileExtension
+        return (
+            URL(fileURLWithPath: media.localCompressedPath),
+            "\(media.id).\(ext)",
+            media.mimeType ?? "image/jpeg"
         )
     }
 
@@ -452,6 +536,33 @@ struct APIClient: Sendable {
         }
     }
 
+    private func writeCheckInUploadFileData(
+        from fileURL: URL,
+        media: CheckInMedia,
+        variant: String,
+        to handle: FileHandle
+    ) throws {
+        if media.isImage && variant == "compressed",
+           let image = UIImage(data: try Data(contentsOf: fileURL)),
+           let compressedData = ImageCompression.uploadJPEGData(from: image) {
+            try handle.write(contentsOf: compressedData)
+            return
+        }
+
+        let input = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            try? input.close()
+        }
+
+        while true {
+            let chunk = input.readData(ofLength: 1_048_576)
+            guard !chunk.isEmpty else {
+                break
+            }
+            try handle.write(contentsOf: chunk)
+        }
+    }
+
     private func uploadTimeout(for media: TimelineMedia, bodyBytes: Int64) -> TimeInterval {
         let megabytes = max(1.0, Double(bodyBytes) / 1_000_000.0)
 
@@ -463,6 +574,11 @@ struct APIClient: Sendable {
             return min(300, max(120, 60 + megabytes * 30))
         }
 
+        return min(180, max(60, 30 + megabytes * 20))
+    }
+
+    private func uploadTimeout(for media: CheckInMedia, bodyBytes: Int64) -> TimeInterval {
+        let megabytes = max(1.0, Double(bodyBytes) / 1_000_000.0)
         return min(180, max(60, 30 + megabytes * 20))
     }
 

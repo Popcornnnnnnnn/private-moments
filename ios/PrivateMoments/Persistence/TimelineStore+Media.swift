@@ -4,6 +4,7 @@ import UIKit
 extension TimelineStore {
     func downloadMissingMedia(client: APIClient, database: LocalDatabase) async throws {
         let media = try database.fetchMediaNeedingDownload()
+        let checkInMedia = try database.fetchCheckInMediaNeedingDownload()
         let queuedMedia = media.filter { item in
             if mediaDownloadsInFlight.contains(item.id) {
                 return false
@@ -20,25 +21,45 @@ extension TimelineStore {
             }
             return true
         }
+        let queuedCheckInMedia = checkInMedia.filter { item in
+            if mediaDownloadsInFlight.contains(item.id) {
+                return false
+            }
+            if item.hasLocalDisplayFile {
+                return false
+            }
+            return true
+        }
 
-        if queuedMedia.isEmpty {
+        if queuedMedia.isEmpty && queuedCheckInMedia.isEmpty {
             AppSettings.lastMediaDownloadError = nil
             return
         }
 
-        AppSettings.lastMediaDownloadError = "Downloading \(queuedMedia.count) media thumbnails"
+        AppSettings.lastMediaDownloadError = "Downloading \(queuedMedia.count + queuedCheckInMedia.count) media thumbnails"
         for item in queuedMedia {
+            mediaDownloadsInFlight.insert(item.id)
+        }
+        for item in queuedCheckInMedia {
             mediaDownloadsInFlight.insert(item.id)
         }
         defer {
             for item in queuedMedia {
                 mediaDownloadsInFlight.remove(item.id)
             }
+            for item in queuedCheckInMedia {
+                mediaDownloadsInFlight.remove(item.id)
+            }
         }
 
-        let payloads = try await client.downloadMediaBatch(mediaIds: queuedMedia.map(\.id), variant: "thumbnail")
+        let payloads = queuedMedia.isEmpty
+            ? []
+            : try await client.downloadMediaBatch(mediaIds: queuedMedia.map(\.id), variant: "thumbnail")
+        let checkInPayloads = queuedCheckInMedia.isEmpty
+            ? []
+            : try await client.downloadCheckInMediaBatch(mediaIds: queuedCheckInMedia.map(\.id), variant: "compressed")
         var payloadById: [String: DownloadedMediaPayload] = [:]
-        for payload in payloads {
+        for payload in payloads + checkInPayloads {
             payloadById[payload.id] = payload
         }
 
@@ -57,13 +78,27 @@ extension TimelineStore {
             try database.markMediaDownloaded(mediaId: item.id, localPath: localURL.path, isThumbnail: item.isVideo)
             savedCount += 1
         }
+        for item in queuedCheckInMedia {
+            guard let payload = payloadById[item.id],
+                  let data = Data(base64Encoded: payload.base64) else {
+                continue
+            }
+
+            let localURL = try localURLForDownloadedCheckInMedia(item)
+            if FileManager.default.fileExists(atPath: localURL.path) {
+                try FileManager.default.removeItem(at: localURL)
+            }
+            try data.write(to: localURL, options: [.atomic])
+            try database.markCheckInMediaDownloaded(mediaId: item.id, localPath: localURL.path)
+            savedCount += 1
+        }
 
         if savedCount > 0 {
             try await reload()
         }
-        AppSettings.lastMediaDownloadError = savedCount == queuedMedia.count
+        AppSettings.lastMediaDownloadError = savedCount == queuedMedia.count + queuedCheckInMedia.count
             ? nil
-            : "Downloaded \(savedCount)/\(queuedMedia.count) media thumbnails"
+            : "Downloaded \(savedCount)/\(queuedMedia.count + queuedCheckInMedia.count) media thumbnails"
     }
 
     func downloadMediaItem(_ item: TimelineMedia, client: APIClient, database: LocalDatabase) async {
@@ -106,6 +141,14 @@ extension TimelineStore {
 
         let suffix = variant == "thumbnail" ? "-thumb" : ""
         return directory.appending(path: "\(media.id)\(suffix).\(fileExtension)")
+    }
+
+    func localURLForDownloadedCheckInMedia(_ media: CheckInMedia) throws -> URL {
+        let directory = try AppDirectories.mediaDirectory()
+        let remoteExtension = media.remoteCompressedPath.flatMap {
+            URL(fileURLWithPath: $0).pathExtension.isEmpty ? nil : URL(fileURLWithPath: $0).pathExtension
+        }
+        return directory.appending(path: "\(media.id).\(remoteExtension ?? "jpg")")
     }
 
     func persistImages(postId: String, imageData: [Data], createdAt: Date) throws -> [TimelineMedia] {
