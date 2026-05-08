@@ -94,28 +94,11 @@ struct StorageDetailsView: View {
     var body: some View {
         Form {
             if let localStats {
-                iPhoneSection(localStats)
-                mediaCacheSection(localStats)
-                syncHealthSection(localStats, serverStatus: serverStatus)
+                summarySection(localStats, serverStatus: serverStatus)
+                diagnosticsMenuSection(localStats, serverStatus: serverStatus, macOperations: macOperations)
             } else {
                 Section(L10n.t("This iPhone", appLanguage)) {
                     ProgressView(L10n.t("Loading", appLanguage))
-                }
-            }
-
-            if let serverStatus {
-                macServerSection(serverStatus)
-                if let macOperations {
-                    macOperationsSection(macOperations)
-                }
-                if let aiSummaries = serverStatus.aiSummaries {
-                    aiSummarySection(aiSummaries)
-                }
-                if let aiUsage = serverStatus.aiUsage {
-                    aiUsageSection(aiUsage)
-                }
-                if let tags = serverStatus.tags {
-                    tagSection(tags)
                 }
             }
         }
@@ -137,6 +120,9 @@ struct StorageDetailsView: View {
         .task {
             await refresh()
         }
+        .refreshable {
+            await refresh()
+        }
         .alert(L10n.t("Clear downloaded media cache?", appLanguage), isPresented: $confirmClearCache) {
             Button(L10n.t("Cancel", appLanguage), role: .cancel) {}
             Button(L10n.t("Clear", appLanguage), role: .destructive) {
@@ -147,6 +133,214 @@ struct StorageDetailsView: View {
         } message: {
             Text(L10n.t("Downloaded full audio and video files will be removed from this iPhone. They can be downloaded again from your Mac when played.", appLanguage))
         }
+    }
+
+    private func summarySection(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> some View {
+        Section(L10n.t("Summary", appLanguage)) {
+            LabeledContent(L10n.t("Status", appLanguage), value: syncStatusText(for: stats))
+            LabeledContent(L10n.t("This iPhone", appLanguage), value: StorageByteFormatter.string(from: stats.totalBytes))
+            LabeledContent(L10n.t("Mac reachability", appLanguage), value: macReachabilityText(serverStatus: serverStatus))
+
+            if let serverVersion = serverStatus?.sync?.latestServerChangeVersion {
+                let changesBehind = max(0, serverVersion - AppSettings.lastSyncCursor)
+                if changesBehind > 0 {
+                    LabeledContent(L10n.t("Remote changes", appLanguage), value: "\(changesBehind) \(L10n.t("behind", appLanguage))")
+                }
+            }
+
+            if stats.failedUploads > 0 {
+                LabeledContent(L10n.t("Failed uploads", appLanguage), value: "\(stats.failedUploads)")
+            }
+
+            if stats.missingMediaDownloads > 0 {
+                LabeledContent(L10n.t("Missing media", appLanguage), value: "\(stats.missingMediaDownloads)")
+            }
+        }
+    }
+
+    private func diagnosticsMenuSection(
+        _ stats: LocalStorageStats,
+        serverStatus: AdminStatusResponse?,
+        macOperations: MacOperationsDiagnostics?
+    ) -> some View {
+        Section(L10n.t("Storage & Diagnostics", appLanguage)) {
+            NavigationLink {
+                diagnosticsForm(title: "This iPhone") {
+                    iPhoneSection(stats)
+                    mediaCacheSection(stats)
+                }
+            } label: {
+                diagnosticsLinkLabel(
+                    title: "This iPhone",
+                    detail: iPhoneStorageSummary(stats)
+                )
+            }
+
+            NavigationLink {
+                diagnosticsForm(title: "Sync Health") {
+                    syncHealthSection(stats, serverStatus: serverStatus)
+                }
+            } label: {
+                diagnosticsLinkLabel(
+                    title: "Sync Health",
+                    detail: syncHealthSummary(stats, serverStatus: serverStatus)
+                )
+            }
+
+            if let serverStatus {
+                NavigationLink {
+                    diagnosticsForm(title: "Mac Server") {
+                        macServerSection(serverStatus)
+                    }
+                } label: {
+                    diagnosticsLinkLabel(
+                        title: "Mac Server",
+                        detail: macServerSummary(serverStatus)
+                    )
+                }
+            }
+
+            if let macOperations {
+                NavigationLink {
+                    diagnosticsForm(title: "Mac Operations") {
+                        macOperationsSection(macOperations)
+                    }
+                } label: {
+                    diagnosticsLinkLabel(
+                        title: "Mac Operations",
+                        detail: macOperationsSummary(macOperations)
+                    )
+                }
+            }
+
+            if let serverStatus, hasAIDiagnostics(serverStatus) {
+                NavigationLink {
+                    diagnosticsForm(title: "AI & Tags") {
+                        if let aiSummaries = serverStatus.aiSummaries {
+                            aiSummarySection(aiSummaries)
+                        }
+                        if let aiUsage = serverStatus.aiUsage {
+                            aiUsageSection(aiUsage)
+                        }
+                        if let tags = serverStatus.tags {
+                            tagSection(tags)
+                        }
+                    }
+                } label: {
+                    diagnosticsLinkLabel(
+                        title: "AI & Tags",
+                        detail: aiDiagnosticsSummary(serverStatus)
+                    )
+                }
+            }
+        }
+    }
+
+    private func diagnosticsForm<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Form {
+            content()
+        }
+        .navigationTitle(L10n.t(title, appLanguage))
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable {
+            await refresh()
+        }
+    }
+
+    private func diagnosticsLinkLabel(title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.t(title, appLanguage))
+            Text(detail)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func iPhoneStorageSummary(_ stats: LocalStorageStats) -> String {
+        "\(L10n.t("Total", appLanguage)) \(StorageByteFormatter.string(from: stats.totalBytes)) · \(L10n.t("Media", appLanguage)) \(StorageByteFormatter.string(from: stats.mediaBytes))"
+    }
+
+    private func syncHealthSummary(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> String {
+        var parts = [
+            syncStatusText(for: stats),
+            macReachabilityText(serverStatus: serverStatus)
+        ]
+
+        if let serverVersion = serverStatus?.sync?.latestServerChangeVersion {
+            let changesBehind = max(0, serverVersion - AppSettings.lastSyncCursor)
+            if changesBehind > 0 {
+                parts.append("\(changesBehind) \(L10n.t("behind", appLanguage))")
+            }
+        }
+
+        return parts.joined(separator: " · ")
+    }
+
+    private func macServerSummary(_ status: AdminStatusResponse) -> String {
+        "v\(status.serverVersion) · \(L10n.t("Schema", appLanguage)) \(status.schemaVersion) · \(StorageByteFormatter.string(from: status.storage.totalBytes))"
+    }
+
+    private func macOperationsSummary(_ diagnostics: MacOperationsDiagnostics) -> String {
+        if let runningJob = diagnostics.runningJob {
+            return "\(L10n.t("Running job", appLanguage)) · \(jobSummary(runningJob))"
+        }
+
+        if let failedJob = diagnostics.latestFailedJob {
+            return "\(L10n.t("Recent failed job", appLanguage)) · \(jobSummary(failedJob))"
+        }
+
+        if let repository = diagnostics.repository {
+            return "\(L10n.t("Archive repository", appLanguage)) · \(L10n.t(repository.configured ? "Configured" : "Not configured", appLanguage))"
+        }
+
+        return L10n.t("Unavailable", appLanguage)
+    }
+
+    private func hasAIDiagnostics(_ status: AdminStatusResponse) -> Bool {
+        status.aiSummaries != nil || status.aiUsage != nil || status.tags != nil
+    }
+
+    private func aiDiagnosticsSummary(_ status: AdminStatusResponse) -> String {
+        var parts: [String] = []
+
+        if let aiSummaries = status.aiSummaries {
+            if aiSummaries.failed > 0 {
+                parts.append("\(aiSummaries.failed) \(L10n.t("Failed", appLanguage))")
+            } else {
+                parts.append("\(aiSummaries.ready) \(L10n.t("Ready", appLanguage))")
+            }
+        }
+
+        if let aiUsage = status.aiUsage {
+            parts.append("\(L10n.t("This month", appLanguage)) \(tokenText(aiUsage.currentMonth.totalTokens))")
+        }
+
+        if let tags = status.tags {
+            parts.append("\(tags.topics) \(L10n.t("Topics", appLanguage))")
+        }
+
+        return parts.isEmpty ? L10n.t("Available", appLanguage) : parts.joined(separator: " · ")
+    }
+
+    private func macReachabilityText(serverStatus: AdminStatusResponse?) -> String {
+        if serverStatus != nil {
+            return L10n.t("Reachable", appLanguage)
+        }
+
+        if store.automaticSyncEnabled && isRefreshing {
+            return L10n.t("Checking", appLanguage)
+        }
+
+        if store.automaticSyncEnabled {
+            return L10n.t("Unavailable", appLanguage)
+        }
+
+        return L10n.t("Local-only", appLanguage)
     }
 
     private func iPhoneSection(_ stats: LocalStorageStats) -> some View {

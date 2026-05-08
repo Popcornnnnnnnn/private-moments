@@ -142,6 +142,7 @@ enum L10n {
         "Add Topic Tag": "添加主题标签",
         "Advanced Sync": "高级同步",
         "AI Language": "AI 语言",
+        "AI & Tags": "AI 与标签",
         "AI not ready": "AI 未完成",
         "AI Title Auto-Insert": "AI 标题自动嵌入",
         "AI assignments": "AI 分配",
