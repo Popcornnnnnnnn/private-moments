@@ -48,6 +48,8 @@ model Post {
   id                String    @id
   text              String
   isFavorite        Boolean   @default(false) @map("is_favorite")
+  isPinned          Boolean   @default(false) @map("is_pinned")
+  pinnedAt          DateTime? @map("pinned_at")
   aiTagProcessedAt  DateTime? @map("ai_tag_processed_at")
   tagsUserEditedAt  DateTime? @map("tags_user_edited_at")
   occurredAt        DateTime  @map("occurred_at")
@@ -69,6 +71,7 @@ model Post {
 
   @@index([occurredAt])
   @@index([deletedAt])
+  @@index([isPinned, pinnedAt])
   @@index([serverVersion])
   @@map("posts")
 }

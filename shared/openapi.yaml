@@ -1177,6 +1177,7 @@ components:
         - id
         - text
         - isFavorite
+        - isPinned
         - occurredAt
         - media
       properties:
@@ -1187,6 +1188,13 @@ components:
           type: string
         isFavorite:
           type: boolean
+        isPinned:
+          type: boolean
+        pinnedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
         occurredAt:
           type: string
           format: date-time
@@ -2116,6 +2124,7 @@ components:
         - id
         - text
         - isFavorite
+        - isPinned
         - occurredAt
         - createdAt
         - updatedAt
@@ -2132,6 +2141,13 @@ components:
           type: string
         isFavorite:
           type: boolean
+        isPinned:
+          type: boolean
+        pinnedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
         occurredAt:
           type: string
           format: date-time
@@ -2391,6 +2407,7 @@ components:
             - update_post
             - insert_ai_title
             - update_post_favorite
+            - update_post_pin
             - create_comment
             - delete_comment
             - update_media_transcription
@@ -2442,6 +2459,9 @@ components:
             the client; the server reloads it from a ready audio AI summary and
             emits `post_updated` with `updateSource: ai_title` when it changes
             the post text.
+            `update_post_pin` uses `entityType: post` with payload
+            `{isPinned, pinnedAt, updatedAt}`. Server changes include
+            `post_pin_updated` with `{id, isPinned, pinnedAt, updatedAt}`.
           additionalProperties: true
     SyncResponse:
       type: object

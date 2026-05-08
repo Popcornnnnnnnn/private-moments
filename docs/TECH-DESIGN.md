@@ -112,6 +112,49 @@ Calendar 有自己的轻量月份筛选：All/Text/Photos/Audio/Video、Favorite
 
 Day Review 不使用 grouped `List` 或 sheet 的灰色大块背景，而是用 ScrollView + 无卡片日内时间轴表达“这一天发生了什么”。顶部显示日期、星期、当天 moment 总数和媒体构成；每条记录左侧是 24 小时制时间点，右侧是内容预览。Day Review 自带轻量横向 chips，多选 Photos、Audio、Video、Favorites、Comments 时按 OR 关系显示内容，点已选 chip 可取消，点 All 清空筛选；Summary 不作为独立筛选项。日内记录用 Morning/Afternoon/Evening/Late Night 等轻分隔增加一天内部的节奏。记录在 `Show Tags in Timeline` 打开时只显示主标签，并对正文中的 `#` / `##` 标题做轻量 Markdown 渲染，正文缺失时回退到 AI 标题或媒体 fallback。图片 moment 在 Day Review 里全部显示为统一小缩略图，单张图片也不放大；视频只显示类型/时长提示，不播放、不自动播放，也不显示 poster；音频可行内播放并显示 ready/summarizing/failed summary 入口。点击非音频控件区域会 push 到 `MomentDetailView`，返回时保持在同一天 Day Review；Day Review 用本地 `UserDefaults` 按日期保存当前可见 moment id，返回 App 或重建该日期页面时恢复上次浏览位置。日期格点击反馈沿用 app 的轻量手感：`0.985` 左右的按压缩放、浅 tint、无阴影，并在确认进入 Day Review 时触发一次 selection feedback。旧 Timeline toolbar `Jump to date` 日历图标在 Calendar 落地后移除，避免两个日期入口并存。
 
+### 2.1.3 Pinned Moments 设计
+
+Pinned Moments 是时间线顶部的快捷回看层，不是新的内容类型。它只增加主 Timeline 顶部的可达性：置顶 moment 仍保留在普通主列表的原时间位置，并用轻量 pin 图标提示状态；它不改变 `occurredAt`、Calendar/Day Review 统计、Review 输入范围、搜索/筛选结果或原 moment 身份。
+
+数据模型：
+
+- server `posts` 增加 `is_pinned` 和 nullable `pinned_at`。
+- iOS `local_posts` 增加 `isPinned` 和 nullable `pinnedAt`。
+- 同步使用独立 `update_post_pin` operation，payload 包含 `isPinned`、nullable `pinnedAt` 和 `updatedAt`。
+- server 接收后更新 post metadata，发出 `post_pin_updated` server change。
+- `post_created` 和 `post_updated` payload 应包含 pin 字段，用于新客户端 baseline/recovery。
+- export/import、Archive restore 和 staged promote 必须保留 pin metadata。
+
+排序和冲突：
+
+- Pinned 区域按 `pinnedAt DESC` 排序，时间相同时用 `occurredAt DESC` 和 id 做稳定兜底。
+- 多设备或多次操作采用当前 sync 的 last-write-wins 语义，以 server 接收顺序为准。
+- 删除 post 后，它自然从 Pinned 区域消失；`post_deleted` 已足够，不需要额外 unpin change。
+
+Timeline UI：
+
+- Pinned 只出现在主 Timeline，并且只在没有 active search/filter state 时出现；搜索、日期、Tag、Favorite、评论、内容类型、待同步或 match-source 筛选都会隐藏 Pinned。
+- Timeline 顶部默认只显示 `Pinned · N` 汇总 header。
+- 已置顶 items 保留在普通 Timeline list 的原时间位置；Pinned header/sheet 只是额外快捷入口，不搬移动态。
+- 当置顶 items 作为普通 Timeline row 显示时，row 顶部 metadata 区显示一个低权重 `pin.fill` 图标，和 Favorite / sync badge 一样作为状态提示，不增加文字或新操作按钮。
+- 当 pinned 数量为 1-3 条时，点击 header 展开/收起最多 3 条标题行。展开/收起状态只保存在本机 `UserDefaults`，不进入 sync。
+- 当 pinned 数量超过 3 条时，点击 header 打开底部 sheet，显示完整 pinned 标题列表。
+- 标题行只显示标题和轻量发生日期辅助信息；不显示正文、media grid、comments、AI summary、tag wall 或 sync success badge。
+- Pinned sheet 使用内部 `NavigationStack`。点击 pinned 行在 sheet 内 push 正常 `MomentDetailView`，Back 返回 pinned 列表；sheet 内 detail 保留编辑、删除、favorite、tag、pin/unpin 等完整行为。
+- Pin / Unpin 入口放在 Moment Detail 顶部 `More` 菜单、Timeline row context menu 和 pinned sheet row context menu。不要给每条普通 row 新增常驻 pin 按钮，也不要占用现有 Favorite swipe action。
+- Calendar、Day Review 和 Weekly Review 不新增 pinned 入口或 pin 标记。
+
+标题生成计划：
+
+1. 正文第一条非空 `# ` 或 `## ` 标题，去掉 marker。
+2. 正文第一条非空普通行，单行截断。
+3. ready audio/video AI summary 的 `documentTitle`。
+4. `Photo moment` / `Audio moment` / `Video moment` 之类媒体 fallback，必要时加发生日期。
+
+第一版不新增自定义置顶标题、手动拖拽排序、Pinned-only Timeline filter 或 Admin pin management。自定义标题会新增用户编辑字段，拖拽排序会新增排序冲突语义；两者都留到需要时再单独设计。
+
+Pin 与 Favorite 保持独立。Pending、failed、partial 和 synced 本地 moment 都允许 pin/unpin，操作写入 outbox 后按普通同步流程发送。多设备冲突以 server 接收顺序为准，last server-accepted wins。删除 post 后 Pinned 表面直接不再显示它，不额外生成 unpin operation。
+
 ## 2.2 详情与编辑决策
 
 详情页是单条动态的管理入口。时间线点击动态进入详情页，详情页负责查看完整内容、图片/视频/语音浏览播放、编辑入口和删除入口。图片浏览器只负责查看，不承担删除操作；视频使用全屏播放；语音使用全局复用的 waveform voice bar。
@@ -329,7 +372,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 {
   "app": "PrivateMoments",
   "dataVersion": 1,
-  "schemaVersion": 12,
+  "schemaVersion": 13,
   "createdAt": "2026-04-28T00:00:00.000Z",
   "mediaLayoutVersion": 1
 }
@@ -979,7 +1022,7 @@ POST   /api/v1/admin/archive/jobs/import
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 12,
+  "schemaVersion": 13,
   "acceptedOps": ["op-uuid-1", "op-uuid-2"],
   "rejectedOps": [],
   "serverChanges": [

@@ -67,6 +67,8 @@ final class LocalDatabasePostTagSyncTests: XCTestCase {
             id: id,
             text: "Tag merge regression",
             isFavorite: false,
+            isPinned: false,
+            pinnedAt: nil,
             aiTagProcessedAt: nil,
             tagsUserEditedAt: nil,
             occurredAt: now,

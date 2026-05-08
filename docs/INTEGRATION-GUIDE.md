@@ -114,6 +114,7 @@ Request shape：
 - `update_post`
 - `insert_ai_title`
 - `update_post_favorite`
+- `update_post_pin`
 - `delete_post`
 - `create_comment`
 - `delete_comment`
@@ -399,7 +400,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 12,
+  "schemaVersion": 13,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {

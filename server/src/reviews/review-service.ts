@@ -413,6 +413,8 @@ export class ReviewService {
             id: post.id,
             text: post.text,
             isFavorite: post.isFavorite,
+            isPinned: post.isPinned,
+            pinnedAt: post.pinnedAt?.toISOString() ?? null,
             occurredAt: post.occurredAt.toISOString(),
             deletedAt: null,
           }),

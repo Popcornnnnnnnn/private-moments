@@ -155,6 +155,17 @@ extension TimelineStore {
         return String(decoding: data, as: UTF8.self)
     }
 
+    func makePinPayload(isPinned: Bool, pinnedAt: Date?, updatedAt: Date) throws -> String {
+        let payload: [String: Any] = [
+            "isPinned": isPinned,
+            "pinnedAt": pinnedAt.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull(),
+            "updatedAt": ISO8601DateFormatter().string(from: updatedAt)
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        return String(decoding: data, as: UTF8.self)
+    }
+
     func makeCreateCommentPayload(postId: String, text: String, createdAt: Date) throws -> String {
         let payload: [String: String] = [
             "postId": postId,

@@ -29,6 +29,7 @@ test("supported sync operation matrix includes all current client operation pair
       "update_media_transcription:media",
       "update_post:post",
       "update_post_favorite:post",
+      "update_post_pin:post",
       "upsert_tag:tag",
       "upsert_tag_alias:tag_alias",
     ],

@@ -25,10 +25,12 @@ npm run verify:release-gates
 | UAT-M009-SYNC-HEALTH | closed | Sync Health | iOS Settings 和 Mac Admin 能区分 server unreachable、auth failure、cursor lag、pending outbox、failed media upload、missing media、AI non-ready，并且安全动作可恢复常见状态。 |
 | UAT-M010-WEEKLY-REVIEW | closed | Weekly Review | 真实最近 7 天数据生成 Review，语气是冷静观察 + 适度鼓励，不逐条过度解读；`Worth Revisiting` 低权重 anchors 能在 Review 内打开原 moment。 |
 | UAT-SHARE-EXTENSION | closed | Save to Moments | Photos 多图、Safari URL/text、Files/Voice Memos 音频、视频分享都能打开主 App Composer，发布成功后 import queue 被清理；真实 provisioning/App Group 正常。 |
+| UAT-M011-PINNED-MOMENTS | open | Pinned Moments | 合并/真机安装前先完成 Sync Health/outbox/recovery checkpoint；真实 iPhone 上确认 Detail `More` pin/unpin、Timeline 长按 pin/unpin、`Pinned · N` 默认折叠、1-3 条展开、超过 3 条 sheet、sheet 内 detail navigation、普通 Timeline 保留 pinned row 且显示 pin 标识、搜索/筛选隐藏 Pinned 且仍能找到原 moment。 |
 
 ## 验收记录
 
 - 2026-05-07：用户确认当前 10 个 UAT gate 先全部验收通过。本次收口只记录人工验收状态，不引入功能代码变更；后续如果发现回归或新增范围，应重新打开对应 gate 或新增 gate。
+- 2026-05-08：M011 Pinned Moments 已在功能 worktree 通过自动化、隔离 server smoke 和模拟器 UI/交互验证；因为本轮明确不安装真机，新增 `UAT-M011-PINNED-MOMENTS` 作为后续真实设备验收门禁。
 
 ## 关闭 Gate 的规则
 

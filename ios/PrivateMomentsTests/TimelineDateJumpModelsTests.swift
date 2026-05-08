@@ -101,6 +101,8 @@ final class TimelineDateJumpModelsTests: XCTestCase {
                 id: id,
                 text: "Fixture \(id)",
                 isFavorite: isFavorite,
+                isPinned: false,
+                pinnedAt: nil,
                 aiTagProcessedAt: nil,
                 tagsUserEditedAt: nil,
                 occurredAt: occurredAt,

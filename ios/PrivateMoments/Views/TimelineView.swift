@@ -43,6 +43,8 @@ struct TimelineView: View {
     @State private var calendarRouteScrollTask: Task<Void, Never>?
     @State private var videoAutoplayCandidateMediaId: String?
     @State private var videoAutoplayTask: Task<Void, Never>?
+    @State private var isPinnedSheetPresented = false
+    @AppStorage("timelinePinnedSectionExpanded") private var isPinnedSectionExpanded = false
     @FocusState private var isCommentInputFocused: Bool
 
     init(
@@ -83,6 +85,30 @@ struct TimelineView: View {
                                 ZStack(alignment: .top) {
                                     GeometryReader { listProxy in
                                         List {
+                                            if !pinnedItems.isEmpty {
+                                                PinnedMomentsSection(
+                                                    items: pinnedItems,
+                                                    isExpanded: $isPinnedSectionExpanded,
+                                                    onOpenSheet: {
+                                                        playbackCenter.pause()
+                                                        stopVideoAutoplay()
+                                                        isPinnedSheetPresented = true
+                                                    },
+                                                    onOpenDetail: { item in
+                                                        playbackCenter.pause()
+                                                        stopVideoAutoplay()
+                                                        detailRoute = DetailRoute(postId: item.id)
+                                                    },
+                                                    onTogglePinned: { item in
+                                                        Task {
+                                                            await store.togglePinned(item)
+                                                        }
+                                                    }
+                                                )
+                                                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                                                .listRowSeparator(.hidden)
+                                            }
+
                                             ForEach(groupedItems) { group in
                                                 Section {
                                                     monthAnchor(for: group)
@@ -134,6 +160,18 @@ struct TimelineView: View {
                                                                 Label(L10n.t("Delete", appLanguage), systemImage: "trash")
                                                             }
                                                             .tint(.red)
+                                                        }
+                                                        .contextMenu {
+                                                            Button {
+                                                                Task {
+                                                                    await store.togglePinned(item)
+                                                                }
+                                                            } label: {
+                                                                Label(
+                                                                    L10n.t(item.post.isPinned ? "Unpin moment" : "Pin moment", appLanguage),
+                                                                    systemImage: item.post.isPinned ? "pin.slash" : "pin"
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -315,6 +353,13 @@ struct TimelineView: View {
                     ContentUnavailableView(L10n.t("Summary unavailable", appLanguage), systemImage: "sparkles")
                 }
             }
+            .sheet(isPresented: $isPinnedSheetPresented) {
+                PinnedMomentsSheet(items: pinnedItems) { item in
+                    Task {
+                        await store.togglePinned(item)
+                    }
+                }
+            }
             .alert(L10n.t("Delete this moment?", appLanguage), isPresented: deleteConfirmationBinding) {
                 Button(L10n.t("Cancel", appLanguage), role: .cancel) {
                     isDeleteConfirmationPresented = false
@@ -412,7 +457,7 @@ struct TimelineView: View {
     }
 
     private var groupedItems: [TimelineDateJumpMonthGroup] {
-        TimelineDateJumpBuilder.groups(from: filteredItems, language: appLanguage)
+        TimelineDateJumpBuilder.groups(from: timelineListItems, language: appLanguage)
     }
 
     private var monthMenuGroups: [TimelineDateJumpMonthGroup] {
@@ -478,6 +523,39 @@ struct TimelineView: View {
             )
             return result.isMatch && selectedMatchSourceFilter.includes(result)
         }
+    }
+
+    private var timelineListItems: [TimelineItem] {
+        filteredItems
+    }
+
+    private var pinnedItems: [TimelineItem] {
+        guard !hasPinnedSuppressionState else {
+            return []
+        }
+
+        return store.items
+            .filter { $0.post.isPinned && $0.post.deletedAt == nil }
+            .sorted { lhs, rhs in
+                switch (lhs.post.pinnedAt, rhs.post.pinnedAt) {
+                case let (left?, right?) where left != right:
+                    return left > right
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                default:
+                    if lhs.post.occurredAt != rhs.post.occurredAt {
+                        return lhs.post.occurredAt > rhs.post.occurredAt
+                    }
+
+                    return lhs.id > rhs.id
+                }
+            }
+    }
+
+    private var hasPinnedSuppressionState: Bool {
+        hasActiveFilters || hasSearchQuery
     }
 
     private var hasActiveFilters: Bool {

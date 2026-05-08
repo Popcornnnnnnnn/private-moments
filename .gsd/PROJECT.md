@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
 
 ## What This Project Is
 
@@ -77,6 +77,8 @@ The owner rarely uses Mac Admin for daily operation. Future settings, monitoring
 
 M010 adds AI Periodic Reviews. The first artifact is Weekly Review, but server data uses generic review kind/range concepts so monthly/custom reviews can reuse the same foundation. Weekly Review is retrospective-first with moderate reflection, uses text moments, comments, ready audio/video AI summaries, tags/favorites/time/media metadata, and leaves images as metadata-only in v1. It avoids per-claim evidence links; only `Worth Revisiting` exposes low-weight moment anchors inside the review context. Auto-generation is default off and runs Sunday evening on the Mac server when enabled. A follow-up adds `ai_usage_events` so growing AI surfaces have token/cost diagnostics without storing private AI input or output bodies.
 
+M011 implements Pinned Moments as a quiet shortcut shelf above Timeline. Pinned moments default to a collapsed header, while pinned items remain in the ordinary chronological Timeline rows with a lightweight pin marker so pinning never makes a moment disappear from lived-time browsing. Their original `occurredAt` still drives Calendar, Day Review, search/filter results, review input, and detail identity. Pin state is lightweight post metadata (`isPinned` / `pinnedAt`) with a dedicated `update_post_pin` sync operation and `post_pin_updated` server change, not a duplicate post, tag, review, or archive-management surface. Implementation and package/device verification remain in the dedicated `codex/pinned-moments-design` worktree with isolated server runtime data; real-device install is still deferred until an explicit recovery checkpoint.
+
 ## Design Constraints
 
 - The main iOS timeline must stay simple. Low-frequency controls belong in toolbar menus, swipe actions, detail views, or settings.
@@ -136,3 +138,4 @@ True-device and human acceptance gaps must stay in `docs/UAT-GATES.md`. Normal w
 - [x] M008: Calendar Review — implementation landed for bottom `Calendar` / `日历` tab, month-grid review, dynamic heatmap density, exact count labels, interactive month stats, Calendar-owned month filters, Day Review multi-select local filters, 24-hour day timeline rows, light period separators, and accessibility-ready local-only derived data. Automated iOS tests/builds passed, and user accepted real iPhone UAT on 2026-05-07.
 - [x] M009: v0.1 Archive, Restore, And Sync Health — Phase A and Phase B implementation have landed for Admin-managed restic backup/restore, daily scheduled backups, staged restore/promote preparation, durable maintenance jobs, maintenance mode, Sync Health in Admin + iOS Settings, and migration-first export/import into a staged clean archive. User accepted Archive and Sync Health UAT gates on 2026-05-07.
 - [x] M010: AI Periodic Reviews — first implementation pass landed for generic Review schema/API, Weekly Review generator, Calendar Reviews UI, Settings toggles, feedback, default-off server auto-generation, and privacy-safe AI token usage metering. User accepted Weekly Review UAT on 2026-05-07.
+- [in progress] M011: Pinned Moments — implementation landed on branch `codex/pinned-moments-design` in the dedicated feature worktree. Current behavior is a top Timeline pinned shelf that defaults to a collapsed header, expands one to three title rows locally, opens a sheet for more than three, keeps pinned full rows in the ordinary chronological Timeline with a lightweight marker, and syncs pin state as post metadata. Automated and simulator verification are in progress; real-device UAT/install remains deferred.

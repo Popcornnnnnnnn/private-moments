@@ -8,6 +8,7 @@ export const SUPPORTED_SYNC_OPERATIONS: ReadonlyArray<SyncOperationShape> = [
   { type: "update_post", entityType: "post" },
   { type: "insert_ai_title", entityType: "post" },
   { type: "update_post_favorite", entityType: "post" },
+  { type: "update_post_pin", entityType: "post" },
   { type: "delete_post", entityType: "post" },
   { type: "update_media_transcription", entityType: "media" },
   { type: "create_comment", entityType: "comment" },

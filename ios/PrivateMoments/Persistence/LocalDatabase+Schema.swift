@@ -14,6 +14,8 @@ extension LocalDatabase {
                 id TEXT PRIMARY KEY,
                 text TEXT NOT NULL,
                 isFavorite INTEGER NOT NULL DEFAULT 0,
+                isPinned INTEGER NOT NULL DEFAULT 0,
+                pinnedAt TEXT,
                 aiTagProcessedAt TEXT,
                 tagsUserEditedAt TEXT,
                 occurredAt TEXT NOT NULL,
@@ -167,6 +169,8 @@ extension LocalDatabase {
 
         try addColumnIfNeeded(table: "local_posts", column: "localEditedAt", definition: "TEXT")
         try addColumnIfNeeded(table: "local_posts", column: "isFavorite", definition: "INTEGER NOT NULL DEFAULT 0")
+        try addColumnIfNeeded(table: "local_posts", column: "isPinned", definition: "INTEGER NOT NULL DEFAULT 0")
+        try addColumnIfNeeded(table: "local_posts", column: "pinnedAt", definition: "TEXT")
         try addColumnIfNeeded(table: "local_posts", column: "aiTagProcessedAt", definition: "TEXT")
         try addColumnIfNeeded(table: "local_posts", column: "tagsUserEditedAt", definition: "TEXT")
         try addColumnIfNeeded(table: "local_media", column: "kind", definition: "TEXT NOT NULL DEFAULT 'image'")

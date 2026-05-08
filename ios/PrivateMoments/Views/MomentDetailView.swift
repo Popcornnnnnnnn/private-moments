@@ -38,41 +38,55 @@ struct MomentDetailView: View {
                 .navigationTitle(L10n.t("Moment", appLanguage))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        if !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            if !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Button {
+                                    copyMomentText(item.post.text)
+                                } label: {
+                                    Label(L10n.t(didCopyText ? "Copied" : "Copy text", appLanguage), systemImage: didCopyText ? "checkmark" : "doc.on.doc")
+                                }
+                            }
+
                             Button {
-                                copyMomentText(item.post.text)
+                                Task {
+                                    await store.togglePinned(item)
+                                }
                             } label: {
-                                Image(systemName: didCopyText ? "checkmark" : "doc.on.doc")
+                                Label(
+                                    L10n.t(item.post.isPinned ? "Unpin moment" : "Pin moment", appLanguage),
+                                    systemImage: item.post.isPinned ? "pin.slash" : "pin"
+                                )
                             }
-                            .accessibilityLabel(L10n.t(didCopyText ? "Copied" : "Copy text", appLanguage))
-                        }
 
-                        Button {
-                            Task {
-                                await store.toggleFavorite(item)
+                            Button {
+                                Task {
+                                    await store.toggleFavorite(item)
+                                }
+                            } label: {
+                                Label(
+                                    L10n.t(item.post.isFavorite ? "Remove favorite" : "Favorite moment", appLanguage),
+                                    systemImage: item.post.isFavorite ? "star.slash" : "star"
+                                )
+                            }
+
+                            Button {
+                                playbackCenter.pause()
+                                isEditing = true
+                            } label: {
+                                Label(L10n.t("Edit moment", appLanguage), systemImage: "square.and.pencil")
+                            }
+                            .disabled(!store.canEdit(item))
+
+                            Button(role: .destructive) {
+                                confirmDelete = true
+                            } label: {
+                                Label(L10n.t("Delete moment", appLanguage), systemImage: "trash")
                             }
                         } label: {
-                            Image(systemName: item.post.isFavorite ? "star.fill" : "star")
-                                .foregroundStyle(item.post.isFavorite ? Color.yellow : Color.primary)
+                            Image(systemName: "ellipsis.circle")
                         }
-                        .accessibilityLabel(L10n.t(item.post.isFavorite ? "Remove favorite" : "Favorite moment", appLanguage))
-
-                        Button {
-                            playbackCenter.pause()
-                            isEditing = true
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                        }
-                        .disabled(!store.canEdit(item))
-                        .accessibilityLabel(L10n.t("Edit moment", appLanguage))
-
-                        Button(role: .destructive) {
-                            confirmDelete = true
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .accessibilityLabel(L10n.t("Delete moment", appLanguage))
+                        .accessibilityLabel(L10n.t("More", appLanguage))
                     }
                 }
                 .sheet(isPresented: $isEditing) {
