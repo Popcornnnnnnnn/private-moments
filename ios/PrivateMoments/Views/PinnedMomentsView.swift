@@ -201,6 +201,7 @@ private struct PinnedMomentTitleRow: View {
             PinnedMomentTitleRowLabel(item: item)
         }
         .buttonStyle(.plain)
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 6, style: .continuous))
         .contextMenu {
             Button {
                 onTogglePinned()
@@ -229,6 +230,8 @@ private struct PinnedMomentTitleRowLabel: View {
                 .lineLimit(1)
         }
         .padding(.vertical, 8)
+        .padding(.horizontal, 6)
         .contentShape(Rectangle())
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
