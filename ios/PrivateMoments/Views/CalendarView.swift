@@ -87,13 +87,6 @@ struct CalendarView: View {
                     }
                     .accessibilityLabel(L10n.t("Reviews", appLanguage))
 
-                    Button {
-                        showMonthStats = true
-                    } label: {
-                        Image(systemName: "chart.bar.xaxis")
-                    }
-                    .accessibilityLabel(L10n.t("Month Stats", appLanguage))
-
                     Menu {
                         Section(L10n.t("Content", appLanguage)) {
                             ForEach(CalendarReviewMediaFilter.allCases) { filter in
@@ -143,6 +136,13 @@ struct CalendarView: View {
                         Image(systemName: "gearshape")
                     }
                     .accessibilityLabel(L10n.t("Settings", appLanguage))
+
+                    Button {
+                        showMonthStats = true
+                    } label: {
+                        Image(systemName: "chart.bar.xaxis")
+                    }
+                    .accessibilityLabel(L10n.t("Month Stats", appLanguage))
                 }
             }
             .navigationDestination(for: CalendarDayRoute.self) { route in
