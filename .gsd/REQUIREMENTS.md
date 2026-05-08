@@ -114,6 +114,60 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R050,R037,R003
 - Validation: iOS build proves `StorageSettingsView` can decode and display admin status, maintenance state/jobs, repository, and snapshots; Admin build proves the visible navigation is `Archive / Overview`; smoke checks prove existing authenticated Admin status and Archive read routes remain reachable.
 
+### R052 — Check-ins are a primary iOS surface, not ordinary moments.
+- Class: functional
+- Status: active
+- Description: iOS must expose `Check-ins` as a bottom tab beside `Timeline` and `Calendar`, while app launch still defaults to `Timeline`. Check-in entries are independent local-first records and must not create ordinary `Post` rows.
+- Why it matters: The user wants fast recurring life activity capture without mixing every meal/exercise/wake-up marker into normal moment authoring.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Root tab order is `Timeline / Calendar / Check-ins`; Timeline renders published check-in entries directly from check-in data.
+
+### R053 — Daily check-in use must stay one-tap first.
+- Class: functional
+- Status: active
+- Description: In the Check-ins `Today` view, tapping the main item control records immediately without a sheet or required content. A separate low-weight content path may add note/time/Timeline visibility. Once-per-day items prevent duplicate same-local-day entries; multiple-per-day items allow repeated entries.
+- Why it matters: The module only beats tags/composer if the common path remains one tap.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Today rows can create an empty semantic check-in with one tap; content entry is separate; duplicate once-per-day entries are rejected locally.
+
+### R054 — Timeline visibility is independent from check-in truth.
+- Class: constraint
+- Status: active
+- Description: Each check-in entry has `showInTimeline`. Hidden entries still count in Check-ins History, Calendar heatmap, Day Review, Month Stats, and future review structure signals. Published entries appear in Timeline as compact check-in rows without comments, favorite, or pin.
+- Why it matters: The user explicitly separated “I did this” from “show this in Timeline”.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Toggling `showInTimeline` changes only Timeline/search visibility, not Check-ins or Calendar counts.
+
+### R055 — Calendar review treats check-ins as activity signals.
+- Class: functional
+- Status: active
+- Description: Calendar heatmap density and Day Review include non-deleted check-in entries alongside ordinary moments. Month Stats shows combined activity plus a visible split between moments and check-ins.
+- Why it matters: Calendar is the “what happened in life” review surface; it should not depend on whether check-ins were published to Timeline.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Calendar model tests or simulator mock data show check-ins affect daily activity and month stats even when hidden from Timeline.
+
+### R056 — Check-ins avoid AI and habit-pressure features in v1.
+- Class: constraint
+- Status: active
+- Description: Check-ins v1 must not add AI auto-tagging, transcription, OCR, summaries, reminders, missed counts, streaks, completion rates, favorite, pin, comments, preset templates, Mac Admin editing, or separate export UI. Optional item tags default to none and stay secondary.
+- Why it matters: The module is for private life record texture, not a KPI habit tracker or another social/feed object.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: No check-in code path calls AI/media transcription/tag suggestion pipelines; UI does not expose favorite/pin/comments/reminders/streaks.
+
+### R057 — Check-in sync and diagnostics stay iOS-first.
+- Class: operational
+- Status: active
+- Description: Check-in items and entries sync as first-class entities through `upsert_checkin_item`, `delete_checkin_item`, `upsert_checkin_entry`, and `delete_checkin_entry`. Routine item/entry management and lightweight diagnostics belong on iOS, not Mac Admin.
+- Why it matters: The phone is the daily surface, and the user requested new diagnostics to default iOS-only unless a Mac-local operation is involved.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Server operation matrix includes check-in operations; iOS Settings > Diagnostics exposes local check-in counts and pending/failed check-in sync state.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active
@@ -478,6 +532,16 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R036,R037,R050,R051
 - Validation: Validated on 2026-05-08 with focused `SyncDoctorDiagnosisTests` covering all-clear, unauthenticated, Mac unavailable, local-only pending work, failed uploads, cursor lag, missing media, historical rejected operations, and active rejected operations; generic iOS Debug build passed; the modified app installed and launched on the paired iPhone. The implementation is iOS-only and does not change server status data, SQLite schema, or sync protocol.
 
+### R054 — Check-ins must support independent image media without becoming ordinary Moments.
+- Class: functional
+- Status: validated
+- Description: Check-in entries can optionally attach still images through the richer entry path and entry detail. Image media must be parented by check-in entries, sync through separate check-in media upload/recovery routes, appear in Check-ins History, Calendar Day Review, Month Stats, and Photos filters regardless of Timeline visibility, and remain independent from ordinary `Post`/`Media` rows. Check-in audio/video media remains out of scope for this checkpoint.
+- Why it matters: Meal-style check-ins need photos for later review, but check-ins must stay a fast independent activity record. Reusing ordinary moment media would break the user's explicit separation between check-in existence and Timeline publication.
+- Source: M012 check-in media follow-up 2026-05-08
+- Primary owning slice: M012
+- Supporting slices: R021,R032,R036,R048
+- Validation: Validated on 2026-05-08 with server typecheck/test/build, isolated check-in media upload/download smoke, generic iOS build, simulator mock UI checks for History filter/photo/Day Review, and simulator SQLite/file inspection showing one `local_checkin_media` row with a local image file.
+
 ## Validated
 
 ### R004 — The timeline must keep feed browsing as the primary experience while offering lightweight month-first, optional-day jump navigation from a low-frequency toolbar menu entry.
@@ -583,10 +647,11 @@ This file is the explicit capability and coverage contract for the project.
 | R051 | constraint | active | maintenance | R036,R037,R047,R050 | Mac Admin opens Archive first and should retain only Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency while daily operations migrate to iOS. |
 | R052 | functional | validated | M011/S02 | M011/S01,M011/S03,M011/S04,M011/S05,R048 | Pinned Moments passed automated/simulator/isolated sync validation, main deploy, real-device install/data checks, and user UAT acceptance on 2026-05-08. |
 | R053 | functional | validated | maintenance | R036,R037,R050,R051 | Sync Doctor classifies Sync Health evidence into safe explicit recovery recommendations/actions without moving destructive Mac recovery into iOS. |
+| R054 | functional | validated | M012 | R021,R032,R036,R048 | Check-in image media passed independent upload/download smoke, generic iOS build, simulator History/Day Review/photo checks, and SQLite/file inspection on 2026-05-08. |
 
 ## Coverage Summary
 
-- Active requirements: 46
-- Mapped to slices: 42 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053)
-- Validated: 7 (R004, R005, R006, R007, R017, R049, R052)
+- Active requirements: 47
+- Mapped to slices: 43 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054)
+- Validated: 9 (R004, R005, R006, R007, R017, R049, R052, R053, R054)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

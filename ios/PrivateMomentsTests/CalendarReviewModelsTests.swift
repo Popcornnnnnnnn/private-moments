@@ -104,6 +104,41 @@ final class CalendarReviewModelsTests: XCTestCase {
         XCTAssertEqual(calendar.component(.day, from: stats.busiestDay!.date), 2)
     }
 
+    func testCheckInsContributeToCalendarActivityEvenWhenHiddenFromTimeline() {
+        let hiddenCheckIn = checkIn(
+            id: "meal-hidden",
+            itemId: "meal",
+            itemName: "Meal",
+            occurredAt: date(year: 2026, month: 4, day: 2, hour: 12),
+            showInTimeline: false
+        )
+        let visibleCheckIn = checkIn(
+            id: "workout-visible",
+            itemId: "workout",
+            itemName: "Workout",
+            occurredAt: date(year: 2026, month: 4, day: 3, hour: 18),
+            showInTimeline: true
+        )
+
+        let month = CalendarReviewBuilder.month(
+            containing: now,
+            items: [
+                item(id: "moment", occurredAt: date(year: 2026, month: 4, day: 2, hour: 9)),
+            ],
+            checkIns: [hiddenCheckIn, visibleCheckIn],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(day(in: month, day: 2).activityCount, 2)
+        XCTAssertEqual(day(in: month, day: 2).checkIns.map(\.id), ["meal-hidden"])
+        XCTAssertEqual(day(in: month, day: 3).activityCount, 1)
+        XCTAssertEqual(month.stats.totalMoments, 1)
+        XCTAssertEqual(month.stats.totalCheckIns, 2)
+        XCTAssertEqual(month.stats.totalActivity, 3)
+        XCTAssertEqual(month.stats.activeDays, 2)
+    }
+
     func testDayReviewFiltersMatchExpectedMomentAttributes() {
         let commented = item(
             id: "commented",
@@ -302,6 +337,44 @@ final class CalendarReviewModelsTests: XCTestCase {
             serverVersion: nil,
             deletedAt: nil
         )
+    }
+
+    private func checkIn(
+        id: String,
+        itemId: String,
+        itemName: String,
+        occurredAt: Date,
+        showInTimeline: Bool
+    ) -> CheckInFeedEntry {
+        let item = CheckInItem(
+            id: itemId,
+            name: itemName,
+            symbolName: "checkmark.circle",
+            colorHex: "#61B88D",
+            recordMode: .oncePerDay,
+            activeWeekdays: [1, 2, 3, 4, 5, 6, 7],
+            sortOrder: 0,
+            defaultShowInTimeline: showInTimeline,
+            tagId: nil,
+            createdAt: occurredAt,
+            updatedAt: occurredAt,
+            archivedAt: nil,
+            deletedAt: nil,
+            syncStatus: "synced"
+        )
+        let entry = CheckInEntry(
+            id: id,
+            itemId: itemId,
+            occurredAt: occurredAt,
+            note: "",
+            showInTimeline: showInTimeline,
+            createdAt: occurredAt,
+            updatedAt: occurredAt,
+            deletedAt: nil,
+            syncStatus: "synced"
+        )
+
+        return CheckInFeedEntry(entry: entry, item: item, tag: nil)
     }
 
     private func date(year: Int, month: Int, day: Int, hour: Int) -> Date {

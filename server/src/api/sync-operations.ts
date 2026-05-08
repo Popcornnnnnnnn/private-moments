@@ -21,6 +21,11 @@ export const SUPPORTED_SYNC_OPERATIONS: ReadonlyArray<SyncOperationShape> = [
   { type: "upsert_tag_alias", entityType: "tag_alias" },
   { type: "delete_tag_alias", entityType: "tag_alias" },
   { type: "set_post_tags", entityType: "post" },
+  { type: "upsert_checkin_item", entityType: "checkin_item" },
+  { type: "delete_checkin_item", entityType: "checkin_item" },
+  { type: "upsert_checkin_entry", entityType: "checkin_entry" },
+  { type: "delete_checkin_entry", entityType: "checkin_entry" },
+  { type: "delete_checkin_media", entityType: "checkin_media" },
 ];
 
 export function isSupportedSyncOperation(operation: SyncOperationShape): boolean {

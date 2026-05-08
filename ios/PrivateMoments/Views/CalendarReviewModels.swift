@@ -178,6 +178,22 @@ enum CalendarDayReviewFilter: String, CaseIterable, Identifiable, Hashable {
             return item.comments.contains { $0.deletedAt == nil }
         }
     }
+
+    func includes(_ item: MomentFeedItem) -> Bool {
+        switch item {
+        case .moment(let moment):
+            return includes(moment)
+        case .checkIn(let checkIn):
+            switch self {
+            case .all:
+                return true
+            case .photos:
+                return checkIn.media.contains { $0.isImage }
+            case .audio, .video, .favorites, .comments:
+                return false
+            }
+        }
+    }
 }
 
 struct CalendarDayReviewFilterSelection: Equatable {
@@ -205,6 +221,10 @@ struct CalendarDayReviewFilterSelection: Equatable {
     }
 
     func includes(_ item: TimelineItem) -> Bool {
+        activeFilters.isEmpty || activeFilters.contains { $0.includes(item) }
+    }
+
+    func includes(_ item: MomentFeedItem) -> Bool {
         activeFilters.isEmpty || activeFilters.contains { $0.includes(item) }
     }
 
@@ -254,18 +274,23 @@ struct CalendarReviewDay: Identifiable {
     let isToday: Bool
     let isFuture: Bool
     let items: [TimelineItem]
+    let checkIns: [CheckInFeedEntry]
     let mediaHints: [CalendarReviewMediaHint]
     let densityLevel: CalendarReviewDensityLevel
+
+    var activityCount: Int {
+        items.count + checkIns.count
+    }
 
     var containsFavorite: Bool {
         items.contains { $0.post.isFavorite }
     }
 
     var isSelectable: Bool {
-        !isFuture && !items.isEmpty
+        !isFuture && activityCount > 0
     }
 
-    var targetItemID: TimelineItem.ID? {
+    var targetItemID: String? {
         items.first?.id
     }
 }
@@ -278,7 +303,7 @@ struct CalendarReviewMonth {
     let days: [CalendarReviewDay]
 
     var containsMoments: Bool {
-        days.contains { !$0.items.isEmpty }
+        days.contains { $0.activityCount > 0 }
     }
 
     var stats: CalendarReviewMonthStats {
@@ -296,6 +321,8 @@ struct CalendarReviewDailyCount: Identifiable, Equatable {
 
 struct CalendarReviewMonthStats: Equatable {
     let totalMoments: Int
+    let totalCheckIns: Int
+    let totalActivity: Int
     let activeDays: Int
     let totalDays: Int
     let maxDayCount: Int
@@ -312,7 +339,7 @@ struct CalendarReviewMonthStats: Equatable {
             return 0
         }
 
-        return Double(totalMoments) / Double(activeDays)
+        return Double(totalActivity) / Double(activeDays)
     }
 
     var busiestDay: CalendarReviewDailyCount? {
@@ -331,16 +358,20 @@ struct CalendarReviewMonthStats: Equatable {
         let displayedDays = days.filter(\.isInDisplayedMonth)
         let reviewableDays = displayedDays.filter { !$0.isFuture }
         let reviewableItems = reviewableDays.flatMap(\.items)
+        let reviewableCheckIns = reviewableDays.flatMap(\.checkIns)
         let media = reviewableItems.flatMap(\.media)
+        let checkInMedia = reviewableCheckIns.flatMap(\.media)
 
         totalMoments = reviewableItems.count
-        activeDays = reviewableDays.filter { !$0.items.isEmpty }.count
+        totalCheckIns = reviewableCheckIns.count
+        totalActivity = totalMoments + totalCheckIns
+        activeDays = reviewableDays.filter { $0.activityCount > 0 }.count
         totalDays = reviewableDays.count
-        maxDayCount = reviewableDays.map { $0.items.count }.max() ?? 0
+        maxDayCount = reviewableDays.map(\.activityCount).max() ?? 0
         textOnlyMoments = reviewableItems.filter { item in
             item.media.isEmpty && !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }.count
-        imageCount = media.filter(\.isImage).count
+        imageCount = media.filter(\.isImage).count + checkInMedia.filter(\.isImage).count
         audioCount = media.filter(\.isAudio).count
         videoCount = media.filter(\.isVideo).count
         favoriteMoments = reviewableItems.filter { $0.post.isFavorite }.count
@@ -352,7 +383,7 @@ struct CalendarReviewMonthStats: Equatable {
                 id: day.id,
                 date: day.date,
                 dayStart: day.dayStart,
-                count: day.items.count,
+                count: day.activityCount,
                 isFuture: day.isFuture
             )
         }
@@ -363,6 +394,7 @@ enum CalendarReviewBuilder {
     static func month(
         containing date: Date,
         items: [TimelineItem],
+        checkIns: [CheckInFeedEntry] = [],
         now: Date = Date(),
         calendar: Calendar = .current,
         language: AppResolvedLanguage = .english,
@@ -377,12 +409,21 @@ enum CalendarReviewBuilder {
             favoritesOnly: favoritesOnly,
             commentsOnly: commentsOnly
         )
+        let visibleCheckIns = hasMomentOnlyFilters(
+            mediaFilter: mediaFilter,
+            favoritesOnly: favoritesOnly,
+            commentsOnly: commentsOnly
+        ) ? [] : checkIns.filter { !$0.isDeleted }
         let groupedItems = Dictionary(grouping: filteredItems) { item in
             calendar.startOfDay(for: item.post.occurredAt)
+        }
+        let groupedCheckIns = Dictionary(grouping: visibleCheckIns) { item in
+            calendar.startOfDay(for: item.occurredAt)
         }
         let days = monthDays(
             for: monthStart,
             groupedItems: groupedItems,
+            groupedCheckIns: groupedCheckIns,
             now: now,
             calendar: calendar
         )
@@ -435,9 +476,18 @@ enum CalendarReviewBuilder {
             }
     }
 
+    private static func hasMomentOnlyFilters(
+        mediaFilter: CalendarReviewMediaFilter,
+        favoritesOnly: Bool,
+        commentsOnly: Bool
+    ) -> Bool {
+        mediaFilter != .all || favoritesOnly || commentsOnly
+    }
+
     private static func monthDays(
         for monthStart: Date,
         groupedItems: [Date: [TimelineItem]],
+        groupedCheckIns: [Date: [CheckInFeedEntry]],
         now: Date,
         calendar: Calendar
     ) -> [CalendarReviewDay] {
@@ -454,6 +504,7 @@ enum CalendarReviewBuilder {
             isToday: Bool,
             isFuture: Bool,
             items: [TimelineItem],
+            checkIns: [CheckInFeedEntry],
             mediaHints: [CalendarReviewMediaHint]
         )? in
             guard let date = calendar.date(byAdding: .day, value: offset, to: gridStart) else {
@@ -462,6 +513,7 @@ enum CalendarReviewBuilder {
 
             let dayStart = calendar.startOfDay(for: date)
             let items = groupedItems[dayStart] ?? []
+            let checkIns = groupedCheckIns[dayStart] ?? []
             return (
                 id: dayID(for: dayStart, calendar: calendar),
                 date: date,
@@ -470,13 +522,14 @@ enum CalendarReviewBuilder {
                 isToday: calendar.isDate(dayStart, inSameDayAs: nowStart),
                 isFuture: dayStart > nowStart,
                 items: items,
-                mediaHints: mediaHints(for: items)
+                checkIns: checkIns,
+                mediaHints: mediaHints(for: items, checkIns: checkIns)
             )
         }
 
         let maxDisplayedCount = rawDays
             .filter { $0.isInDisplayedMonth && !$0.isFuture }
-            .map { $0.items.count }
+            .map { $0.items.count + $0.checkIns.count }
             .max() ?? 0
 
         return rawDays.map { day in
@@ -488,10 +541,11 @@ enum CalendarReviewBuilder {
                 isToday: day.isToday,
                 isFuture: day.isFuture,
                 items: day.items,
+                checkIns: day.checkIns,
                 mediaHints: day.mediaHints,
                 densityLevel: CalendarReviewDensityLevel.level(
-                    for: day.items.count,
-                    maxCount: day.isInDisplayedMonth && !day.isFuture ? maxDisplayedCount : day.items.count
+                    for: day.items.count + day.checkIns.count,
+                    maxCount: day.isInDisplayedMonth && !day.isFuture ? maxDisplayedCount : day.items.count + day.checkIns.count
                 )
             )
         }
@@ -510,12 +564,13 @@ enum CalendarReviewBuilder {
         }
     }
 
-    private static func mediaHints(for items: [TimelineItem]) -> [CalendarReviewMediaHint] {
+    private static func mediaHints(for items: [TimelineItem], checkIns: [CheckInFeedEntry]) -> [CalendarReviewMediaHint] {
         CalendarReviewMediaHint.allCases
             .filter { hint in
                 switch hint {
                 case .image:
                     return items.contains { $0.media.contains { $0.isImage } }
+                        || checkIns.contains { $0.media.contains { $0.isImage } }
                 case .audio:
                     return items.contains { $0.media.contains { $0.isAudio } }
                 case .video:

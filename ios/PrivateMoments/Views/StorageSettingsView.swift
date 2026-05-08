@@ -316,6 +316,17 @@ struct StorageDetailsView: View {
                 )
             }
 
+            NavigationLink {
+                diagnosticsForm(title: "Check-ins") {
+                    checkInDiagnosticsSection(stats.checkIns)
+                }
+            } label: {
+                diagnosticsLinkLabel(
+                    title: "Check-ins",
+                    detail: checkInDiagnosticsSummary(stats.checkIns)
+                )
+            }
+
             if let serverStatus {
                 NavigationLink {
                     diagnosticsForm(title: "Mac Server") {
@@ -417,6 +428,21 @@ struct StorageDetailsView: View {
         }
 
         return "\(L10n.t(diagnosis.status.titleKey, appLanguage)) · \(L10n.t(diagnosis.titleKey, appLanguage))"
+    }
+
+    private func checkInDiagnosticsSummary(_ stats: LocalCheckInStats) -> String {
+        var parts = [
+            "\(stats.entries) \(L10n.t("entries", appLanguage))",
+            "\(stats.activeItems) \(L10n.t("items", appLanguage))"
+        ]
+
+        if stats.failedChanges > 0 {
+            parts.append("\(stats.failedChanges) \(L10n.t("failed", appLanguage))")
+        } else if stats.pendingChanges > 0 {
+            parts.append("\(stats.pendingChanges) \(L10n.t("pending", appLanguage))")
+        }
+
+        return parts.joined(separator: " · ")
     }
 
     private func macServerSummary(_ status: AdminStatusResponse) -> String {
@@ -687,6 +713,15 @@ struct StorageDetailsView: View {
                 Text(L10n.t("Re-download Missing Media", appLanguage))
             }
             .disabled(!store.isAuthenticated || !store.automaticSyncEnabled || isRetryingDownloads || stats.missingMediaDownloads == 0)
+        }
+    }
+
+    private func checkInDiagnosticsSection(_ stats: LocalCheckInStats) -> some View {
+        Section(L10n.t("Check-ins", appLanguage)) {
+            LabeledContent(L10n.t("Active items", appLanguage), value: "\(stats.activeItems)")
+            LabeledContent(L10n.t("Entries", appLanguage), value: "\(stats.entries)")
+            LabeledContent(L10n.t("Pending changes", appLanguage), value: "\(stats.pendingChanges)")
+            LabeledContent(L10n.t("Failed changes", appLanguage), value: "\(stats.failedChanges)")
         }
     }
 

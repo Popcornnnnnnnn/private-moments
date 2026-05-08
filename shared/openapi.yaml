@@ -477,6 +477,135 @@ paths:
               schema:
                 type: string
                 format: binary
+  /api/v1/checkin-media/upload:
+    post:
+      summary: Upload an image media file for a check-in entry.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - mediaId
+                - entryId
+                - variant
+                - file
+              properties:
+                mediaId:
+                  type: string
+                  format: uuid
+                entryId:
+                  type: string
+                  format: uuid
+                variant:
+                  type: string
+                  enum:
+                    - compressed
+                kind:
+                  type: string
+                  enum:
+                    - image
+                  default: image
+                mimeType:
+                  type: string
+                sortOrder:
+                  type: integer
+                  default: 0
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Upload accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media
+                properties:
+                  media:
+                    type: object
+                    required:
+                      - id
+                      - entryId
+                      - variant
+                      - status
+                      - path
+                      - sizeBytes
+                      - checksum
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      entryId:
+                        type: string
+                        format: uuid
+                      variant:
+                        type: string
+                      status:
+                        type: string
+                      path:
+                        type: string
+                      sizeBytes:
+                        type: integer
+                      checksum:
+                        type: string
+  /api/v1/checkin-media/batch-download:
+    post:
+      summary: Download multiple check-in image media files as base64 JSON payloads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - mediaIds
+              properties:
+                mediaIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                variant:
+                  type: string
+                  default: compressed
+                  enum:
+                    - compressed
+      responses:
+        "200":
+          description: Downloadable check-in media payloads. Missing or deleted media are skipped.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - media
+                properties:
+                  media:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MediaBatchDownloadItem"
+  /api/v1/checkin-media/{mediaId}:
+    get:
+      summary: Download one check-in image media file.
+      parameters:
+        - name: mediaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Check-in image bytes.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
   /api/v1/timeline:
     get:
       summary: Read server timeline.
@@ -2420,6 +2549,11 @@ components:
             - upsert_tag_alias
             - delete_tag_alias
             - set_post_tags
+            - upsert_checkin_item
+            - delete_checkin_item
+            - upsert_checkin_entry
+            - delete_checkin_entry
+            - delete_checkin_media
         entityType:
           type: string
           enum:
@@ -2428,6 +2562,9 @@ components:
             - media
             - tag
             - tag_alias
+            - checkin_item
+            - checkin_entry
+            - checkin_media
         entityId:
           type: string
           format: uuid
@@ -2462,6 +2599,11 @@ components:
             `update_post_pin` uses `entityType: post` with payload
             `{isPinned, pinnedAt, updatedAt}`. Server changes include
             `post_pin_updated` with `{id, isPinned, pinnedAt, updatedAt}`.
+            Check-ins use `checkin_item`, `checkin_entry`, and `checkin_media`
+            entity types. Item/entry metadata syncs through `/api/v1/sync`;
+            check-in image files upload separately through
+            `/api/v1/checkin-media/upload`. `delete_checkin_media` soft-deletes
+            one uploaded check-in media record and emits `checkin_media_deleted`.
           additionalProperties: true
     SyncResponse:
       type: object

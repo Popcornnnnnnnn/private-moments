@@ -71,6 +71,19 @@ struct TimelineSearchResult: Equatable {
 
 enum TimelineSearch {
     static func result(
+        for item: MomentFeedItem,
+        query: String,
+        aliasesByTagId: [String: [TimelineTagAlias]] = [:]
+    ) -> TimelineSearchResult {
+        switch item {
+        case .moment(let moment):
+            return result(for: moment, query: query, aliasesByTagId: aliasesByTagId)
+        case .checkIn(let checkIn):
+            return result(for: checkIn, query: query, aliasesByTagId: aliasesByTagId)
+        }
+    }
+
+    static func result(
         for item: TimelineItem,
         query: String,
         aliasesByTagId: [String: [TimelineTagAlias]] = [:]
@@ -112,6 +125,36 @@ enum TimelineSearch {
                 })
         }) {
             sources.insert(.tags)
+        }
+
+        return TimelineSearchResult(sources: sources)
+    }
+
+    static func result(
+        for item: CheckInFeedEntry,
+        query: String,
+        aliasesByTagId: [String: [TimelineTagAlias]] = [:]
+    ) -> TimelineSearchResult {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            return TimelineSearchResult(sources: [])
+        }
+
+        var sources = Set<TimelineSearchMatchSource>()
+        if textMatches(item.item.name, query: trimmedQuery) || textMatches(item.entry.note, query: trimmedQuery) {
+            sources.insert(.text)
+        }
+
+        if let tag = item.tag {
+            let tagMatches = L10n.defaultPrimaryTagSearchNames(for: tag).contains {
+                textMatches($0, query: trimmedQuery)
+            } || (aliasesByTagId[tag.id] ?? []).contains { alias in
+                alias.deletedAt == nil && textMatches(alias.alias, query: trimmedQuery)
+            }
+
+            if tagMatches {
+                sources.insert(.tags)
+            }
         }
 
         return TimelineSearchResult(sources: sources)

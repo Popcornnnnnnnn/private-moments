@@ -3,7 +3,7 @@ import SQLite3
 
 extension LocalDatabase {
     func uploadCount(status: String) throws -> Int {
-        try count(
+        let momentMediaCount = try count(
             """
             SELECT COUNT(*)
             FROM local_media m
@@ -15,6 +15,22 @@ extension LocalDatabase {
         ) { statement in
             try self.bind(status, to: 1, in: statement)
         }
+        let checkInMediaCount = try count(
+            """
+            SELECT COUNT(*)
+            FROM local_checkin_media m
+            JOIN local_checkin_entries e ON e.id = m.entryId
+            JOIN local_checkin_items i ON i.id = e.itemId
+            WHERE m.uploadStatus = ?
+              AND m.deletedAt IS NULL
+              AND e.deletedAt IS NULL
+              AND i.deletedAt IS NULL
+            """
+        ) { statement in
+            try self.bind(status, to: 1, in: statement)
+        }
+
+        return momentMediaCount + checkInMediaCount
     }
 
     func retryFailedMediaUploads() throws -> Int {
@@ -40,7 +56,7 @@ extension LocalDatabase {
 
         try bind(Date(), to: 1, in: statement)
         try stepDone(statement)
-        return Int(sqlite3_changes(handle))
+        return Int(sqlite3_changes(handle)) + ((try? retryFailedCheckInMediaUploads()) ?? 0)
     }
 
     func downloadedAudioVideoCacheBytes() throws -> Int64 {

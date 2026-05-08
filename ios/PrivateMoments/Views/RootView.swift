@@ -31,6 +31,12 @@ struct RootView: View {
                     Label(L10n.t("Calendar", appLanguage), systemImage: "calendar")
                 }
                 .tag(RootTab.calendar)
+
+            CheckInsView()
+                .tabItem {
+                    Label(L10n.t("Check-ins", appLanguage), systemImage: "checkmark.circle")
+                }
+                .tag(RootTab.checkIns)
         }
         .sheet(isPresented: $isShareImportComposerPresented) {
             ComposerView()
@@ -66,4 +72,5 @@ struct RootView: View {
 private enum RootTab: Hashable {
     case timeline
     case calendar
+    case checkIns
 }

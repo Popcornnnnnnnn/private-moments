@@ -7,7 +7,7 @@ extension LocalDatabase {
     }
 
     func pendingUploadCount() throws -> Int {
-        try count(
+        let momentMediaCount = try count(
             """
             SELECT COUNT(*)
             FROM local_media m
@@ -17,10 +17,12 @@ extension LocalDatabase {
               AND p.deletedAt IS NULL
             """
         )
+        let checkInMediaCount = try pendingCheckInMediaUploadCount()
+        return momentMediaCount + checkInMediaCount
     }
 
     func missingMediaDownloadCount() throws -> Int {
-        try count(
+        let momentMediaCount = try count(
             """
             SELECT COUNT(*)
             FROM local_media m
@@ -34,6 +36,23 @@ extension LocalDatabase {
               AND p.deletedAt IS NULL
             """
         )
+        let checkInMediaCount = try count(
+            """
+            SELECT COUNT(*)
+            FROM local_checkin_media m
+            JOIN local_checkin_entries e ON e.id = m.entryId
+            JOIN local_checkin_items i ON i.id = e.itemId
+            WHERE m.uploadStatus = 'uploaded'
+              AND m.kind = 'image'
+              AND m.remoteCompressedPath IS NOT NULL
+              AND m.localCompressedPath = ''
+              AND m.deletedAt IS NULL
+              AND e.deletedAt IS NULL
+              AND i.deletedAt IS NULL
+            """
+        )
+
+        return momentMediaCount + checkInMediaCount
     }
 
     func localPostCount() throws -> Int {
@@ -217,6 +236,10 @@ extension LocalDatabase {
 
                 if operation.entityType == "post" {
                     try refreshPostSyncStatus(postId: operation.entityId)
+                } else if operation.entityType == "checkin_item" {
+                    try markCheckInItemSyncStatus(itemId: operation.entityId, status: "synced")
+                } else if operation.entityType == "checkin_entry" {
+                    try markCheckInEntrySyncStatus(entryId: operation.entityId, status: "synced")
                 }
             }
         }
@@ -253,6 +276,10 @@ extension LocalDatabase {
 
                 if operation.entityType == "post" {
                     try updatePostSyncStatus(postId: operation.entityId, status: "failed")
+                } else if operation.entityType == "checkin_item" {
+                    try markCheckInItemSyncStatus(itemId: operation.entityId, status: "failed")
+                } else if operation.entityType == "checkin_entry" {
+                    try markCheckInEntrySyncStatus(entryId: operation.entityId, status: "failed")
                 }
             }
         }

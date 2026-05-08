@@ -764,7 +764,7 @@ extension TimelineStore {
         }
     }
 
-    private func syncSoonIfAuthenticated() {
+    func syncSoonIfAuthenticated() {
         if isAuthenticated && automaticSyncEnabled {
             Task {
                 await syncNow(userInitiated: false)

@@ -157,8 +157,8 @@ extension TimelineStore {
                 return
             }
 
-            let localPostCount = try database.localPostCount()
-            let shouldRunRecoverySync = !AppSettings.didApplySyncRecoveryV1 || localPostCount == 0
+            let localRecordCount = try database.localPostCount() + database.localCheckInRecordCount()
+            let shouldRunRecoverySync = !AppSettings.didApplySyncRecoveryV1 || localRecordCount == 0
 
             if shouldRunRecoverySync {
                 AppSettings.lastSyncCursor = 0
@@ -216,7 +216,8 @@ extension TimelineStore {
 
     func runSyncPass(database: LocalDatabase, deviceId: String, token: String) async throws {
         let operations = try database.fetchPendingOperations()
-        let requestedCursor = try database.localPostCount() == 0 ? 0 : AppSettings.lastSyncCursor
+        let hasNoLocalRecords = try database.localPostCount() == 0 && database.localCheckInRecordCount() == 0
+        let requestedCursor = hasNoLocalRecords ? 0 : AppSettings.lastSyncCursor
         let request = SyncRequestBody(
             deviceId: deviceId,
             lastSyncCursor: requestedCursor,
@@ -230,6 +231,7 @@ extension TimelineStore {
         try apply(sync: firstSync, database: database)
 
         let pendingMedia = try database.fetchPendingMediaReadyForUpload()
+        let pendingCheckInMedia = try database.fetchPendingCheckInMediaReadyForUpload()
         var didUploadSummarizableMedia = false
         for media in pendingMedia {
             do {
@@ -262,7 +264,22 @@ extension TimelineStore {
             }
         }
 
-        if !pendingMedia.isEmpty {
+        for media in pendingCheckInMedia {
+            do {
+                let uploaded = try await withAvailableAPIClient(token: token) { client in
+                    try await client.uploadCheckInMedia(media, variant: "compressed")
+                }
+                try database.markCheckInMediaUploaded(
+                    mediaId: media.id,
+                    remotePath: uploaded.path,
+                    checksum: uploaded.checksum
+                )
+            } catch {
+                try database.markCheckInMediaUploadFailed(mediaId: media.id, error: error.localizedDescription)
+            }
+        }
+
+        if !pendingMedia.isEmpty || !pendingCheckInMedia.isEmpty {
             let followUpOperations = try database.fetchPendingOperations()
             let followUpRequest = SyncRequestBody(
                     deviceId: deviceId,

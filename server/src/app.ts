@@ -6,6 +6,7 @@ import { registerAdminMaintenanceRoutes } from "./api/admin-maintenance.js";
 import { registerAdminRoutes } from "./api/admin.js";
 import { registerAIRoutes } from "./api/ai.js";
 import { registerAuthRoutes } from "./api/auth.js";
+import { registerCheckInMediaRoutes } from "./api/checkin-media.js";
 import { registerDeviceRoutes } from "./api/devices.js";
 import { registerHealthRoutes } from "./api/health.js";
 import { registerMediaRoutes } from "./api/media.js";
@@ -104,6 +105,12 @@ export async function buildApp(context: AppContext): Promise<FastifyInstance> {
   });
   await registerMediaRoutes(app, {
     config: context.config,
+    prisma: context.prisma,
+    paths: context.paths,
+    fileLogger: context.fileLogger,
+    maintenanceMode: context.maintenanceMode,
+  });
+  await registerCheckInMediaRoutes(app, {
     prisma: context.prisma,
     paths: context.paths,
     fileLogger: context.fileLogger,

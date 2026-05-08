@@ -9,6 +9,14 @@ struct LocalStorageStats: Equatable {
     let pendingUploads: Int
     let failedUploads: Int
     let missingMediaDownloads: Int
+    let checkIns: LocalCheckInStats
+}
+
+struct LocalCheckInStats: Equatable {
+    let activeItems: Int
+    let entries: Int
+    let pendingChanges: Int
+    let failedChanges: Int
 }
 
 enum StorageByteFormatter {
@@ -34,7 +42,13 @@ enum LocalStorageStatsLoader {
             pendingChanges: try database?.pendingOperationCount() ?? 0,
             pendingUploads: try database?.uploadCount(status: "pending") ?? 0,
             failedUploads: try database?.uploadCount(status: "failed") ?? 0,
-            missingMediaDownloads: try database?.missingMediaDownloadCount() ?? 0
+            missingMediaDownloads: try database?.missingMediaDownloadCount() ?? 0,
+            checkIns: try database?.checkInDiagnosticsStats() ?? LocalCheckInStats(
+                activeItems: 0,
+                entries: 0,
+                pendingChanges: 0,
+                failedChanges: 0
+            )
         )
     }
 
