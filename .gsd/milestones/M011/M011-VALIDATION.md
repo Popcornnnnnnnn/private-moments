@@ -17,7 +17,7 @@ Checks intentionally not run:
 - No live server restart, because the feature worktree must not touch the owner's active `3210` live archive.
 - No build verification during the initial design checkpoint, because that checkpoint changed only documentation and planning files.
 
-Next implementation verification must use an isolated server port/data directory before any real-device install.
+Next implementation verification must use an isolated server port/data directory before any real-device install. Simulator validation is primarily for UI and interaction behavior; sync/data correctness must still be proven by focused tests and isolated server smoke.
 
 ## 2026-05-08 Simulator Launch Validation
 
@@ -54,3 +54,24 @@ Limitations:
 - XcodeBuildMCP accessibility hierarchy capture failed, but screenshot capture succeeded and verified visible launch state.
 - This validation did not exercise sync, login, media, Share Extension, or real-device behavior.
 - No `npm run ios:device` was run.
+
+## 2026-05-08 Grill-Me Decision Checkpoint
+
+Scope: product and verification decisions for implementation. No app/server implementation was changed in this checkpoint.
+
+Resolved decisions:
+
+- Pin state is synced post metadata.
+- Pinned appears only on the main Timeline when no search/filter state is active.
+- Pinned defaults to a collapsed `Pinned · N` summary header.
+- With one to three pinned moments, tapping the header expands/collapses title rows and remembers that state locally.
+- With more than three pinned moments, tapping the header opens a bottom sheet with the full pinned title list.
+- The pinned sheet uses internal navigation; selecting a row pushes full `MomentDetailView` inside the sheet.
+- Pinned title rows show title plus a light occurred-date accessory, not body/media/comment/tag previews.
+- Pin/unpin lives in Moment Detail `More`, Timeline row context menu, and pinned sheet row context menu.
+- Pin and favorite are independent.
+- Pending/failed/partial/synced local moments can be pinned or unpinned.
+- Deleted moments disappear from pinned surfaces without an extra unpin operation.
+- Calendar, Day Review, and Weekly Review do not gain pinned entry points.
+- Conflicts use last server-accepted operation wins.
+- Implementation verification uses simulator UI/interaction validation plus isolated server/test validation, with no real-device install by default.
