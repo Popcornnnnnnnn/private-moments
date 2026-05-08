@@ -505,7 +505,7 @@ curl -fsS http://127.0.0.1:3210/api/v1/admin/status \
 
 响应应包含 `counts`，以及 `storage.totalBytes`、`storage.databaseBytes`、`storage.mediaBytes`、`storage.logsBytes`、`storage.availableBytes`、`sync.latestServerChangeVersion`、`aiSummaries` 和 `aiUsage`。`aiSummaries` 只暴露计数、状态、错误码、duration、transcript length、卡住时长和排查提示，不暴露 transcript 或 summary 正文。`aiUsage` 只暴露 token/request/error 聚合，不暴露 prompt、transcript、review input 或 summary/review 正文。
 
-Sync Health 还应包含 server-side `pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady`、`lastServerChangeAt`、`lastSyncOperationAt`、`lastSuccessfulSyncAt` 和 `lastRejectedSyncAt`。iOS Settings > Storage & Diagnostics 会把这些 Mac 侧计数和本机 cursor、outbox、pending upload、failed upload、missing media download 状态合并展示，并提供安全动作：`Sync Now`、`Pull Server Changes`、`Retry Uploads`、`Re-download Missing Media`。
+Sync Health 还应包含 server-side `pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady`、`lastServerChangeAt`、`lastSyncOperationAt`、`lastSuccessfulSyncAt` 和 `lastRejectedSyncAt`。iOS Settings > Storage & Diagnostics 会把这些 Mac 侧计数和本机 cursor、outbox、pending upload、failed upload、missing media download 状态合并展示。`Diagnostics > Sync Doctor` 是优先查看的诊断向导，会把这些原始信号分类成未登录、Mac 不可达、cursor lag、pending outbox、failed uploads、missing media、server rejected ops、server failed media 和 AI non-ready 等状态，并只提供安全的显式动作：`Sync Now`、`Pull Server Changes`、`Retry Uploads`、`Re-download Missing Media`。原始计数和 timestamps 仍保留在 `Sync Health` 子页。
 
 iOS 无签名编译检查：
 

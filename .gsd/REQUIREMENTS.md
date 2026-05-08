@@ -470,13 +470,13 @@ This file is the explicit capability and coverage contract for the project.
 
 ### R053 — Sync Doctor should guide diagnosis and safe repair from existing Sync Health evidence.
 - Class: functional
-- Status: active
-- Description: A future Sync Doctor flow should use existing local and Mac-side Sync Health evidence to classify common sync problems such as unreachable server, stale fallback endpoint, auth failure, cursor lag, pending outbox, failed media uploads, missing media, and AI non-ready state. It should recommend or trigger only safe next actions, such as Sync Now, Pull Server Changes, Retry Uploads, Re-download Missing Media, or explaining that Mac-side service/tunnel repair is required.
+- Status: validated
+- Description: Sync Doctor uses existing local and Mac-side Sync Health evidence to classify common sync problems such as unreachable server, stale fallback endpoint, auth failure, cursor lag, pending outbox, failed media uploads, missing media, rejected operations, and AI non-ready state. It recommends or triggers only safe explicit next actions: Sync Now, Pull Server Changes, Retry Uploads, Re-download Missing Media, or manual Mac-side service/tunnel/log inspection.
 - Why it matters: The project already exposes many diagnostics, but repeated real-use incidents still require manual interpretation. A guided flow can reduce recovery time without crowding Timeline or moving dangerous Mac archive actions to iOS.
 - Source: post-M011 feature triage 2026-05-08
 - Primary owning slice: maintenance
 - Supporting slices: R036,R037,R050,R051
-- Validation: Future implementation should prove classification behavior with focused model/unit tests, verify iOS copy and actions in Simulator or real-device Settings, and run server/admin build or HTTP checks only if the flow changes server status data.
+- Validation: Validated on 2026-05-08 with focused `SyncDoctorDiagnosisTests` covering all-clear, unauthenticated, Mac unavailable, local-only pending work, failed uploads, cursor lag, missing media, and rejected operations; generic iOS Debug build passed; the modified app installed and launched on the paired iPhone. The implementation is iOS-only and does not change server status data, SQLite schema, or sync protocol.
 
 ## Validated
 
@@ -582,7 +582,7 @@ This file is the explicit capability and coverage contract for the project.
 | R050 | constraint | active | maintenance | R036,R037,R047 | New operational settings, diagnostics, monitoring, and safe repair controls prefer iOS Settings; Mac Admin remains for Mac-local recovery and low-frequency operations. |
 | R051 | constraint | active | maintenance | R036,R037,R047,R050 | Mac Admin opens Archive first and should retain only Archive/recovery, promote/export/import artifacts, runtime truth, maintenance jobs, server logs, and device emergency while daily operations migrate to iOS. |
 | R052 | functional | validated | M011/S02 | M011/S01,M011/S03,M011/S04,M011/S05,R048 | Pinned Moments passed automated/simulator/isolated sync validation, main deploy, real-device install/data checks, and user UAT acceptance on 2026-05-08. |
-| R053 | functional | active | maintenance | R036,R037,R050,R051 | Sync Doctor should classify Sync Health evidence into safe recovery recommendations or actions without moving destructive Mac recovery into iOS. |
+| R053 | functional | validated | maintenance | R036,R037,R050,R051 | Sync Doctor classifies Sync Health evidence into safe explicit recovery recommendations/actions without moving destructive Mac recovery into iOS. |
 
 ## Coverage Summary
 

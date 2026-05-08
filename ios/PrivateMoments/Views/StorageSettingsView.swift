@@ -295,6 +295,17 @@ struct StorageDetailsView: View {
     ) -> some View {
         Section(L10n.t("Diagnostics", appLanguage)) {
             NavigationLink {
+                diagnosticsForm(title: "Sync Doctor") {
+                    syncDoctorSection(stats, serverStatus: serverStatus)
+                }
+            } label: {
+                diagnosticsLinkLabel(
+                    title: "Sync Doctor",
+                    detail: syncDoctorSummary(stats, serverStatus: serverStatus)
+                )
+            }
+
+            NavigationLink {
                 diagnosticsForm(title: "Sync Health") {
                     syncHealthSection(stats, serverStatus: serverStatus)
                 }
@@ -399,6 +410,15 @@ struct StorageDetailsView: View {
         return parts.joined(separator: " · ")
     }
 
+    private func syncDoctorSummary(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> String {
+        let diagnosis = syncDoctorDiagnosis(stats, serverStatus: serverStatus)
+        guard diagnosis.status != .allClear else {
+            return L10n.t("All clear", appLanguage)
+        }
+
+        return "\(L10n.t(diagnosis.status.titleKey, appLanguage)) · \(L10n.t(diagnosis.titleKey, appLanguage))"
+    }
+
     private func macServerSummary(_ status: AdminStatusResponse) -> String {
         "v\(status.serverVersion) · \(L10n.t("Schema", appLanguage)) \(status.schemaVersion) · \(durationText(Double(status.uptimeSeconds)))"
     }
@@ -496,6 +516,94 @@ struct StorageDetailsView: View {
             }
             .disabled(stats.audioVideoCacheBytes == 0 || isClearingCache)
         }
+    }
+
+    @ViewBuilder
+    private func syncDoctorSection(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> some View {
+        let diagnosis = syncDoctorDiagnosis(stats, serverStatus: serverStatus)
+
+        Section(L10n.t("Recommended", appLanguage)) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L10n.t(diagnosis.titleKey, appLanguage))
+                        .font(.headline)
+                    Spacer()
+                    Text(L10n.t(diagnosis.status.titleKey, appLanguage))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(syncDoctorStatusColor(diagnosis.status))
+                }
+
+                Text(L10n.t(diagnosis.detailKey, appLanguage))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+
+            if let action = diagnosis.recommendedAction {
+                syncDoctorActionButton(action, stats: stats)
+            } else {
+                Text(L10n.t("No repair action available", appLanguage))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(L10n.t("Sync Doctor only uses existing Sync Health signals. Repair actions run only when tapped.", appLanguage))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+
+        Section(L10n.t("Signals", appLanguage)) {
+            if diagnosis.findings.isEmpty {
+                Text(L10n.t("No sync problems found.", appLanguage))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(diagnosis.findings) { finding in
+                    syncDoctorFindingRow(finding)
+                }
+            }
+
+            NavigationLink {
+                diagnosticsForm(title: "Sync Health") {
+                    syncHealthSection(stats, serverStatus: serverStatus)
+                }
+            } label: {
+                Text(L10n.t("See Sync Health for raw metrics", appLanguage))
+            }
+        }
+    }
+
+    private func syncDoctorFindingRow(_ finding: SyncDoctorFinding) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.t(finding.titleKey, appLanguage))
+                Spacer()
+                if let value = finding.value {
+                    Text(value)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(L10n.t(finding.detailKey, appLanguage))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func syncDoctorActionButton(_ action: SyncDoctorAction, stats: LocalStorageStats) -> some View {
+        Button {
+            Task {
+                await runSyncDoctorAction(action)
+            }
+        } label: {
+            HStack {
+                if syncDoctorActionInFlight(action) {
+                    ProgressView()
+                }
+                Text(L10n.t(action.titleKey, appLanguage))
+            }
+        }
+        .disabled(syncDoctorActionDisabled(action, stats: stats))
     }
 
     private func syncHealthSection(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> some View {
@@ -851,6 +959,66 @@ struct StorageDetailsView: View {
         let minutes = totalSeconds / 60
         let remainingSeconds = totalSeconds % 60
         return "\(minutes)m \(remainingSeconds)s"
+    }
+
+    private func syncDoctorDiagnosis(_ stats: LocalStorageStats, serverStatus: AdminStatusResponse?) -> SyncDoctorDiagnosis {
+        SyncDoctorDiagnosis.resolve(
+            stats: stats,
+            serverStatus: serverStatus,
+            lastSyncCursor: AppSettings.lastSyncCursor,
+            isAuthenticated: store.isAuthenticated,
+            automaticSyncEnabled: store.automaticSyncEnabled
+        )
+    }
+
+    private func syncDoctorStatusColor(_ status: SyncDoctorStatus) -> Color {
+        switch status {
+        case .allClear:
+            return .green
+        case .needsAttention:
+            return .orange
+        case .blocked:
+            return .red
+        }
+    }
+
+    private func syncDoctorActionInFlight(_ action: SyncDoctorAction) -> Bool {
+        switch action {
+        case .syncNow:
+            return isSyncNowInFlight
+        case .pullServerChanges:
+            return isPullingServerChanges
+        case .retryUploads:
+            return isRetryingUploads
+        case .redownloadMissingMedia:
+            return isRetryingDownloads
+        }
+    }
+
+    private func syncDoctorActionDisabled(_ action: SyncDoctorAction, stats: LocalStorageStats) -> Bool {
+        switch action {
+        case .syncNow:
+            return !store.isAuthenticated || isSyncNowInFlight
+        case .pullServerChanges:
+            return !store.isAuthenticated || isPullingServerChanges
+        case .retryUploads:
+            return !store.isAuthenticated || store.isSyncing || isRetryingUploads || (stats.pendingUploads + stats.failedUploads) == 0
+        case .redownloadMissingMedia:
+            return !store.isAuthenticated || isRetryingDownloads || stats.missingMediaDownloads == 0
+        }
+    }
+
+    private func runSyncDoctorAction(_ action: SyncDoctorAction) async {
+        switch action {
+        case .syncNow:
+            await syncNowFromDiagnostics()
+        case .pullServerChanges:
+            await pullServerChanges()
+        case .retryUploads:
+            await retryMediaUploads()
+        case .redownloadMissingMedia:
+            await retryMediaDownloads()
+        }
     }
 
     private func refresh() async {
