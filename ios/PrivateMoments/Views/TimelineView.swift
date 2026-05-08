@@ -110,9 +110,7 @@ struct TimelineView: View {
                                             }
 
                                             ForEach(groupedItems) { group in
-                                                monthAnchor(for: group)
-
-                                                ForEach(group.items) { item in
+                                                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
                                                     TimelineRow(
                                                         item: item,
                                                         isCommentsExpanded: expandedCommentPostIDs.contains(item.id),
@@ -138,6 +136,11 @@ struct TimelineView: View {
                                                         summaryRoute = AISummaryRoute(mediaId: media.id)
                                                     }
                                                     .id(item.id)
+                                                    .background {
+                                                        if index == 0 {
+                                                            monthAnchor(for: group)
+                                                        }
+                                                    }
                                                     .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                                                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                                         Button {
@@ -1032,27 +1035,19 @@ struct TimelineView: View {
     }
 
     private func monthAnchor(for group: TimelineDateJumpMonthGroup) -> some View {
-        Color.clear
-            .frame(height: 0)
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .environment(\.defaultMinListRowHeight, 0)
-            .background {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: MonthAnchorPreferenceKey.self,
-                        value: [
-                            MonthAnchorValue(
-                                id: group.id,
-                                title: group.title,
-                                minY: proxy.frame(in: .named("timelineList")).minY
-                            ),
-                        ]
-                    )
-                }
-            }
-            .id(group.id)
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: MonthAnchorPreferenceKey.self,
+                value: [
+                    MonthAnchorValue(
+                        id: group.id,
+                        title: group.title,
+                        minY: proxy.frame(in: .named("timelineList")).minY
+                    ),
+                ]
+            )
+        }
+        .allowsHitTesting(false)
     }
 
     private func updateFloatingMonth(from anchors: [MonthAnchorValue]) {
