@@ -127,6 +127,12 @@ Request shape：
 - `upsert_tag_alias`
 - `delete_tag_alias`
 - `set_post_tags`
+- `upsert_checkin_item`
+- `delete_checkin_item`
+- `upsert_checkin_entry`
+- `delete_checkin_entry`
+
+Check-in operations 也使用同一个 sync endpoint。`checkin_item` 定义活动本身，`checkin_entry` 定义某一次打卡。它们不会创建 ordinary post；只有 entry payload 的 `showInTimeline` 为 `true` 时，iOS Timeline 会直接渲染 compact check-in row。Calendar 和 Day Review 会读取所有未删除 check-in entries，不受 `showInTimeline` 影响。
 
 Comment operations 使用同一个 sync endpoint。`create_comment` 的 `entityType` 是 `comment`，`entityId` 是 comment id，payload 至少包含父 `postId` 和 `text`：
 
@@ -400,7 +406,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 13,
+  "schemaVersion": 14,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {

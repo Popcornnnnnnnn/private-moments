@@ -217,6 +217,10 @@ extension LocalDatabase {
 
                 if operation.entityType == "post" {
                     try refreshPostSyncStatus(postId: operation.entityId)
+                } else if operation.entityType == "checkin_item" {
+                    try markCheckInItemSyncStatus(itemId: operation.entityId, status: "synced")
+                } else if operation.entityType == "checkin_entry" {
+                    try markCheckInEntrySyncStatus(entryId: operation.entityId, status: "synced")
                 }
             }
         }
@@ -253,6 +257,10 @@ extension LocalDatabase {
 
                 if operation.entityType == "post" {
                     try updatePostSyncStatus(postId: operation.entityId, status: "failed")
+                } else if operation.entityType == "checkin_item" {
+                    try markCheckInItemSyncStatus(itemId: operation.entityId, status: "failed")
+                } else if operation.entityType == "checkin_entry" {
+                    try markCheckInEntrySyncStatus(entryId: operation.entityId, status: "failed")
                 }
             }
         }

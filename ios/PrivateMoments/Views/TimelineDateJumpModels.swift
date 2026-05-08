@@ -4,36 +4,36 @@ struct TimelineDateJumpMonthGroup: Identifiable {
     let id: String
     let title: String
     let monthStart: Date
-    let anchorItemID: TimelineItem.ID
+    let anchorItemID: String
     let days: [TimelineDateJumpDayGroup]
-    let items: [TimelineItem]
+    let items: [MomentFeedItem]
 }
 
 struct TimelineDateJumpDayGroup: Identifiable {
     let id: String
     let title: String
     let dayStart: Date
-    let targetItemID: TimelineItem.ID
-    let items: [TimelineItem]
+    let targetItemID: String
+    let items: [MomentFeedItem]
 }
 
 enum TimelineDateJumpBuilder {
     static func groups(
-        from items: [TimelineItem],
+        from items: [MomentFeedItem],
         now: Date = Date(),
         calendar: Calendar = .current,
         language: AppResolvedLanguage = .english
     ) -> [TimelineDateJumpMonthGroup] {
         let sortedItems = items.sorted { lhs, rhs in
-            if lhs.post.occurredAt == rhs.post.occurredAt {
-                return lhs.id > rhs.id
+            if lhs.occurredAt == rhs.occurredAt {
+                return lhs.sortKey > rhs.sortKey
             }
 
-            return lhs.post.occurredAt > rhs.post.occurredAt
+            return lhs.occurredAt > rhs.occurredAt
         }
 
         let groupedByMonth = Dictionary(grouping: sortedItems) { item in
-            monthStart(for: item.post.occurredAt, calendar: calendar)
+            monthStart(for: item.occurredAt, calendar: calendar)
         }
 
         return groupedByMonth
@@ -47,7 +47,7 @@ enum TimelineDateJumpBuilder {
                     id: monthID(for: monthStart, calendar: calendar),
                     title: MomentDateFormatter.monthTitle(for: monthStart, calendar: calendar, language: language),
                     monthStart: monthStart,
-                    anchorItemID: anchorItem.id,
+                    anchorItemID: anchorItem.rawItemID,
                     days: days,
                     items: monthItems
                 )
@@ -58,13 +58,13 @@ enum TimelineDateJumpBuilder {
     }
 
     private static func dayGroups(
-        from items: [TimelineItem],
+        from items: [MomentFeedItem],
         now: Date,
         calendar: Calendar,
         language: AppResolvedLanguage
     ) -> [TimelineDateJumpDayGroup] {
         let groupedByDay = Dictionary(grouping: items) { item in
-            calendar.startOfDay(for: item.post.occurredAt)
+            calendar.startOfDay(for: item.occurredAt)
         }
 
         return groupedByDay
@@ -77,7 +77,7 @@ enum TimelineDateJumpBuilder {
                     id: dayID(for: dayStart, calendar: calendar),
                     title: MomentDateFormatter.dayJumpTitle(for: dayStart, now: now, calendar: calendar, language: language),
                     dayStart: dayStart,
-                    targetItemID: targetItem.id,
+                    targetItemID: targetItem.rawItemID,
                     items: dayItems
                 )
             }

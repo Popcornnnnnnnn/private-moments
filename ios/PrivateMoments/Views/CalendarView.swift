@@ -25,6 +25,7 @@ struct CalendarView: View {
         CalendarReviewBuilder.month(
             containing: visibleMonth,
             items: store.items,
+            checkIns: store.checkInFeedEntries,
             now: now,
             calendar: calendar,
             language: appLanguage,
@@ -63,7 +64,7 @@ struct CalendarView: View {
                             onSelectDay: selectDay
                         )
 
-                        if store.items.isEmpty {
+                        if store.items.isEmpty && store.checkInEntries.isEmpty {
                             Text(L10n.t("No moments yet", appLanguage))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -267,6 +268,7 @@ struct CalendarView: View {
         CalendarReviewBuilder.month(
             containing: route.dayStart,
             items: store.items,
+            checkIns: store.checkInFeedEntries,
             now: now,
             calendar: calendar,
             language: appLanguage
@@ -400,7 +402,7 @@ private struct CalendarDayCell: View {
 
             Spacer(minLength: 0)
 
-            if !day.mediaHints.isEmpty || !day.items.isEmpty {
+            if !day.mediaHints.isEmpty || day.activityCount > 0 {
                 HStack(spacing: 4) {
                     if !day.mediaHints.isEmpty {
                         HStack(spacing: 3) {
@@ -414,8 +416,8 @@ private struct CalendarDayCell: View {
 
                     Spacer(minLength: 0)
 
-                    if !day.items.isEmpty {
-                        Text("\(day.items.count)")
+                    if day.activityCount > 0 {
+                        Text("\(day.activityCount)")
                             .font(.caption2.weight(.bold).monospacedDigit())
                             .foregroundStyle(.primary.opacity(0.72))
                             .minimumScaleFactor(0.72)
@@ -520,15 +522,15 @@ private struct CalendarDayCell: View {
     }
 
     private var momentCountTitle: String {
-        if day.items.isEmpty {
+        if day.activityCount == 0 {
             return L10n.t("No moments", appLanguage)
         }
 
-        if day.items.count == 1 {
-            return L10n.t("1 moment", appLanguage)
+        if day.activityCount == 1 {
+            return L10n.t("1 item", appLanguage)
         }
 
-        return "\(day.items.count) \(L10n.t("moments", appLanguage))"
+        return "\(day.activityCount) \(L10n.t("items", appLanguage))"
     }
 }
 
@@ -638,7 +640,7 @@ private struct CalendarMonthStatsOverview: View {
             HStack(spacing: 10) {
                 CalendarMonthStatPill(
                     title: L10n.t("Total", appLanguage),
-                    value: "\(stats.totalMoments)"
+                    value: "\(stats.totalActivity)"
                 )
                 CalendarMonthStatPill(
                     title: L10n.t("Active days", appLanguage),
@@ -649,6 +651,13 @@ private struct CalendarMonthStatsOverview: View {
                     value: averageTitle
                 )
             }
+
+            HStack(spacing: 8) {
+                Label("\(stats.totalMoments) \(L10n.t("moments", appLanguage))", systemImage: "rectangle.stack")
+                Label("\(stats.totalCheckIns) \(L10n.t("check-ins", appLanguage))", systemImage: "checkmark.circle")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
 
             if let busiestDay = stats.busiestDay {
                 Button {
@@ -840,7 +849,8 @@ private struct CalendarDayReviewView: View {
     let onOpenMoment: (TimelineItem.ID) -> Void
 
     @State private var summaryRoute: CalendarSummaryRoute?
-    @State private var scrollTargetItemID: TimelineItem.ID?
+    @State private var checkInDetailRoute: CheckInEntryDetailRoute?
+    @State private var scrollTargetItemID: String?
     @State private var filterSelection = CalendarDayReviewFilterSelection()
 
     init(
@@ -860,9 +870,9 @@ private struct CalendarDayReviewView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 CalendarDayReviewHeader(day: day, calendar: calendar)
-                    .padding(.bottom, day.items.isEmpty ? 18 : 12)
+                    .padding(.bottom, day.activityCount == 0 ? 18 : 12)
 
-                if day.items.isEmpty {
+                if day.activityCount == 0 {
                     ContentUnavailableView(L10n.t("No moments", appLanguage), systemImage: "calendar")
                         .frame(maxWidth: .infinity)
                         .padding(.top, 28)
@@ -881,20 +891,35 @@ private struct CalendarDayReviewView: View {
                         CalendarDayReviewPeriodHeader(title: section.period.title(language: appLanguage))
 
                         ForEach(section.items) { item in
-                            CalendarDayReviewItemRow(
-                                item: item,
-                                calendar: calendar,
-                                isLast: item.id == lastFilteredItemID,
-                                onOpenMoment: {
-                                    playbackCenter.pause()
-                                    onOpenMoment(item.id)
-                                },
-                                onOpenSummary: { media in
-                                    playbackCenter.pause()
-                                    summaryRoute = CalendarSummaryRoute(mediaId: media.id)
-                                }
-                            )
-                            .id(item.id)
+                            switch item {
+                            case .moment(let moment):
+                                CalendarDayReviewItemRow(
+                                    item: moment,
+                                    calendar: calendar,
+                                    isLast: item.rawItemID == lastFilteredItemID,
+                                    onOpenMoment: {
+                                        playbackCenter.pause()
+                                        onOpenMoment(moment.id)
+                                    },
+                                    onOpenSummary: { media in
+                                        playbackCenter.pause()
+                                        summaryRoute = CalendarSummaryRoute(mediaId: media.id)
+                                    }
+                                )
+                                .id(moment.id)
+
+                            case .checkIn(let checkIn):
+                                CalendarDayReviewCheckInRow(
+                                    checkIn: checkIn,
+                                    calendar: calendar,
+                                    isLast: item.rawItemID == lastFilteredItemID,
+                                    onOpen: {
+                                        playbackCenter.pause()
+                                        checkInDetailRoute = CheckInEntryDetailRoute(entryId: checkIn.id)
+                                    }
+                                )
+                                .id(checkIn.id)
+                            }
                         }
                     }
                 }
@@ -934,6 +959,9 @@ private struct CalendarDayReviewView: View {
                 ContentUnavailableView(L10n.t("Summary unavailable", appLanguage), systemImage: "sparkles")
             }
         }
+        .sheet(item: $checkInDetailRoute) { route in
+            CheckInEntryDetailView(entryId: route.entryId)
+        }
         .onChange(of: scrollTargetItemID) { _, itemID in
             guard let itemID else {
                 return
@@ -960,18 +988,30 @@ private struct CalendarDayReviewView: View {
 
     private var availableFilters: [CalendarDayReviewFilter] {
         CalendarDayReviewFilter.allCases.filter { filter in
-            filter == .all || day.items.contains { filter.includes($0) }
+            filter == .all || dayFeedItems.contains { filter.includes($0) }
         }
     }
 
-    private var filteredItems: [TimelineItem] {
-        day.items.filter { filterSelection.includes($0) }
+    private var dayFeedItems: [MomentFeedItem] {
+        let moments = day.items.map(MomentFeedItem.moment)
+        let checkIns = day.checkIns.map(MomentFeedItem.checkIn)
+        return (moments + checkIns).sorted { lhs, rhs in
+            if lhs.occurredAt == rhs.occurredAt {
+                return lhs.sortKey > rhs.sortKey
+            }
+
+            return lhs.occurredAt > rhs.occurredAt
+        }
+    }
+
+    private var filteredItems: [MomentFeedItem] {
+        dayFeedItems.filter { filterSelection.includes($0) }
     }
 
     private var sections: [CalendarDayReviewSection] {
         CalendarDayPeriod.allCases.reversed().compactMap { period in
             let items = filteredItems.filter { item in
-                CalendarDayPeriod.period(for: item.post.occurredAt, calendar: calendar) == period
+                CalendarDayPeriod.period(for: item.occurredAt, calendar: calendar) == period
             }
 
             guard !items.isEmpty else {
@@ -982,14 +1022,14 @@ private struct CalendarDayReviewView: View {
         }
     }
 
-    private var lastFilteredItemID: TimelineItem.ID? {
-        filteredItems.last?.id
+    private var lastFilteredItemID: String? {
+        filteredItems.last?.rawItemID
     }
 }
 
 private struct CalendarDayReviewSection: Identifiable {
     let period: CalendarDayPeriod
-    let items: [TimelineItem]
+    let items: [MomentFeedItem]
 
     var id: String {
         period.rawValue
@@ -1098,16 +1138,16 @@ private struct CalendarSummaryRoute: Identifiable {
 }
 
 private enum DayReviewScrollMemory {
-    static func restoredItemID(for day: CalendarReviewDay, calendar: Calendar) -> TimelineItem.ID? {
+    static func restoredItemID(for day: CalendarReviewDay, calendar: Calendar) -> String? {
         guard let itemID = UserDefaults.standard.string(forKey: key(for: day.dayStart, calendar: calendar)),
-              day.items.contains(where: { $0.id == itemID }) else {
+              day.items.contains(where: { $0.id == itemID }) || day.checkIns.contains(where: { $0.id == itemID }) else {
             return nil
         }
 
         return itemID
     }
 
-    static func save(_ itemID: TimelineItem.ID, for dayStart: Date, calendar: Calendar) {
+    static func save(_ itemID: String, for dayStart: Date, calendar: Calendar) {
         UserDefaults.standard.set(itemID, forKey: key(for: dayStart, calendar: calendar))
     }
 
@@ -1170,11 +1210,11 @@ private struct CalendarDayReviewHeader: View {
     }
 
     private var momentCountTitle: String {
-        if day.items.count == 1 {
-            return L10n.t("1 moment", appLanguage)
+        if day.activityCount == 1 {
+            return L10n.t("1 item", appLanguage)
         }
 
-        return "\(day.items.count) \(L10n.t("moments", appLanguage))"
+        return "\(day.activityCount) \(L10n.t("items", appLanguage))"
     }
 
     private var mediaCompositionTitle: String {
@@ -1185,11 +1225,13 @@ private struct CalendarDayReviewHeader: View {
         let imageCount = media.filter(\.isImage).count
         let audioCount = media.filter(\.isAudio).count
         let videoCount = media.filter(\.isVideo).count
+        let checkInCount = day.checkIns.count
         let parts = [
             compositionPart(count: textCount, singular: "text", plural: "texts"),
             compositionPart(count: imageCount, singular: "photo", plural: "photos"),
             compositionPart(count: audioCount, singular: "audio", plural: "audio"),
             compositionPart(count: videoCount, singular: "video", plural: "videos"),
+            compositionPart(count: checkInCount, singular: "check-in", plural: "check-ins"),
         ].compactMap { $0 }
 
         return parts.joined(separator: " · ")
@@ -1416,6 +1458,58 @@ private struct CalendarDayReviewItemRow: View {
         }
 
         return parts.joined(separator: ", ")
+    }
+}
+
+private struct CalendarDayReviewCheckInRow: View {
+    let checkIn: CheckInFeedEntry
+    let calendar: Calendar
+    let isLast: Bool
+    let onOpen: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(timeTitle)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+                .allowsTightening(true)
+                .frame(width: 42, alignment: .trailing)
+                .padding(.top, 2)
+
+            VStack(spacing: 8) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 6, height: 6)
+
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.16))
+                    .frame(width: 1)
+                    .opacity(isLast ? 0 : 1)
+            }
+            .frame(width: 8)
+
+            CheckInTimelineRow(
+                checkIn: checkIn,
+                showsDate: false,
+                showTagsInTimeline: false,
+                onOpenDetail: onOpen
+            )
+            .padding(.bottom, isLast ? 0 : 18)
+        }
+    }
+
+    private var dotColor: Color {
+        Color(hex: checkIn.item.colorHex) ?? Color.accentColor
+    }
+
+    private var timeTitle: String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = calendar.locale ?? .current
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: checkIn.occurredAt)
     }
 }
 

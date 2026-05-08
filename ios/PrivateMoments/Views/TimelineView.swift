@@ -12,6 +12,7 @@ struct TimelineView: View {
     @State private var gallery: MediaGallery?
     @State private var videoPlayer: VideoPlayerRoute?
     @State private var detailRoute: DetailRoute?
+    @State private var checkInDetailRoute: CheckInEntryDetailRoute?
     @State private var summaryRoute: AISummaryRoute?
     @State private var pendingDelete: TimelineItem?
     @State private var searchText = ""
@@ -60,13 +61,13 @@ struct TimelineView: View {
             Group {
                 if !store.isReady {
                     ProgressView()
-                } else if store.items.isEmpty && !store.isAuthenticated {
+                } else if store.timelineFeedItems.isEmpty && !store.isAuthenticated {
                     ContentUnavailableView(
                         L10n.t("Log in to sync", appLanguage),
                         systemImage: "lock",
                         description: Text(L10n.t("Open Settings and log in to your Mac server.", appLanguage))
                     )
-                } else if store.items.isEmpty {
+                } else if store.timelineFeedItems.isEmpty {
                     ContentUnavailableView(L10n.t("No moments", appLanguage), systemImage: "rectangle.stack")
                 } else {
                     VStack(spacing: 0) {
@@ -113,65 +114,80 @@ struct TimelineView: View {
                                                 Section {
                                                     monthAnchor(for: group)
 
-                                                    ForEach(group.items) { item in
-                                                        TimelineRow(
-                                                            item: item,
-                                                            isCommentsExpanded: expandedCommentPostIDs.contains(item.id),
-                                                            searchQuery: searchText,
-                                                            relativeTimeNow: relativeTimeNow,
-                                                            aiSummaryRequestMediaIDs: store.aiSummaryRequestsInFlight,
-                                                            searchResult: searchResult(for: item),
-                                                            showTagsInTimeline: store.showTagsInTimeline
-                                                        ) { media, index in
-                                                            openMedia(media, index: index)
-                                                        } onOpenDetail: {
-                                                            playbackCenter.pause()
-                                                            stopVideoAutoplay()
-                                                            detailRoute = DetailRoute(postId: item.id)
-                                                        } onComment: {
-                                                            beginComment(on: item, proxy: proxy)
-                                                        } onToggleComments: {
-                                                            toggleComments(for: item.id)
-                                                        } onDeleteComment: { comment in
-                                                            requestCommentDelete(comment)
-                                                        } onOpenSummary: { media in
-                                                            playbackCenter.pause()
-                                                            summaryRoute = AISummaryRoute(mediaId: media.id)
-                                                        }
-                                                        .id(item.id)
-                                                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                                                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                                            Button {
-                                                                Task {
-                                                                    await store.toggleFavorite(item)
+                                                    ForEach(group.items) { feedItem in
+                                                        switch feedItem {
+                                                        case .moment(let item):
+                                                            TimelineRow(
+                                                                item: item,
+                                                                isCommentsExpanded: expandedCommentPostIDs.contains(item.id),
+                                                                searchQuery: searchText,
+                                                                relativeTimeNow: relativeTimeNow,
+                                                                aiSummaryRequestMediaIDs: store.aiSummaryRequestsInFlight,
+                                                                searchResult: searchResult(for: feedItem),
+                                                                showTagsInTimeline: store.showTagsInTimeline
+                                                            ) { media, index in
+                                                                openMedia(media, index: index)
+                                                            } onOpenDetail: {
+                                                                playbackCenter.pause()
+                                                                stopVideoAutoplay()
+                                                                detailRoute = DetailRoute(postId: item.id)
+                                                            } onComment: {
+                                                                beginComment(on: item, proxy: proxy)
+                                                            } onToggleComments: {
+                                                                toggleComments(for: item.id)
+                                                            } onDeleteComment: { comment in
+                                                                requestCommentDelete(comment)
+                                                            } onOpenSummary: { media in
+                                                                playbackCenter.pause()
+                                                                summaryRoute = AISummaryRoute(mediaId: media.id)
+                                                            }
+                                                            .id(item.id)
+                                                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                                                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                                                Button {
+                                                                    Task {
+                                                                        await store.toggleFavorite(item)
+                                                                    }
+                                                                } label: {
+                                                                    Label(
+                                                                        L10n.t(item.post.isFavorite ? "Unfavorite" : "Favorite", appLanguage),
+                                                                        systemImage: item.post.isFavorite ? "star.slash" : "star"
+                                                                    )
                                                                 }
-                                                            } label: {
-                                                                Label(
-                                                                    L10n.t(item.post.isFavorite ? "Unfavorite" : "Favorite", appLanguage),
-                                                                    systemImage: item.post.isFavorite ? "star.slash" : "star"
-                                                                )
+                                                                .tint(.yellow)
                                                             }
-                                                            .tint(.yellow)
-                                                        }
-                                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                                            Button {
-                                                                requestDelete(item)
-                                                            } label: {
-                                                                Label(L10n.t("Delete", appLanguage), systemImage: "trash")
-                                                            }
-                                                            .tint(.red)
-                                                        }
-                                                        .contextMenu {
-                                                            Button {
-                                                                Task {
-                                                                    await store.togglePinned(item)
+                                                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                                                Button {
+                                                                    requestDelete(item)
+                                                                } label: {
+                                                                    Label(L10n.t("Delete", appLanguage), systemImage: "trash")
                                                                 }
-                                                            } label: {
-                                                                Label(
-                                                                    L10n.t(item.post.isPinned ? "Unpin moment" : "Pin moment", appLanguage),
-                                                                    systemImage: item.post.isPinned ? "pin.slash" : "pin"
-                                                                )
+                                                                .tint(.red)
                                                             }
+                                                            .contextMenu {
+                                                                Button {
+                                                                    Task {
+                                                                        await store.togglePinned(item)
+                                                                    }
+                                                                } label: {
+                                                                    Label(
+                                                                        L10n.t(item.post.isPinned ? "Unpin moment" : "Pin moment", appLanguage),
+                                                                        systemImage: item.post.isPinned ? "pin.slash" : "pin"
+                                                                    )
+                                                                }
+                                                            }
+
+                                                        case .checkIn(let checkIn):
+                                                            CheckInTimelineRow(
+                                                                checkIn: checkIn,
+                                                                showTagsInTimeline: store.showTagsInTimeline
+                                                            ) {
+                                                                playbackCenter.pause()
+                                                                stopVideoAutoplay()
+                                                                checkInDetailRoute = CheckInEntryDetailRoute(entryId: checkIn.id)
+                                                            }
+                                                            .id(checkIn.id)
+                                                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
                                                         }
                                                     }
                                                 }
@@ -329,6 +345,9 @@ struct TimelineView: View {
             .navigationDestination(item: $detailRoute) { route in
                 MomentDetailView(postId: route.postId)
             }
+            .sheet(item: $checkInDetailRoute) { route in
+                CheckInEntryDetailView(entryId: route.entryId)
+            }
             .fullScreenCover(item: $gallery) { gallery in
                 MediaGalleryView(media: gallery.media, initialIndex: gallery.startIndex)
             }
@@ -461,7 +480,7 @@ struct TimelineView: View {
     }
 
     private var monthMenuGroups: [TimelineDateJumpMonthGroup] {
-        TimelineDateJumpBuilder.groups(from: store.items, language: appLanguage)
+        TimelineDateJumpBuilder.groups(from: store.timelineFeedItems, language: appLanguage)
     }
 
     private var trimmedSearchText: String {
@@ -472,13 +491,13 @@ struct TimelineView: View {
         !trimmedSearchText.isEmpty
     }
 
-    private var filteredItems: [TimelineItem] {
-        store.items.filter { item in
+    private var filteredItems: [MomentFeedItem] {
+        store.timelineFeedItems.filter { item in
             guard selectedContentFilter.includes(item) else {
                 return false
             }
 
-            if isFavoritesOnly && !item.post.isFavorite {
+            if isFavoritesOnly && item.moment?.post.isFavorite != true {
                 return false
             }
 
@@ -491,23 +510,22 @@ struct TimelineView: View {
             }
 
             if let selectedMonthFilter,
-               !Calendar.current.isDate(item.post.occurredAt, equalTo: selectedMonthFilter.monthStart, toGranularity: .month) {
+               !Calendar.current.isDate(item.occurredAt, equalTo: selectedMonthFilter.monthStart, toGranularity: .month) {
                 return false
             }
 
             if let selectedDayFilter,
-               !Calendar.current.isDate(item.post.occurredAt, inSameDayAs: selectedDayFilter.dayStart) {
+               !Calendar.current.isDate(item.occurredAt, inSameDayAs: selectedDayFilter.dayStart) {
                 return false
             }
 
             if let selectedPrimaryTagId,
-               item.primaryTag?.tagId != selectedPrimaryTagId {
+               item.primaryTagId != selectedPrimaryTagId {
                 return false
             }
 
             if !selectedTopicTagIds.isEmpty {
-                let itemTopicTagIds = Set(item.topicTags.map(\.tagId))
-                if !selectedTopicTagIds.isSubset(of: itemTopicTagIds) {
+                if !selectedTopicTagIds.isSubset(of: item.topicTagIds) {
                     return false
                 }
             }
@@ -525,7 +543,7 @@ struct TimelineView: View {
         }
     }
 
-    private var timelineListItems: [TimelineItem] {
+    private var timelineListItems: [MomentFeedItem] {
         filteredItems
     }
 
@@ -686,17 +704,17 @@ struct TimelineView: View {
             )
         )
 
-        let targetID = route.targetItemID ?? store.items
-            .filter { Calendar.current.isDate($0.post.occurredAt, inSameDayAs: route.dayStart) }
+        let targetID = route.targetItemID ?? store.timelineFeedItems
+            .filter { Calendar.current.isDate($0.occurredAt, inSameDayAs: route.dayStart) }
             .sorted { lhs, rhs in
-                if lhs.post.occurredAt == rhs.post.occurredAt {
-                    return lhs.id > rhs.id
+                if lhs.occurredAt == rhs.occurredAt {
+                    return lhs.sortKey > rhs.sortKey
                 }
 
-                return lhs.post.occurredAt > rhs.post.occurredAt
+                return lhs.occurredAt > rhs.occurredAt
             }
             .first?
-            .id
+            .rawItemID
 
         if let targetID {
             scheduleCalendarRouteScroll(targetID: targetID)
@@ -705,7 +723,7 @@ struct TimelineView: View {
         calendarRoute = nil
     }
 
-    private func scheduleCalendarRouteScroll(targetID: TimelineItem.ID) {
+    private func scheduleCalendarRouteScroll(targetID: String) {
         calendarRouteScrollTask?.cancel()
         dateJumpRequest = TimelineDateJumpRequest(targetID: targetID)
 
@@ -729,7 +747,7 @@ struct TimelineView: View {
         }
     }
 
-    private func searchResult(for item: TimelineItem) -> TimelineSearchResult? {
+    private func searchResult(for item: MomentFeedItem) -> TimelineSearchResult? {
         guard hasSearchQuery else {
             return nil
         }
@@ -741,10 +759,15 @@ struct TimelineView: View {
         )
     }
 
-    private func itemNeedsSync(_ item: TimelineItem) -> Bool {
-        item.post.syncStatus != "synced"
-            || item.media.contains { $0.uploadStatus != "uploaded" }
-            || item.comments.contains { $0.serverVersion == nil }
+    private func itemNeedsSync(_ item: MomentFeedItem) -> Bool {
+        switch item {
+        case .moment(let moment):
+            return moment.post.syncStatus != "synced"
+                || moment.media.contains { $0.uploadStatus != "uploaded" }
+                || moment.comments.contains { $0.serverVersion == nil }
+        case .checkIn(let checkIn):
+            return checkIn.syncStatus != "synced"
+        }
     }
 
     private var activeCommentTarget: TimelineItem? {
@@ -1236,12 +1259,17 @@ private enum TimelineContentFilter: String, CaseIterable, Identifiable {
         }
     }
 
-    func includes(_ item: TimelineItem) -> Bool {
+    func includes(_ item: MomentFeedItem) -> Bool {
         switch self {
         case .all:
             return true
         case .text:
-            return !item.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            switch item {
+            case .moment(let moment):
+                return !moment.post.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .checkIn(let checkIn):
+                return checkIn.entry.hasNote
+            }
         case .photos:
             return item.media.contains { $0.isImage }
         case .audio:
@@ -1258,6 +1286,7 @@ private enum TimelineMatchSourceFilter: String, CaseIterable, Identifiable {
     case comments
     case summary
     case transcript
+    case tags
 
     var id: String {
         rawValue
@@ -1275,6 +1304,8 @@ private enum TimelineMatchSourceFilter: String, CaseIterable, Identifiable {
             return L10n.t("Summary", language)
         case .transcript:
             return L10n.t("Transcript", language)
+        case .tags:
+            return L10n.t("Tags", language)
         }
     }
 
@@ -1290,6 +1321,8 @@ private enum TimelineMatchSourceFilter: String, CaseIterable, Identifiable {
             return TimelineSearchMatchSource.summary.systemImage
         case .transcript:
             return TimelineSearchMatchSource.transcript.systemImage
+        case .tags:
+            return TimelineSearchMatchSource.tags.systemImage
         }
     }
 
@@ -1305,6 +1338,8 @@ private enum TimelineMatchSourceFilter: String, CaseIterable, Identifiable {
             return result.includes(.summary)
         case .transcript:
             return result.includes(.transcript)
+        case .tags:
+            return result.includes(.tags)
         }
     }
 }
@@ -1414,7 +1449,7 @@ private struct FloatingMonthIndicator: View {
 
 private struct TimelineDateJumpRequest: Equatable {
     let requestID = UUID()
-    let targetID: TimelineItem.ID
+    let targetID: String
     var anchor: TimelineScrollAnchor = .top
 }
 

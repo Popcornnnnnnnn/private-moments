@@ -114,6 +114,60 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R050,R037,R003
 - Validation: iOS build proves `StorageSettingsView` can decode and display admin status, maintenance state/jobs, repository, and snapshots; Admin build proves the visible navigation is `Archive / Overview`; smoke checks prove existing authenticated Admin status and Archive read routes remain reachable.
 
+### R052 — Check-ins are a primary iOS surface, not ordinary moments.
+- Class: functional
+- Status: active
+- Description: iOS must expose `Check-ins` as a bottom tab beside `Timeline` and `Calendar`, while app launch still defaults to `Timeline`. Check-in entries are independent local-first records and must not create ordinary `Post` rows.
+- Why it matters: The user wants fast recurring life activity capture without mixing every meal/exercise/wake-up marker into normal moment authoring.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Root tab order is `Timeline / Calendar / Check-ins`; Timeline renders published check-in entries directly from check-in data.
+
+### R053 — Daily check-in use must stay one-tap first.
+- Class: functional
+- Status: active
+- Description: In the Check-ins `Today` view, tapping the main item control records immediately without a sheet or required content. A separate low-weight content path may add note/time/Timeline visibility. Once-per-day items prevent duplicate same-local-day entries; multiple-per-day items allow repeated entries.
+- Why it matters: The module only beats tags/composer if the common path remains one tap.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Today rows can create an empty semantic check-in with one tap; content entry is separate; duplicate once-per-day entries are rejected locally.
+
+### R054 — Timeline visibility is independent from check-in truth.
+- Class: constraint
+- Status: active
+- Description: Each check-in entry has `showInTimeline`. Hidden entries still count in Check-ins History, Calendar heatmap, Day Review, Month Stats, and future review structure signals. Published entries appear in Timeline as compact check-in rows without comments, favorite, or pin.
+- Why it matters: The user explicitly separated “I did this” from “show this in Timeline”.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Toggling `showInTimeline` changes only Timeline/search visibility, not Check-ins or Calendar counts.
+
+### R055 — Calendar review treats check-ins as activity signals.
+- Class: functional
+- Status: active
+- Description: Calendar heatmap density and Day Review include non-deleted check-in entries alongside ordinary moments. Month Stats shows combined activity plus a visible split between moments and check-ins.
+- Why it matters: Calendar is the “what happened in life” review surface; it should not depend on whether check-ins were published to Timeline.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Calendar model tests or simulator mock data show check-ins affect daily activity and month stats even when hidden from Timeline.
+
+### R056 — Check-ins avoid AI and habit-pressure features in v1.
+- Class: constraint
+- Status: active
+- Description: Check-ins v1 must not add AI auto-tagging, transcription, OCR, summaries, reminders, missed counts, streaks, completion rates, favorite, pin, comments, preset templates, Mac Admin editing, or separate export UI. Optional item tags default to none and stay secondary.
+- Why it matters: The module is for private life record texture, not a KPI habit tracker or another social/feed object.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: No check-in code path calls AI/media transcription/tag suggestion pipelines; UI does not expose favorite/pin/comments/reminders/streaks.
+
+### R057 — Check-in sync and diagnostics stay iOS-first.
+- Class: operational
+- Status: active
+- Description: Check-in items and entries sync as first-class entities through `upsert_checkin_item`, `delete_checkin_item`, `upsert_checkin_entry`, and `delete_checkin_entry`. Routine item/entry management and lightweight diagnostics belong on iOS, not Mac Admin.
+- Why it matters: The phone is the daily surface, and the user requested new diagnostics to default iOS-only unless a Mac-local operation is involved.
+- Source: M012 Check-ins grill-me 2026-05-08
+- Primary owning slice: M012
+- Validation: Server operation matrix includes check-in operations; iOS Settings > Diagnostics exposes local check-in counts and pending/failed check-in sync state.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active

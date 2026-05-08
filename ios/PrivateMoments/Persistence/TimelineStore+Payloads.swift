@@ -201,4 +201,48 @@ extension TimelineStore {
         let data = try JSONSerialization.data(withJSONObject: payload)
         return String(decoding: data, as: UTF8.self)
     }
+
+    func makeUpsertCheckInItemPayload(_ item: CheckInItem) throws -> String {
+        let payload: [String: Any] = [
+            "name": item.name,
+            "symbolName": item.symbolName,
+            "colorHex": item.colorHex,
+            "recordMode": item.recordMode.rawValue,
+            "activeWeekdays": item.activeWeekdays,
+            "sortOrder": item.sortOrder,
+            "defaultShowInTimeline": item.defaultShowInTimeline,
+            "tagId": item.tagId ?? NSNull(),
+            "createdAt": ISO8601DateFormatter().string(from: item.createdAt),
+            "updatedAt": ISO8601DateFormatter().string(from: item.updatedAt),
+            "archivedAt": item.archivedAt.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull(),
+            "deletedAt": item.deletedAt.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull(),
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func makeUpsertCheckInEntryPayload(_ entry: CheckInEntry) throws -> String {
+        let payload: [String: Any] = [
+            "itemId": entry.itemId,
+            "occurredAt": ISO8601DateFormatter().string(from: entry.occurredAt),
+            "note": entry.note,
+            "showInTimeline": entry.showInTimeline,
+            "createdAt": ISO8601DateFormatter().string(from: entry.createdAt),
+            "updatedAt": ISO8601DateFormatter().string(from: entry.updatedAt),
+            "deletedAt": entry.deletedAt.map { ISO8601DateFormatter().string(from: $0) } ?? NSNull(),
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func makeDeleteCheckInPayload(deletedAt: Date) throws -> String {
+        let payload: [String: String] = [
+            "deletedAt": ISO8601DateFormatter().string(from: deletedAt)
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        return String(decoding: data, as: UTF8.self)
+    }
 }

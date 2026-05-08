@@ -157,8 +157,8 @@ extension TimelineStore {
                 return
             }
 
-            let localPostCount = try database.localPostCount()
-            let shouldRunRecoverySync = !AppSettings.didApplySyncRecoveryV1 || localPostCount == 0
+            let localRecordCount = try database.localPostCount() + database.localCheckInRecordCount()
+            let shouldRunRecoverySync = !AppSettings.didApplySyncRecoveryV1 || localRecordCount == 0
 
             if shouldRunRecoverySync {
                 AppSettings.lastSyncCursor = 0
@@ -216,7 +216,8 @@ extension TimelineStore {
 
     func runSyncPass(database: LocalDatabase, deviceId: String, token: String) async throws {
         let operations = try database.fetchPendingOperations()
-        let requestedCursor = try database.localPostCount() == 0 ? 0 : AppSettings.lastSyncCursor
+        let hasNoLocalRecords = try database.localPostCount() == 0 && database.localCheckInRecordCount() == 0
+        let requestedCursor = hasNoLocalRecords ? 0 : AppSettings.lastSyncCursor
         let request = SyncRequestBody(
             deviceId: deviceId,
             lastSyncCursor: requestedCursor,

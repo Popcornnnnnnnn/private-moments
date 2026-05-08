@@ -161,6 +161,7 @@ model Tag {
 
   aliases  TagAlias[]
   postTags PostTag[]
+  checkInItems CheckInItem[]
 
   @@index([type])
   @@index([isArchived])
@@ -201,6 +202,55 @@ model PostTag {
   @@index([tagId])
   @@index([role])
   @@map("post_tags")
+}
+
+model CheckInItem {
+  id                    String    @id
+  name                  String
+  symbolName            String    @map("symbol_name")
+  colorHex              String    @map("color_hex")
+  recordMode            String    @map("record_mode")
+  activeWeekdaysJson    String    @map("active_weekdays_json")
+  sortOrder             Int       @default(0) @map("sort_order")
+  defaultShowInTimeline Boolean   @default(false) @map("default_show_in_timeline")
+  tagId                 String?   @map("tag_id")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  archivedAt            DateTime? @map("archived_at")
+  deletedAt             DateTime? @map("deleted_at")
+  serverVersion         Int       @default(0) @map("server_version")
+
+  tag     Tag?           @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  entries CheckInEntry[]
+
+  @@index([sortOrder])
+  @@index([archivedAt])
+  @@index([deletedAt])
+  @@index([tagId])
+  @@index([serverVersion])
+  @@map("checkin_items")
+}
+
+model CheckInEntry {
+  id            String    @id
+  itemId        String    @map("item_id")
+  occurredAt    DateTime  @map("occurred_at")
+  note          String    @default("")
+  showInTimeline Boolean  @default(false) @map("show_in_timeline")
+  clientCreatedAt DateTime? @map("client_created_at")
+  clientUpdatedAt DateTime? @map("client_updated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  serverVersion Int       @default(0) @map("server_version")
+
+  item CheckInItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([occurredAt])
+  @@index([deletedAt])
+  @@index([serverVersion])
+  @@map("checkin_entries")
 }
 
 model Media {

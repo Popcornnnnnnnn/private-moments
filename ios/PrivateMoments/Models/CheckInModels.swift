@@ -1,0 +1,194 @@
+import Foundation
+
+enum CheckInRecordMode: String, CaseIterable, Codable, Identifiable {
+    case oncePerDay
+    case multiplePerDay
+
+    var id: String {
+        rawValue
+    }
+
+    func title(language: AppResolvedLanguage = .english) -> String {
+        switch self {
+        case .oncePerDay:
+            return L10n.t("Once per day", language)
+        case .multiplePerDay:
+            return L10n.t("Multiple per day", language)
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .oncePerDay:
+            return "checkmark.circle"
+        case .multiplePerDay:
+            return "plus.circle"
+        }
+    }
+}
+
+struct CheckInItem: Identifiable, Codable, Equatable {
+    var id: String
+    var name: String
+    var symbolName: String
+    var colorHex: String
+    var recordMode: CheckInRecordMode
+    var activeWeekdays: [Int]
+    var sortOrder: Int
+    var defaultShowInTimeline: Bool
+    var tagId: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var archivedAt: Date?
+    var deletedAt: Date?
+    var syncStatus: String
+
+    var isArchived: Bool {
+        archivedAt != nil
+    }
+
+    func isScheduled(on date: Date, calendar: Calendar = .current) -> Bool {
+        activeWeekdays.contains(calendar.component(.weekday, from: date))
+    }
+}
+
+struct CheckInEntry: Identifiable, Codable, Equatable {
+    var id: String
+    var itemId: String
+    var occurredAt: Date
+    var note: String
+    var showInTimeline: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var deletedAt: Date?
+    var syncStatus: String
+
+    var hasNote: Bool {
+        !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+struct CheckInFeedEntry: Identifiable {
+    let entry: CheckInEntry
+    let item: CheckInItem
+    let tag: TimelineTag?
+
+    var id: String {
+        entry.id
+    }
+
+    var occurredAt: Date {
+        entry.occurredAt
+    }
+
+    var syncStatus: String {
+        entry.syncStatus == "synced" ? item.syncStatus : entry.syncStatus
+    }
+
+    var isDeleted: Bool {
+        entry.deletedAt != nil || item.deletedAt != nil
+    }
+}
+
+enum MomentFeedItem: Identifiable {
+    case moment(TimelineItem)
+    case checkIn(CheckInFeedEntry)
+
+    var id: String {
+        switch self {
+        case .moment(let item):
+            return "moment-\(item.id)"
+        case .checkIn(let checkIn):
+            return "checkin-\(checkIn.id)"
+        }
+    }
+
+    var rawItemID: String {
+        switch self {
+        case .moment(let item):
+            return item.id
+        case .checkIn(let checkIn):
+            return checkIn.id
+        }
+    }
+
+    var occurredAt: Date {
+        switch self {
+        case .moment(let item):
+            return item.post.occurredAt
+        case .checkIn(let checkIn):
+            return checkIn.occurredAt
+        }
+    }
+
+    var isMoment: Bool {
+        if case .moment = self {
+            return true
+        }
+
+        return false
+    }
+
+    var isCheckIn: Bool {
+        if case .checkIn = self {
+            return true
+        }
+
+        return false
+    }
+
+    var moment: TimelineItem? {
+        if case .moment(let item) = self {
+            return item
+        }
+
+        return nil
+    }
+
+    var checkIn: CheckInFeedEntry? {
+        if case .checkIn(let item) = self {
+            return item
+        }
+
+        return nil
+    }
+
+    var media: [TimelineMedia] {
+        moment?.media ?? []
+    }
+
+    var comments: [TimelineComment] {
+        moment?.comments ?? []
+    }
+
+    var primaryTagId: String? {
+        switch self {
+        case .moment(let item):
+            return item.primaryTag?.tagId
+        case .checkIn(let item):
+            return item.tag?.id
+        }
+    }
+
+    var topicTagIds: Set<String> {
+        Set(moment?.topicTags.map(\.tagId) ?? [])
+    }
+
+    var syncStatus: String {
+        switch self {
+        case .moment(let item):
+            return item.post.syncStatus
+        case .checkIn(let item):
+            return item.syncStatus
+        }
+    }
+
+    var sortKey: String {
+        switch self {
+        case .moment(let item):
+            return item.id
+        case .checkIn(let item):
+            return item.id
+        }
+    }
+}

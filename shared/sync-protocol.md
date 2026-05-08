@@ -60,11 +60,17 @@ The MVP server currently supports these operation types:
 - `delete_tag_alias`: soft-delete one alias.
 - `set_post_tags`: replace one post's primary tag and topic tag set, marking the moment as user-edited.
 - `update_post_pin`: set or clear one post's lightweight pinned shortcut state.
+- `upsert_checkin_item`: create or update one check-in item definition.
+- `delete_checkin_item`: soft-delete one check-in item and its entries.
+- `upsert_checkin_entry`: create or update one check-in entry.
+- `delete_checkin_entry`: soft-delete one check-in entry.
 - `tag_updated`: server-originated vocabulary change.
 - `tag_deleted`: server-originated permanent tag deletion.
 - `tag_alias_updated` / `tag_alias_deleted`: server-originated alias changes.
 - `post_tag_updated` / `post_tag_deleted`: server-originated assignment changes.
 - `post_tag_state_updated`: server-originated post-level tag state change.
+- `checkin_item_updated` / `checkin_item_deleted`: server-originated check-in item changes.
+- `checkin_entry_updated` / `checkin_entry_deleted`: server-originated check-in entry changes.
 
 Future operation types:
 
@@ -95,6 +101,8 @@ Deletes are soft deletes.
 - The server sets `deletedAt` on the post and related media.
 - The server also soft-deletes comments under a deleted post, but emits only the `post_deleted` server change; clients cascade local comments when applying `post_deleted`.
 - Direct comment deletes use `delete_comment` and emit `comment_deleted`.
+- Check-in item deletes use `delete_checkin_item`; the server soft-deletes the item and its entries, emits `checkin_item_deleted`, and clients cascade local entries.
+- Direct check-in entry deletes use `delete_checkin_entry` and emit `checkin_entry_deleted`.
 - The server permanently deletes records and files after 30 days.
 
 ## Partial Media Sync
@@ -277,9 +285,81 @@ iOS behavior:
 - Applies `post_pin_updated` into `local_posts.isPinned` / `local_posts.pinnedAt`.
 - Shows pinned moments only on the unfiltered Timeline. Active search/filter state hides the pinned surface.
 - Defaults to a collapsed `Pinned · N` header; one to three pinned moments can expand into title rows, while more than three open a bottom sheet list.
-- Removes pinned items from the ordinary unfiltered Timeline list while the Pinned surface is visible, so the top shelf is the only unfiltered Timeline entry point for them.
+- Keeps pinned items in the ordinary unfiltered Timeline list with a lightweight marker; the top shelf is only an extra shortcut entry point.
 - Keeps pinned moments in their original chronological Calendar, Day Review, search/filter, review input, and detail positions.
 - Treats pin/unpin like favorite in edit semantics: it does not set user edited metadata and does not change post text or `occurredAt`.
+
+## Check-ins
+
+Check-ins are independent local-first life-activity records. They are not ordinary posts and must not create linked `Post` rows. A check-in entry can optionally be rendered in Timeline through `showInTimeline`, but Calendar, Day Review, Check-ins History, Month Stats, and future review structure signals use non-deleted entries regardless of Timeline visibility.
+
+Item payloads use `entityType: "checkin_item"`, `entityId: <item id>`.
+
+`upsert_checkin_item` payload:
+
+```json
+{
+  "name": "Meal",
+  "symbolName": "fork.knife",
+  "colorHex": "#D98E73",
+  "recordMode": "multiplePerDay",
+  "activeWeekdays": [1, 2, 3, 4, 5, 6, 7],
+  "sortOrder": 2,
+  "defaultShowInTimeline": false,
+  "tagId": null,
+  "createdAt": "2026-05-08T09:00:00Z",
+  "updatedAt": "2026-05-08T09:00:00Z",
+  "archivedAt": null
+}
+```
+
+`delete_checkin_item` payload:
+
+```json
+{
+  "deletedAt": "2026-05-08T12:00:00Z"
+}
+```
+
+Entry payloads use `entityType: "checkin_entry"`, `entityId: <entry id>`.
+
+`upsert_checkin_entry` payload:
+
+```json
+{
+  "itemId": "checkin-meal",
+  "occurredAt": "2026-05-08T12:30:00Z",
+  "note": "Lunch",
+  "showInTimeline": false,
+  "createdAt": "2026-05-08T12:30:00Z",
+  "updatedAt": "2026-05-08T12:30:00Z"
+}
+```
+
+`delete_checkin_entry` payload:
+
+```json
+{
+  "deletedAt": "2026-05-08T12:45:00Z"
+}
+```
+
+Server behavior:
+
+- Validates item names, record modes, colors, weekdays, optional active tag references, and timestamps.
+- Validates entry parent item existence and soft-delete state.
+- Relies on iOS to perform local same-day validation before enqueueing once-per-day entries; v1 does not add a conflict UI for rare cross-device duplicate check-ins.
+- Emits `checkin_item_updated`, `checkin_item_deleted`, `checkin_entry_updated`, and `checkin_entry_deleted` server changes.
+- Does not invoke media upload, AI summary, transcription, OCR, or AI tag pipelines for check-ins.
+
+iOS behavior:
+
+- Stores items in `local_checkin_items` and entries in `local_checkin_entries`.
+- Shows Check-ins as a third bottom tab after Calendar, while default launch remains Timeline.
+- Creates empty semantic entries with one tap in Today.
+- Uses entry-level `showInTimeline` to decide whether the mixed Timeline feed includes a compact check-in row.
+- Includes all non-deleted entries in Calendar activity counts and Day Review, including entries hidden from Timeline.
+- Exposes item/entry management and lightweight diagnostics on iOS; Mac Admin does not manage Check-ins in v1.
 
 ## Comments
 

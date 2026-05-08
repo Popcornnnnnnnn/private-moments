@@ -246,6 +246,30 @@ extension TimelineStore {
                 serverVersion: change.version
             )
 
+        case "checkin_item_updated":
+            let item = try parseCheckInItemPayload(change.payload, changeType: "checkin_item_updated")
+            try database.applyCheckInItemUpdated(item)
+
+        case "checkin_item_deleted":
+            guard let id = change.payload["id"]?.stringValue,
+                  let deletedAtValue = change.payload["deletedAt"]?.stringValue,
+                  let deletedAt = Self.parseServerDate(deletedAtValue) else {
+                throw StoreError.invalidServerChange("checkin_item_deleted is missing required fields")
+            }
+            try database.applyCheckInItemDeleted(id: id, deletedAt: deletedAt)
+
+        case "checkin_entry_updated":
+            let entry = try parseCheckInEntryPayload(change.payload, changeType: "checkin_entry_updated")
+            try database.applyCheckInEntryUpdated(entry)
+
+        case "checkin_entry_deleted":
+            guard let id = change.payload["id"]?.stringValue,
+                  let deletedAtValue = change.payload["deletedAt"]?.stringValue,
+                  let deletedAt = Self.parseServerDate(deletedAtValue) else {
+                throw StoreError.invalidServerChange("checkin_entry_deleted is missing required fields")
+            }
+            try database.applyCheckInEntryDeleted(id: id, deletedAt: deletedAt)
+
         default:
             return
         }
@@ -346,6 +370,73 @@ extension TimelineStore {
         )
     }
 
+    private func parseCheckInItemPayload(
+        _ payload: [String: JSONValue],
+        changeType: String
+    ) throws -> CheckInItem {
+        guard let id = payload["id"]?.stringValue,
+              let name = payload["name"]?.stringValue,
+              let symbolName = payload["symbolName"]?.stringValue,
+              let colorHex = payload["colorHex"]?.stringValue,
+              let recordModeValue = payload["recordMode"]?.stringValue,
+              let recordMode = CheckInRecordMode(rawValue: recordModeValue),
+              let sortOrder = payload["sortOrder"]?.intValue,
+              let defaultShowInTimeline = payload["defaultShowInTimeline"]?.boolValue,
+              let createdAtValue = payload["createdAt"]?.stringValue,
+              let updatedAtValue = payload["updatedAt"]?.stringValue,
+              let createdAt = Self.parseServerDate(createdAtValue),
+              let updatedAt = Self.parseServerDate(updatedAtValue) else {
+            throw StoreError.invalidServerChange("\(changeType) is missing required fields")
+        }
+
+        let activeWeekdays = parseIntegerArray(payload["activeWeekdays"]).filter { (1...7).contains($0) }
+        return CheckInItem(
+            id: id,
+            name: name,
+            symbolName: symbolName,
+            colorHex: colorHex,
+            recordMode: recordMode,
+            activeWeekdays: activeWeekdays.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : activeWeekdays,
+            sortOrder: sortOrder,
+            defaultShowInTimeline: defaultShowInTimeline,
+            tagId: payload["tagId"]?.stringValue,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            archivedAt: payload["archivedAt"]?.stringValue.flatMap(Self.parseServerDate),
+            deletedAt: payload["deletedAt"]?.stringValue.flatMap(Self.parseServerDate),
+            syncStatus: "synced"
+        )
+    }
+
+    private func parseCheckInEntryPayload(
+        _ payload: [String: JSONValue],
+        changeType: String
+    ) throws -> CheckInEntry {
+        guard let id = payload["id"]?.stringValue,
+              let itemId = payload["itemId"]?.stringValue,
+              let occurredAtValue = payload["occurredAt"]?.stringValue,
+              let occurredAt = Self.parseServerDate(occurredAtValue),
+              let showInTimeline = payload["showInTimeline"]?.boolValue,
+              let createdAtValue = payload["createdAt"]?.stringValue,
+              let updatedAtValue = payload["updatedAt"]?.stringValue,
+              let createdAt = Self.parseServerDate(createdAtValue),
+              let updatedAt = Self.parseServerDate(updatedAtValue) else {
+            throw StoreError.invalidServerChange("\(changeType) is missing required fields")
+        }
+
+        return CheckInEntry(
+            id: id,
+            itemId: itemId,
+            occurredAt: occurredAt,
+            note: payload["note"]?.stringValue ?? "",
+            showInTimeline: showInTimeline,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            deletedAt: payload["deletedAt"]?.stringValue.flatMap(Self.parseServerDate),
+            syncStatus: "synced"
+        )
+    }
+
     private func parseTagAliasPayload(
         _ payload: [String: JSONValue],
         changeType: String
@@ -417,6 +508,10 @@ extension TimelineStore {
 
     private func parseStringArray(_ value: JSONValue?) -> [String] {
         value?.arrayValue?.compactMap(\.stringValue) ?? []
+    }
+
+    private func parseIntegerArray(_ value: JSONValue?) -> [Int] {
+        value?.arrayValue?.compactMap(\.intValue) ?? []
     }
 
     private func parseSummarySections(_ value: JSONValue?) -> [TimelineAISummarySection] {

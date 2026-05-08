@@ -4,6 +4,8 @@ import Foundation
 @MainActor
 final class TimelineStore: ObservableObject {
     @Published var items: [TimelineItem] = []
+    @Published var checkInItems: [CheckInItem] = []
+    @Published var checkInEntries: [CheckInEntry] = []
     @Published var isReady = false
     @Published var errorMessage: String?
     @Published var syncMessage: String?
@@ -44,6 +46,9 @@ final class TimelineStore: ObservableObject {
             AppSettings.ensureAITitleAutoInsertCutoff()
             database = try LocalDatabase.open()
             loadSessionState()
+            if ProcessInfo.processInfo.arguments.contains("--private-moments-checkins-mock") {
+                try database?.seedCheckInMockDataIfNeeded()
+            }
             try await reload()
             try refreshPendingCounts()
             isReady = true
@@ -71,6 +76,8 @@ final class TimelineStore: ObservableObject {
         }
 
         items = try database.fetchTimelineItems()
+        checkInItems = try database.fetchCheckInItems(includeArchived: true)
+        checkInEntries = try database.fetchCheckInEntries()
         tags = try database.fetchTags(includeArchived: true)
         tagAliases = try database.fetchTagAliases()
         tagUsageCounts = try database.fetchTagUsageCounts()
@@ -82,6 +89,45 @@ final class TimelineStore: ObservableObject {
 
     func item(id: String) -> TimelineItem? {
         items.first { $0.id == id }
+    }
+
+    func checkInItem(id: String) -> CheckInItem? {
+        checkInItems.first { $0.id == id }
+    }
+
+    func checkInEntry(id: String) -> CheckInEntry? {
+        checkInEntries.first { $0.id == id }
+    }
+
+    var checkInFeedEntries: [CheckInFeedEntry] {
+        let itemById = Dictionary(uniqueKeysWithValues: checkInItems.map { ($0.id, $0) })
+        let tagById = Dictionary(uniqueKeysWithValues: tags.map { ($0.id, $0) })
+        return checkInEntries.compactMap { entry in
+            guard let item = itemById[entry.itemId],
+                  entry.deletedAt == nil,
+                  item.deletedAt == nil else {
+                return nil
+            }
+
+            return CheckInFeedEntry(entry: entry, item: item, tag: item.tagId.flatMap { tagById[$0] })
+        }
+    }
+
+    var timelineFeedItems: [MomentFeedItem] {
+        let moments = items
+            .filter { $0.post.deletedAt == nil }
+            .map(MomentFeedItem.moment)
+        let checkIns = checkInFeedEntries
+            .filter { $0.entry.showInTimeline }
+            .map(MomentFeedItem.checkIn)
+
+        return (moments + checkIns).sorted { lhs, rhs in
+            if lhs.occurredAt == rhs.occurredAt {
+                return lhs.sortKey > rhs.sortKey
+            }
+
+            return lhs.occurredAt > rhs.occurredAt
+        }
     }
 
     func canEdit(_ item: TimelineItem) -> Bool {

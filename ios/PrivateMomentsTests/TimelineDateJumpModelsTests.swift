@@ -34,23 +34,23 @@ final class TimelineDateJumpModelsTests: XCTestCase {
 
         XCTAssertEqual(groups.map(\.title), ["April 2026", "March 2026"])
         XCTAssertEqual(groups.map(\.anchorItemID), ["april-newest", "march-visible"])
-        XCTAssertEqual(groups[0].items.map(\.id), ["april-newest", "april-older-same-day", "april-older-day"])
+        XCTAssertEqual(groups[0].items.map(\.rawItemID), ["april-newest", "april-older-same-day", "april-older-day"])
         XCTAssertEqual(groups[0].days.map(\.targetItemID), ["april-newest", "april-older-day"])
-        XCTAssertEqual(groups[0].days[0].items.map(\.id), ["april-newest", "april-older-same-day"])
+        XCTAssertEqual(groups[0].days[0].items.map(\.rawItemID), ["april-newest", "april-older-same-day"])
         XCTAssertEqual(groups[1].days.map(\.targetItemID), ["march-visible"])
     }
 
     func testBuilderReadsOnlyItemsPassedByCaller() {
         let visible = item(id: "visible-favorite", occurredAt: date(year: 2026, month: 4, day: 20, hour: 12), isFavorite: true)
         let hiddenByCaller = item(id: "hidden-non-favorite", occurredAt: date(year: 2026, month: 5, day: 2, hour: 12), isFavorite: false)
-        let filteredItems = [visible, hiddenByCaller].filter(\.post.isFavorite)
+        let filteredItems = [visible, hiddenByCaller].filter { $0.moment?.post.isFavorite == true }
 
         let groups = TimelineDateJumpBuilder.groups(from: filteredItems, now: now, calendar: calendar)
 
         XCTAssertEqual(groups.count, 1)
         XCTAssertEqual(groups.first?.title, "April 2026")
         XCTAssertEqual(groups.first?.anchorItemID, "visible-favorite")
-        XCTAssertFalse(groups.flatMap(\.items).contains { $0.id == hiddenByCaller.id })
+        XCTAssertFalse(groups.flatMap(\.items).contains { $0.rawItemID == hiddenByCaller.rawItemID })
     }
 
     func testDayJumpLabelsAreDateLanguageOnly() {
@@ -95,8 +95,8 @@ final class TimelineDateJumpModelsTests: XCTestCase {
         occurredAt: Date,
         isFavorite: Bool = false,
         media: [TimelineMedia] = []
-    ) -> TimelineItem {
-        TimelineItem(
+    ) -> MomentFeedItem {
+        .moment(TimelineItem(
             post: TimelinePost(
                 id: id,
                 text: "Fixture \(id)",
@@ -117,7 +117,7 @@ final class TimelineDateJumpModelsTests: XCTestCase {
             comments: [],
             aiSummaries: [],
             tags: []
-        )
+        ))
     }
 
     private func date(year: Int, month: Int, day: Int, hour: Int) -> Date {

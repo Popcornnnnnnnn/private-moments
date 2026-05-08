@@ -147,6 +147,43 @@ extension LocalDatabase {
             CREATE INDEX IF NOT EXISTS idx_local_post_tags_tagId ON local_post_tags(tagId);
             CREATE INDEX IF NOT EXISTS idx_local_post_tags_role ON local_post_tags(role);
 
+            CREATE TABLE IF NOT EXISTS local_checkin_items (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                symbolName TEXT NOT NULL,
+                colorHex TEXT NOT NULL,
+                recordMode TEXT NOT NULL,
+                activeWeekdays TEXT NOT NULL,
+                sortOrder INTEGER NOT NULL,
+                defaultShowInTimeline INTEGER NOT NULL DEFAULT 0,
+                tagId TEXT REFERENCES local_tags(id) ON DELETE SET NULL,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                archivedAt TEXT,
+                deletedAt TEXT,
+                syncStatus TEXT NOT NULL DEFAULT 'synced'
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_items_sortOrder ON local_checkin_items(sortOrder);
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_items_deletedAt ON local_checkin_items(deletedAt);
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_items_archivedAt ON local_checkin_items(archivedAt);
+
+            CREATE TABLE IF NOT EXISTS local_checkin_entries (
+                id TEXT PRIMARY KEY,
+                itemId TEXT NOT NULL REFERENCES local_checkin_items(id) ON DELETE CASCADE,
+                occurredAt TEXT NOT NULL,
+                note TEXT NOT NULL DEFAULT '',
+                showInTimeline INTEGER NOT NULL DEFAULT 0,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                deletedAt TEXT,
+                syncStatus TEXT NOT NULL DEFAULT 'synced'
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_entries_itemId ON local_checkin_entries(itemId);
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_entries_occurredAt ON local_checkin_entries(occurredAt);
+            CREATE INDEX IF NOT EXISTS idx_local_checkin_entries_deletedAt ON local_checkin_entries(deletedAt);
+
             CREATE TABLE IF NOT EXISTS outbox_operations (
                 id TEXT PRIMARY KEY,
                 opId TEXT NOT NULL UNIQUE,
