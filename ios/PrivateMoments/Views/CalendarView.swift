@@ -336,37 +336,75 @@ private struct CalendarMonthGrid: View {
     let calendar: Calendar
     let onSelectDay: (CalendarReviewDay) -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 6), count: 7)
+    @State private var gridWidth: CGFloat = 0
+
+    private let gridSpacing: CGFloat = 6
+    private let weekdayHeight: CGFloat = 18
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 6) {
+            HStack(spacing: gridSpacing) {
                 ForEach(month.weekdays) { weekday in
                     Text(weekday.title)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
+                        .frame(width: dayCellSide, height: weekdayHeight)
                 }
             }
 
-            LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(month.days) { day in
-                    Button {
-                        if day.isSelectable {
-                            onSelectDay(day)
-                        }
-                    } label: {
-                        Color.clear
-                            .aspectRatio(1, contentMode: .fit)
-                            .overlay {
-                                CalendarDayCell(day: day, calendar: calendar)
+            VStack(spacing: gridSpacing) {
+                ForEach(0..<6, id: \.self) { rowIndex in
+                    HStack(spacing: gridSpacing) {
+                        ForEach(0..<7, id: \.self) { columnIndex in
+                            let dayIndex = rowIndex * 7 + columnIndex
+                            if dayIndex < month.days.count {
+                                let day = month.days[dayIndex]
+                                Button {
+                                    if day.isSelectable {
+                                        onSelectDay(day)
+                                    }
+                                } label: {
+                                    CalendarDayCell(day: day, calendar: calendar)
+                                        .frame(width: dayCellSide, height: dayCellSide)
+                                }
+                                .buttonStyle(CalendarDayButtonStyle(isEnabled: day.isSelectable))
+                                .disabled(!day.isSelectable)
                             }
+                        }
                     }
-                    .frame(maxWidth: .infinity)
-                    .buttonStyle(CalendarDayButtonStyle(isEnabled: day.isSelectable))
-                    .disabled(!day.isSelectable)
                 }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: CalendarGridWidthPreferenceKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(CalendarGridWidthPreferenceKey.self) { width in
+            if width > 0, abs(gridWidth - width) > 0.5 {
+                gridWidth = width
+            }
+        }
+    }
+
+    private var dayCellSide: CGFloat {
+        guard gridWidth > 0 else {
+            return 44
+        }
+
+        return max(0, (gridWidth - gridSpacing * 6) / 7)
+    }
+}
+
+private struct CalendarGridWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 {
+            value = next
         }
     }
 }
