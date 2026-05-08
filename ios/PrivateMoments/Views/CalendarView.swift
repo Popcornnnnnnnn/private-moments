@@ -496,7 +496,7 @@ private struct CalendarDayCell: View {
     private var dayBackground: Color {
         switch day.densityLevel {
         case .none:
-            return Color.clear
+            return Color.secondary.opacity(colorScheme == .dark ? 0.10 : 0.055)
         case .light:
             return heatColor.opacity(colorScheme == .dark ? 0.16 : 0.12)
         case .medium:
