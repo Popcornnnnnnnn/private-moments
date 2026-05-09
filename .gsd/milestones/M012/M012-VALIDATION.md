@@ -111,3 +111,15 @@ This proves:
 Simulator cannot exercise the real camera hardware picker. The camera path compiled and the UI reserves it for real devices; simulator validation used seeded mock image media and direct SQLite/file checks. Check-in audio/video media is intentionally not implemented in this checkpoint.
 
 No real iPhone install was performed from the feature worktree, by design. Real-device deployment happened only after merge to `main`.
+
+## 2026-05-09 Time Line Axis Follow-up
+
+Follow-up scope: fix the `Time Line` chart so occurrence time is shown as the Y axis, and the X axis starts at the first in-window data day rather than reserving leading empty history. A single today-only point now appears at the leading edge and later dates extend rightward.
+
+Evidence:
+
+- `npm run verify:ios:generic` passed.
+- Targeted XCTest passed with exit code 0 using `xcodebuild -quiet -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination 'platform=iOS Simulator,id=006069EA-BA9A-4689-9C52-36A74F279704' -derivedDataPath /tmp/PrivateMoments-CheckInTimeInsightsTests-263 -only-testing:PrivateMomentsTests/CheckInTimeInsightsTests test`.
+- An earlier concurrent targeted XCTest attempt failed before test execution because Xcode's shared build database was locked, and a later retry against simulator `99FC9B7B-81FF-4BDD-9562-3DF02EA63D06` was interrupted by CoreSimulator `Invalid device state`; the successful rerun used a clean simulator and isolated DerivedData.
+- `git diff --check` passed.
+- `npm run ios:device` built, signed, installed, and launched Moments on `wwz 的 iphone`.

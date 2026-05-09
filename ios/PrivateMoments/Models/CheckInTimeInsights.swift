@@ -80,7 +80,7 @@ enum CheckInTimeInsightsBuilder {
         calendar: Calendar = .current,
         dayCount: Int = defaultDayCount
     ) -> CheckInTimeLineInsight {
-        let days = insightDays(endingAt: now, calendar: calendar, dayCount: dayCount)
+        let windowDays = insightDays(endingAt: now, calendar: calendar, dayCount: dayCount)
         let range = insightRange(endingAt: now, calendar: calendar, dayCount: dayCount)
         let entriesByDay = Dictionary(
             grouping: activeEntries(for: item, entries: entries, in: range)
@@ -100,6 +100,13 @@ enum CheckInTimeInsightsBuilder {
 
             return (day, first)
         })
+        let days: [Date]
+        if let firstDataDay = firstEntryByDay.keys.min(),
+           let firstIndex = windowDays.firstIndex(of: firstDataDay) {
+            days = Array(windowDays[firstIndex...])
+        } else {
+            days = []
+        }
 
         let rawMinutes = days.compactMap { day -> Int? in
             guard let entry = firstEntryByDay[day] else {

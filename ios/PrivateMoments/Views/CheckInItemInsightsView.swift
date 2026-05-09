@@ -141,21 +141,24 @@ private struct CheckInTimeLineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if insight.hasData {
-                HStack {
-                    Text(CheckInTimeInsightsBuilder.timeLabel(for: insight.upperMinute))
-                    Spacer()
-                    Text(CheckInTimeInsightsBuilder.timeLabel(for: insight.lowerMinute))
+                HStack(alignment: .top, spacing: 8) {
+                    CheckInTimeLineYAxis(insight: insight)
+                        .frame(width: 44, height: 156)
+
+                    CheckInTimeLineCanvas(insight: insight, color: color)
+                        .frame(height: 156)
                 }
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
 
-                CheckInTimeLineCanvas(insight: insight, color: color)
-                    .frame(height: 150)
-
-                HStack {
-                    Text("30d")
+                HStack(spacing: 8) {
                     Spacer()
-                    Text(L10n.t("Today", language))
+                        .frame(width: 44)
+                    HStack {
+                        Text(xAxisStartLabel)
+                        Spacer()
+                        if insight.points.count > 1 {
+                            Text(L10n.t("Today", language))
+                        }
+                    }
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -167,6 +170,45 @@ private struct CheckInTimeLineView: View {
         }
         .padding(.vertical, 6)
     }
+
+    private var xAxisStartLabel: String {
+        guard let firstDay = insight.points.first?.day else {
+            return ""
+        }
+
+        if Calendar.current.isDateInToday(firstDay) {
+            return L10n.t("Today", language)
+        }
+
+        return Self.dayFormatter.string(from: firstDay)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        return formatter
+    }()
+}
+
+private struct CheckInTimeLineYAxis: View {
+    let insight: CheckInTimeLineInsight
+
+    private var middleMinute: Int {
+        (insight.lowerMinute + insight.upperMinute) / 2
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(CheckInTimeInsightsBuilder.timeLabel(for: insight.upperMinute))
+            Spacer(minLength: 0)
+            Text(CheckInTimeInsightsBuilder.timeLabel(for: middleMinute))
+            Spacer(minLength: 0)
+            Text(CheckInTimeInsightsBuilder.timeLabel(for: insight.lowerMinute))
+        }
+        .font(.caption2.monospacedDigit())
+        .foregroundStyle(.secondary)
+        .padding(.vertical, 2)
+    }
 }
 
 private struct CheckInTimeLineCanvas: View {
@@ -177,15 +219,31 @@ private struct CheckInTimeLineCanvas: View {
         Canvas { context, size in
             let width = max(size.width, 1)
             let height = max(size.height, 1)
+            let xInset = 6.0
+            let yInset = 8.0
+            let plotWidth = max(width - xInset * 2, 1)
+            let plotHeight = max(height - yInset * 2, 1)
             let count = max(insight.points.count - 1, 1)
             let range = max(insight.upperMinute - insight.lowerMinute, 1)
             var previous: CGPoint?
 
+            for ratio in [0.0, 0.5, 1.0] {
+                let y = yInset + plotHeight * ratio
+                var gridLine = Path()
+                gridLine.move(to: CGPoint(x: xInset, y: y))
+                gridLine.addLine(to: CGPoint(x: xInset + plotWidth, y: y))
+                context.stroke(
+                    gridLine,
+                    with: .color(.secondary.opacity(0.15)),
+                    style: StrokeStyle(lineWidth: 1, lineCap: .round)
+                )
+            }
+
             for (index, point) in insight.points.enumerated() {
-                let x = width * Double(index) / Double(count)
+                let x = xInset + plotWidth * Double(index) / Double(count)
                 guard let plottedMinute = point.plottedMinute else {
                     previous = nil
-                    let y = height - 2
+                    let y = yInset + plotHeight
                     context.stroke(
                         Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)),
                         with: .color(.secondary.opacity(0.35)),
@@ -195,7 +253,7 @@ private struct CheckInTimeLineCanvas: View {
                 }
 
                 let ratio = Double(plottedMinute - insight.lowerMinute) / Double(range)
-                let y = height - ratio * height
+                let y = yInset + plotHeight - ratio * plotHeight
                 let current = CGPoint(x: x, y: y)
                 if let previous {
                     var segment = Path()

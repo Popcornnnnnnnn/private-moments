@@ -12,7 +12,7 @@ final class CheckInTimeInsightsTests: XCTestCase {
         self.calendar = calendar
     }
 
-    func testTimeLineBuildsThirtyDaysWithGapsAndDynamicBounds() {
+    func testTimeLineBuildsDataWindowWithGapsAndDynamicBounds() {
         let item = checkInItem(mode: .oncePerDay, visualization: .timeLine)
         let now = date(2026, 5, 30, 12, 0)
         let insight = CheckInTimeInsightsBuilder.lineInsight(
@@ -26,12 +26,31 @@ final class CheckInTimeInsightsTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(insight.points.count, 30)
+        XCTAssertEqual(insight.points.count, 4)
+        XCTAssertEqual(insight.points.first?.day, calendar.startOfDay(for: date(2026, 5, 27, 12, 0)))
+        XCTAssertEqual(insight.points.last?.day, calendar.startOfDay(for: now))
         XCTAssertFalse(insight.usesOvernightExpansion)
         XCTAssertEqual(insight.points.compactMap(\.plottedMinute), [450, 690, 480])
         XCTAssertTrue(insight.points.contains { $0.entry == nil })
         XCTAssertLessThanOrEqual(insight.lowerMinute, 390)
         XCTAssertGreaterThanOrEqual(insight.upperMinute, 750)
+    }
+
+    func testTimeLineStartsTodayAtLeadingEdgeWhenThereIsNoHistory() {
+        let item = checkInItem(mode: .oncePerDay, visualization: .timeLine)
+        let now = date(2026, 5, 30, 12, 0)
+        let insight = CheckInTimeInsightsBuilder.lineInsight(
+            item: item,
+            entries: [
+                entry(itemId: item.id, id: "today", at: date(2026, 5, 30, 8, 0)),
+            ],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(insight.points.count, 1)
+        XCTAssertEqual(insight.points.first?.day, calendar.startOfDay(for: now))
+        XCTAssertEqual(insight.points.first?.plottedMinute, 480)
     }
 
     func testTimeLineExpandsOvernightTimesIntoOneContinuousRange() {
