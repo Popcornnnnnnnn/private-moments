@@ -168,6 +168,15 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M012
 - Validation: Server operation matrix includes check-in operations; iOS Settings > Diagnostics exposes local check-in counts and pending/failed check-in sync state.
 
+### R058 — Check-in time insights are item-scoped and optional.
+- Class: functional
+- Status: active
+- Description: Each check-in item may sync a `timeVisualization` value of `none`, `timeLine`, or `timeHeatmap`, defaulting to `none` for legacy items. `timeLine` is allowed only for `oncePerDay` items and shows recent daily occurrence times with missing-day gaps and overnight continuity. `timeHeatmap` uses one-hour buckets and supports multiple entries per day.
+- Why it matters: The user wants trends for stable time-point items such as wake/sleep without turning all check-ins into completion tracking or KPI dashboards.
+- Source: Check-ins Time Insights v1 plan 2026-05-09
+- Primary owning slice: M012 follow-up
+- Validation: Server sync tests cover defaults/valid/invalid modes; iOS tests cover 30-day line aggregation, missing gaps, overnight expansion, heatmap buckets, and multiple entries per day.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active
@@ -648,10 +657,14 @@ This file is the explicit capability and coverage contract for the project.
 | R052 | functional | validated | M011/S02 | M011/S01,M011/S03,M011/S04,M011/S05,R048 | Pinned Moments passed automated/simulator/isolated sync validation, main deploy, real-device install/data checks, and user UAT acceptance on 2026-05-08. |
 | R053 | functional | validated | maintenance | R036,R037,R050,R051 | Sync Doctor classifies Sync Health evidence into safe explicit recovery recommendations/actions without moving destructive Mac recovery into iOS. |
 | R054 | functional | validated | M012 | R021,R032,R036,R048 | Check-in image media passed independent upload/download smoke, generic iOS build, simulator History/Day Review/photo checks, and SQLite/file inspection on 2026-05-08. |
+| R055 | functional | active | M012 | R032,R052,R054 | Calendar heatmap, Day Review, Month Stats, and Photos filter treat check-ins as activity signals independent of Timeline visibility. |
+| R056 | constraint | active | M012 | R052,R053,R054 | Check-ins v1 avoids AI, reminders, streaks, goals, comments, favorite, pin, presets, Mac Admin editing, and separate export UI. |
+| R057 | operational | active | M012 | R036,R050,R053,R054 | Check-in item/entry/media sync and diagnostics stay iOS-first, with Mac Admin reserved for Mac-local recovery and runtime truth. |
+| R058 | functional | active | M012 follow-up | R053,R056,R057 | Check-in time insights are optional per-item synced metadata with line charts only for once-per-day items and heatmaps for multi-entry distributions. |
 
 ## Coverage Summary
 
 - Active requirements: 47
-- Mapped to slices: 43 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054)
+- Mapped to slices: 47 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054, R055, R056, R057, R058)
 - Validated: 9 (R004, R005, R006, R007, R017, R049, R052, R053, R054)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

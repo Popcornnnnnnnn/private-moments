@@ -352,6 +352,7 @@ final class CalendarReviewModelsTests: XCTestCase {
             symbolName: "checkmark.circle",
             colorHex: "#61B88D",
             recordMode: .oncePerDay,
+            timeVisualization: .none,
             activeWeekdays: [1, 2, 3, 4, 5, 6, 7],
             sortOrder: 0,
             defaultShowInTimeline: showInTimeline,
@@ -374,7 +375,7 @@ final class CalendarReviewModelsTests: XCTestCase {
             syncStatus: "synced"
         )
 
-        return CheckInFeedEntry(entry: entry, item: item, tag: nil)
+        return CheckInFeedEntry(entry: entry, item: item, tag: nil, media: [])
     }
 
     private func date(year: Int, month: Int, day: Int, hour: Int) -> Date {

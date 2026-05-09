@@ -15,6 +15,7 @@ import { OperationRejectedError, type SyncOperationInput } from "./sync-types.js
 
 const MAX_CHECKIN_NAME_LENGTH = 80;
 const MAX_CHECKIN_NOTE_LENGTH = 2_000;
+const CHECKIN_TIME_VISUALIZATIONS = new Set(["none", "timeLine", "timeHeatmap"]);
 
 export async function applyCheckInOperation(
   tx: Prisma.TransactionClient,
@@ -56,6 +57,7 @@ async function applyUpsertCheckInItem(
   const symbolName = getString(operation.payload, "symbolName") ?? "checkmark.circle";
   const colorHex = getString(operation.payload, "colorHex") ?? "#61B88D";
   const recordMode = getString(operation.payload, "recordMode");
+  const timeVisualization = getString(operation.payload, "timeVisualization") ?? "none";
   const activeWeekdays = getIntegerArray(operation.payload, "activeWeekdays", 7);
   const sortOrder = getNonNegativeInteger(operation.payload, "sortOrder") ?? 0;
   const defaultShowInTimeline = getBoolean(operation.payload, "defaultShowInTimeline");
@@ -71,6 +73,14 @@ async function applyUpsertCheckInItem(
 
   if (recordMode !== "oncePerDay" && recordMode !== "multiplePerDay") {
     throw new OperationRejectedError("upsert_checkin_item.payload.recordMode is invalid");
+  }
+
+  if (!CHECKIN_TIME_VISUALIZATIONS.has(timeVisualization)) {
+    throw new OperationRejectedError("upsert_checkin_item.payload.timeVisualization is invalid");
+  }
+
+  if (recordMode === "multiplePerDay" && timeVisualization === "timeLine") {
+    throw new OperationRejectedError("upsert_checkin_item.payload.timeVisualization is incompatible with multiplePerDay");
   }
 
   if (!activeWeekdays || activeWeekdays.some((weekday) => weekday < 1 || weekday > 7)) {
@@ -102,6 +112,7 @@ async function applyUpsertCheckInItem(
       symbolName,
       colorHex,
       recordMode,
+      timeVisualization,
       activeWeekdaysJson: JSON.stringify(activeWeekdays),
       sortOrder,
       defaultShowInTimeline,
@@ -116,6 +127,7 @@ async function applyUpsertCheckInItem(
       symbolName,
       colorHex,
       recordMode,
+      timeVisualization,
       activeWeekdaysJson: JSON.stringify(activeWeekdays),
       sortOrder,
       defaultShowInTimeline,
@@ -355,6 +367,7 @@ async function emitCheckInItemChange(
           symbolName: item.symbolName,
           colorHex: item.colorHex,
           recordMode: item.recordMode,
+          timeVisualization: item.timeVisualization,
           activeWeekdays: parseJsonArray(item.activeWeekdaysJson),
           sortOrder: item.sortOrder,
           defaultShowInTimeline: item.defaultShowInTimeline,

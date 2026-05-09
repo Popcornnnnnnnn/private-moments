@@ -7,6 +7,7 @@ extension TimelineStore {
         symbolName: String,
         colorHex: String,
         recordMode: CheckInRecordMode,
+        timeVisualization: CheckInTimeVisualization,
         activeWeekdays: [Int],
         defaultShowInTimeline: Bool,
         tagId: String?
@@ -29,6 +30,7 @@ extension TimelineStore {
                 symbolName: normalizedCheckInSymbol(symbolName),
                 colorHex: normalizedCheckInColor(colorHex),
                 recordMode: recordMode,
+                timeVisualization: normalizedTimeVisualization(timeVisualization, recordMode: recordMode),
                 activeWeekdays: normalizedWeekdays(activeWeekdays),
                 sortOrder: try database.nextCheckInSortOrder(),
                 defaultShowInTimeline: defaultShowInTimeline,
@@ -72,6 +74,10 @@ extension TimelineStore {
 
             updated.symbolName = normalizedCheckInSymbol(updated.symbolName)
             updated.colorHex = normalizedCheckInColor(updated.colorHex)
+            updated.timeVisualization = normalizedTimeVisualization(
+                updated.timeVisualization,
+                recordMode: updated.recordMode
+            )
             updated.activeWeekdays = normalizedWeekdays(updated.activeWeekdays)
             updated.updatedAt = Date()
             updated.syncStatus = "pending"
@@ -355,6 +361,17 @@ extension TimelineStore {
         }
 
         return "#61B88D"
+    }
+
+    private func normalizedTimeVisualization(
+        _ value: CheckInTimeVisualization,
+        recordMode: CheckInRecordMode
+    ) -> CheckInTimeVisualization {
+        if recordMode == .multiplePerDay, value == .timeLine {
+            return .timeHeatmap
+        }
+
+        return value
     }
 
     private func normalizedWeekdays(_ value: [Int]) -> [Int] {

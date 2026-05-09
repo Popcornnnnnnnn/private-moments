@@ -27,12 +27,45 @@ enum CheckInRecordMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum CheckInTimeVisualization: String, CaseIterable, Codable, Identifiable {
+    case none
+    case timeLine
+    case timeHeatmap
+
+    var id: String {
+        rawValue
+    }
+
+    func title(language: AppResolvedLanguage = .english) -> String {
+        switch self {
+        case .none:
+            return L10n.t("None", language)
+        case .timeLine:
+            return L10n.t("Time Line", language)
+        case .timeHeatmap:
+            return L10n.t("Time Heatmap", language)
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .none:
+            return "minus.circle"
+        case .timeLine:
+            return "chart.xyaxis.line"
+        case .timeHeatmap:
+            return "square.grid.3x3"
+        }
+    }
+}
+
 struct CheckInItem: Identifiable, Codable, Equatable {
     var id: String
     var name: String
     var symbolName: String
     var colorHex: String
     var recordMode: CheckInRecordMode
+    var timeVisualization: CheckInTimeVisualization
     var activeWeekdays: [Int]
     var sortOrder: Int
     var defaultShowInTimeline: Bool

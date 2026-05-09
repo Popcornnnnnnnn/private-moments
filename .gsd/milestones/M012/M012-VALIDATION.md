@@ -31,6 +31,24 @@
 - Device install reported bundle id `com.popcornnnnnn.privatemoments` and installation URL `file:///private/var/containers/Bundle/Application/2B8340D6-8DF2-4BC4-9D42-915C2063E638/PrivateMoments.app/`.
 - Device launch succeeded through `xcrun devicectl device process launch`.
 
+## Time Insights Follow-up Verification
+
+Validated on 2026-05-09 from `main`.
+
+- Added schema version 16 with `checkin_items.time_visualization`, defaulting legacy rows to `none`.
+- `npm run server:typecheck` passed.
+- `npm run server:test` passed: 53/53 Node tests, including `upsert_checkin_item` default, valid modes, invalid mode rejection, and `timeLine` rejection for `multiplePerDay`.
+- `npm run admin:build` passed.
+- `npm run verify:ios:generic` passed.
+- `xcodebuild -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination 'platform=iOS Simulator,id=99FC9B7B-81FF-4BDD-9562-3DF02EA63D06' test` passed: 59/59 XCTest cases, including `CheckInTimeInsightsTests`.
+- `npm run verify:all` passed; `verify:uat-gates` reported 11 total, 0 open.
+- Created a live SQLite backup before migration: `server/data/backups/manual/app-before-checkin-time-insights-20260509-120507.sqlite`.
+- Ran `npm run server:prisma:deploy` against the live database; migration `20260509102000_checkin_time_visualization` applied successfully.
+- Restarted the LaunchAgent-managed server; `GET http://127.0.0.1:3210/api/v1/health` returned `schemaVersion: 16`.
+- Pre-install iPhone Library checkpoint `.tmp/deploy-checkpoints/20260509-120552-checkin-time-insights` showed visible posts `131`, outbox pending/failed `0`, active check-in items `5`, check-in entries `4`, and check-in media pending/failed `0`.
+- `npm run ios:device` built, signed, installed, and launched `com.popcornnnnnn.privatemoments` on `wwz 的 iphone`.
+- Post-install iPhone Library checkpoint `.tmp/deploy-checkpoints/20260509-120647-checkin-time-insights-postinstall` showed `local_checkin_items.timeVisualization` exists, all 5 existing items default to `none`, outbox pending/failed remains `0`, and active check-in media pending/failed remains `0`.
+
 ## Simulator Mock-Data Verification
 
 Simulator: `Private Moments Pinned iPhone 17` (`1FD6368F-8CB5-4736-9682-AE8DF38A0CC9`)

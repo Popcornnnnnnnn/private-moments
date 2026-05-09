@@ -36,6 +36,9 @@ interface ExportPackageManifest {
     tagAliases: number;
     postTags: number;
     aiSummaries: number;
+    checkInItems: number;
+    checkInEntries: number;
+    checkInMedia: number;
   };
 }
 
@@ -51,6 +54,16 @@ type ExportPost = Prisma.PostGetPayload<{
 type ExportTag = Prisma.TagGetPayload<{
   include: {
     aliases: true;
+  };
+}>;
+
+type ExportCheckInItem = Prisma.CheckInItemGetPayload<{
+  include: {
+    entries: {
+      include: {
+        media: true;
+      };
+    };
   };
 }>;
 
@@ -77,8 +90,13 @@ export class ExportImportService {
     const media = posts.flatMap((post) => post.media);
     const comments = posts.flatMap((post) => post.comments);
     const aiSummaries = posts.flatMap((post) => post.aiSummaries);
+    const checkInItems = await this.loadExportCheckInItems(dateRange);
+    const checkInEntries = checkInItems.flatMap((item) => item.entries);
+    const checkInMedia = checkInEntries.flatMap((entry) => entry.media);
 
-    const copiedMediaFiles = await this.copyExportMedia(media, mediaDir);
+    const copiedMediaFiles =
+      (await this.copyExportMedia(media, mediaDir)) +
+      (await this.copyExportCheckInMedia(checkInMedia, mediaDir));
     const manifest: ExportPackageManifest = {
       packageType: "private-moments-export",
       packageVersion: 1,
@@ -98,6 +116,9 @@ export class ExportImportService {
         tagAliases: tagAliases.length,
         postTags: postTags.length,
         aiSummaries: aiSummaries.length,
+        checkInItems: checkInItems.length,
+        checkInEntries: checkInEntries.length,
+        checkInMedia: checkInMedia.length,
       },
     };
 
@@ -113,16 +134,18 @@ export class ExportImportService {
         tags: tags.map((tag) => serializeTagRecord(tag)),
         tagAliases: tagAliases.map((alias) => serializeTagAlias(alias)),
         posts: posts.map((post) => serializePostRecord(post)),
+        checkInItems: checkInItems.map((item) => serializeCheckInItemRecord(item)),
       }, null, 2)}\n`,
       "utf8",
     );
-    await writeFile(path.join(exportDir, "preview.md"), renderPreview(posts), "utf8");
+    await writeFile(path.join(exportDir, "preview.md"), renderPreview(posts, checkInItems), "utf8");
 
     const tarballPath = `${exportDir}.tar.gz`;
     await runCommand("tar", ["-czf", tarballPath, "-C", path.dirname(exportDir), path.basename(exportDir)]);
     await this.fileLogger.info("archive.export_completed", {
       posts: posts.length,
       media: media.length,
+      checkInEntries: checkInEntries.length,
       tarballPath,
     });
 
@@ -241,6 +264,48 @@ export class ExportImportService {
     });
   }
 
+  private async loadExportCheckInItems(dateRange: ExportDateRange): Promise<ExportCheckInItem[]> {
+    return this.prisma.checkInItem.findMany({
+      where: dateRange.from || dateRange.to
+        ? {
+            entries: {
+              some: {
+                occurredAt: {
+                  ...(dateRange.from ? { gte: dateRange.from } : {}),
+                  ...(dateRange.to ? { lt: dateRange.to } : {}),
+                },
+              },
+            },
+          }
+        : {},
+      include: {
+        entries: {
+          where: dateRange.from || dateRange.to
+            ? {
+                occurredAt: {
+                  ...(dateRange.from ? { gte: dateRange.from } : {}),
+                  ...(dateRange.to ? { lt: dateRange.to } : {}),
+                },
+              }
+            : {},
+          include: {
+            media: {
+              orderBy: {
+                sortOrder: "asc",
+              },
+            },
+          },
+          orderBy: {
+            occurredAt: "asc",
+          },
+        },
+      },
+      orderBy: {
+        sortOrder: "asc",
+      },
+    });
+  }
+
   private async copyExportMedia(
     media: Array<{ id: string; compressedPath: string | null; originalPath: string | null; thumbnailPath: string | null }>,
     mediaDir: string,
@@ -268,6 +333,36 @@ export class ExportImportService {
         seen.add(relativePath);
         copied += 1;
       }
+    }
+
+    return copied;
+  }
+
+  private async copyExportCheckInMedia(
+    media: Array<{ compressedPath: string | null }>,
+    mediaDir: string,
+  ): Promise<number> {
+    const seen = new Set<string>();
+    let copied = 0;
+    for (const item of media) {
+      if (!item.compressedPath || seen.has(item.compressedPath)) {
+        continue;
+      }
+
+      const source = path.join(this.paths.dataDir, item.compressedPath);
+      if (!isPathInsideOrEqual(this.paths.dataDir, source) || !(await exists(source))) {
+        continue;
+      }
+
+      const target = path.join(mediaDir, item.compressedPath);
+      if (!isPathInsideOrEqual(mediaDir, target)) {
+        continue;
+      }
+
+      await mkdir(path.dirname(target), { recursive: true });
+      await cp(source, target);
+      seen.add(item.compressedPath);
+      copied += 1;
     }
 
     return copied;
@@ -302,6 +397,7 @@ export class ExportImportService {
       await importedPrisma.$transaction(async (tx) => {
         await clearImportedRuntime(tx);
         await importTags(tx, archive);
+        await importCheckIns(tx, archive);
         await importPosts(tx, archive);
         await rebuildServerChanges(tx, archive);
       }, {
@@ -332,6 +428,7 @@ interface ExportArchiveFile {
   tags: Array<Record<string, unknown>>;
   tagAliases: Array<Record<string, unknown>>;
   posts: Array<ExportedPostRecord>;
+  checkInItems: Array<ExportedCheckInItemRecord>;
 }
 
 interface ExportedPostRecord {
@@ -352,6 +449,24 @@ interface ExportedPostRecord {
   comments: Array<Record<string, unknown>>;
   aiSummaries: Array<Record<string, unknown>>;
   postTags: Array<Record<string, unknown>>;
+}
+
+interface ExportedCheckInItemRecord {
+  id: string;
+  name: string;
+  symbolName: string;
+  colorHex: string;
+  recordMode: string;
+  timeVisualization: string;
+  activeWeekdays: Array<unknown>;
+  sortOrder: number;
+  defaultShowInTimeline: boolean;
+  tagId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+  deletedAt: string | null;
+  entries: Array<Record<string, unknown>>;
 }
 
 function parseDateRange(input: { from?: string; to?: string }): ExportDateRange {
@@ -397,6 +512,59 @@ function serializePostRecord(post: ExportPost): ExportedPostRecord {
     comments: post.comments.map(serializeCommentRecord),
     aiSummaries: post.aiSummaries.map(serializeSummaryRecord),
     postTags: post.tags.map(serializePostTag),
+  };
+}
+
+function serializeCheckInItemRecord(item: ExportCheckInItem): ExportedCheckInItemRecord {
+  return {
+    id: item.id,
+    name: item.name,
+    symbolName: item.symbolName,
+    colorHex: item.colorHex,
+    recordMode: item.recordMode,
+    timeVisualization: item.timeVisualization,
+    activeWeekdays: parseJsonArray(item.activeWeekdaysJson),
+    sortOrder: item.sortOrder,
+    defaultShowInTimeline: item.defaultShowInTimeline,
+    tagId: item.tagId,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+    archivedAt: item.archivedAt?.toISOString() ?? null,
+    deletedAt: item.deletedAt?.toISOString() ?? null,
+    entries: item.entries.map(serializeCheckInEntryRecord),
+  };
+}
+
+function serializeCheckInEntryRecord(entry: ExportCheckInItem["entries"][number]): Record<string, unknown> {
+  return {
+    id: entry.id,
+    itemId: entry.itemId,
+    occurredAt: entry.occurredAt.toISOString(),
+    note: entry.note,
+    showInTimeline: entry.showInTimeline,
+    clientCreatedAt: entry.clientCreatedAt?.toISOString() ?? null,
+    clientUpdatedAt: entry.clientUpdatedAt?.toISOString() ?? null,
+    createdAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
+    deletedAt: entry.deletedAt?.toISOString() ?? null,
+    media: entry.media.map(serializeCheckInMediaRecord),
+  };
+}
+
+function serializeCheckInMediaRecord(media: ExportCheckInItem["entries"][number]["media"][number]): Record<string, unknown> {
+  return {
+    id: media.id,
+    entryId: media.entryId,
+    kind: media.kind,
+    status: media.status,
+    compressedPath: media.compressedPath,
+    mimeType: media.mimeType,
+    compressedSizeBytes: media.compressedSizeBytes,
+    checksum: media.checksum,
+    sortOrder: media.sortOrder,
+    createdAt: media.createdAt.toISOString(),
+    updatedAt: media.updatedAt.toISOString(),
+    deletedAt: media.deletedAt?.toISOString() ?? null,
   };
 }
 
@@ -467,11 +635,14 @@ function serializeSummaryRecord(summary: ExportPost["aiSummaries"][number]): Rec
   };
 }
 
-function renderPreview(posts: ExportPost[]): string {
+function renderPreview(posts: ExportPost[], checkInItems: ExportCheckInItem[]): string {
   const lines = [
     "# Private Moments Export Preview",
     "",
     `Generated at ${new Date().toISOString()}.`,
+    "",
+    `Moments: ${posts.length}`,
+    `Check-ins: ${checkInItems.reduce((count, item) => count + item.entries.length, 0)}`,
     "",
   ];
   for (const post of posts) {
@@ -508,6 +679,9 @@ async function readArchiveFile(filePath: string): Promise<ExportArchiveFile> {
   if (!Array.isArray(parsed.tags) || !Array.isArray(parsed.tagAliases)) {
     throw new Error("Invalid export package metadata");
   }
+  if (!Array.isArray(parsed.checkInItems)) {
+    parsed.checkInItems = [];
+  }
   return parsed as unknown as ExportArchiveFile;
 }
 
@@ -517,6 +691,9 @@ async function clearImportedRuntime(tx: Prisma.TransactionClient): Promise<void>
   await tx.serverChange.deleteMany();
   await tx.aiSummary.deleteMany();
   await tx.postTag.deleteMany();
+  await tx.checkInMedia.deleteMany();
+  await tx.checkInEntry.deleteMany();
+  await tx.checkInItem.deleteMany();
   await tx.tagAlias.deleteMany();
   await tx.tag.deleteMany();
   await tx.comment.deleteMany();
@@ -568,6 +745,82 @@ async function importTags(tx: Prisma.TransactionClient, archive: ExportArchiveFi
         deletedAt: getNullableDate(raw, "deletedAt"),
       },
     });
+  }
+}
+
+async function importCheckIns(tx: Prisma.TransactionClient, archive: ExportArchiveFile): Promise<void> {
+  for (const item of archive.checkInItems) {
+    const activeWeekdays = Array.isArray(item.activeWeekdays)
+      ? item.activeWeekdays.filter((value): value is number => Number.isInteger(value))
+      : [];
+
+    await tx.checkInItem.create({
+      data: {
+        id: item.id,
+        name: item.name,
+        symbolName: item.symbolName,
+        colorHex: item.colorHex,
+        recordMode: item.recordMode,
+        timeVisualization: validCheckInTimeVisualization(item.timeVisualization),
+        activeWeekdaysJson: JSON.stringify(activeWeekdays.length ? activeWeekdays : [1, 2, 3, 4, 5, 6, 7]),
+        sortOrder: item.sortOrder,
+        defaultShowInTimeline: item.defaultShowInTimeline,
+        tagId: item.tagId,
+        createdAt: parseDate(item.createdAt),
+        updatedAt: parseDate(item.updatedAt),
+        archivedAt: parseNullableDate(item.archivedAt),
+        deletedAt: parseNullableDate(item.deletedAt),
+        serverVersion: 0,
+      },
+    });
+
+    for (const raw of item.entries) {
+      const id = getString(raw, "id");
+      if (!id) {
+        continue;
+      }
+
+      await tx.checkInEntry.create({
+        data: {
+          id,
+          itemId: item.id,
+          occurredAt: getDate(raw, "occurredAt") ?? new Date(),
+          note: getString(raw, "note") ?? "",
+          showInTimeline: getBoolean(raw, "showInTimeline") ?? false,
+          clientCreatedAt: getNullableDate(raw, "clientCreatedAt"),
+          clientUpdatedAt: getNullableDate(raw, "clientUpdatedAt"),
+          createdAt: getDate(raw, "createdAt") ?? new Date(),
+          updatedAt: getDate(raw, "updatedAt") ?? new Date(),
+          deletedAt: getNullableDate(raw, "deletedAt"),
+          serverVersion: 0,
+        },
+      });
+
+      const rawMedia = raw["media"];
+      const media = Array.isArray(rawMedia) ? rawMedia.filter(isRecord) : [];
+      for (const mediaRecord of media) {
+        const mediaId = getString(mediaRecord, "id");
+        if (!mediaId) {
+          continue;
+        }
+        await tx.checkInMedia.create({
+          data: {
+            id: mediaId,
+            entryId: id,
+            kind: getString(mediaRecord, "kind") ?? "image",
+            status: getString(mediaRecord, "status") ?? "uploaded",
+            compressedPath: getNullableString(mediaRecord, "compressedPath"),
+            mimeType: getNullableString(mediaRecord, "mimeType"),
+            compressedSizeBytes: getNullableInteger(mediaRecord, "compressedSizeBytes"),
+            checksum: getNullableString(mediaRecord, "checksum"),
+            sortOrder: getInteger(mediaRecord, "sortOrder") ?? 0,
+            createdAt: getDate(mediaRecord, "createdAt") ?? new Date(),
+            updatedAt: getDate(mediaRecord, "updatedAt") ?? new Date(),
+            deletedAt: getNullableDate(mediaRecord, "deletedAt"),
+          },
+        });
+      }
+    }
   }
 }
 
@@ -705,6 +958,7 @@ async function importPosts(tx: Prisma.TransactionClient, archive: ExportArchiveF
 
 async function rebuildServerChanges(tx: Prisma.TransactionClient, archive: ExportArchiveFile): Promise<void> {
   const postVersion = new Map<string, number>();
+  const checkInItemVersion = new Map<string, number>();
 
   for (const raw of archive.tags) {
     const id = getString(raw, "id");
@@ -734,6 +988,92 @@ async function rebuildServerChanges(tx: Prisma.TransactionClient, archive: Expor
         payloadJson: JSON.stringify(raw),
       },
     });
+  }
+
+  for (const item of archive.checkInItems) {
+    const itemChange = await tx.serverChange.create({
+      data: {
+        entityType: "checkin_item",
+        entityId: item.id,
+        changeType: item.deletedAt ? "checkin_item_deleted" : "checkin_item_updated",
+        payloadJson: JSON.stringify(item.deletedAt
+          ? {
+              id: item.id,
+              deletedAt: item.deletedAt,
+            }
+          : {
+              id: item.id,
+              name: item.name,
+              symbolName: item.symbolName,
+              colorHex: item.colorHex,
+              recordMode: item.recordMode,
+              timeVisualization: validCheckInTimeVisualization(item.timeVisualization),
+              activeWeekdays: item.activeWeekdays,
+              sortOrder: item.sortOrder,
+              defaultShowInTimeline: item.defaultShowInTimeline,
+              tagId: item.tagId,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+              archivedAt: item.archivedAt,
+              deletedAt: item.deletedAt,
+            }),
+      },
+    });
+    checkInItemVersion.set(item.id, itemChange.version);
+
+    for (const entry of item.entries) {
+      const id = getString(entry, "id");
+      if (!id) {
+        continue;
+      }
+      const change = await tx.serverChange.create({
+        data: {
+          entityType: "checkin_entry",
+          entityId: id,
+          changeType: getNullableString(entry, "deletedAt") ? "checkin_entry_deleted" : "checkin_entry_updated",
+          payloadJson: JSON.stringify(entry),
+        },
+      });
+      await tx.checkInEntry.update({
+        where: {
+          id,
+        },
+        data: {
+          serverVersion: change.version,
+        },
+      });
+      checkInItemVersion.set(item.id, change.version);
+
+      const rawMedia = entry["media"];
+      const mediaRecords = Array.isArray(rawMedia) ? rawMedia.filter(isRecord) : [];
+      for (const media of mediaRecords) {
+        const mediaId = getString(media, "id");
+        if (!mediaId) {
+          continue;
+        }
+        const mediaChange = await tx.serverChange.create({
+          data: {
+            entityType: "checkin_media",
+            entityId: mediaId,
+            changeType: getNullableString(media, "deletedAt") ? "checkin_media_deleted" : "checkin_media_uploaded",
+            payloadJson: JSON.stringify({
+              id: mediaId,
+              entryId: id,
+              kind: getString(media, "kind") ?? "image",
+              status: getString(media, "status") ?? "uploaded",
+              variant: "compressed",
+              path: getNullableString(media, "compressedPath"),
+              mimeType: getNullableString(media, "mimeType"),
+              sortOrder: getInteger(media, "sortOrder") ?? 0,
+              checksum: getNullableString(media, "checksum"),
+              compressedSizeBytes: getNullableInteger(media, "compressedSizeBytes"),
+              deletedAt: getNullableString(media, "deletedAt"),
+            }),
+          },
+        });
+        checkInItemVersion.set(item.id, mediaChange.version);
+      }
+    }
   }
 
   for (const post of archive.posts) {
@@ -880,6 +1220,17 @@ async function rebuildServerChanges(tx: Prisma.TransactionClient, archive: Expor
       },
     });
   }
+
+  for (const [itemId, version] of checkInItemVersion) {
+    await tx.checkInItem.update({
+      where: {
+        id: itemId,
+      },
+      data: {
+        serverVersion: version,
+      },
+    });
+  }
 }
 
 async function copyImportedMedia(exportDir: string, importedPaths: DataPaths): Promise<void> {
@@ -913,13 +1264,28 @@ async function verifyImportedData(paths: DataPaths): Promise<Record<string, unkn
   };
   const prisma = createPrismaClient(config);
   try {
-    const [posts, media, comments, tags, summaries, serverChanges, devices, missingMediaFiles] =
+    const [
+      posts,
+      media,
+      comments,
+      tags,
+      summaries,
+      checkInItems,
+      checkInEntries,
+      checkInMedia,
+      serverChanges,
+      devices,
+      missingMediaFiles,
+    ] =
       await Promise.all([
         prisma.post.count(),
         prisma.media.count(),
         prisma.comment.count(),
         prisma.tag.count(),
         prisma.aiSummary.count(),
+        prisma.checkInItem.count(),
+        prisma.checkInEntry.count(),
+        prisma.checkInMedia.count(),
         prisma.serverChange.count(),
         prisma.device.count(),
         countMissingMediaFiles(prisma, paths),
@@ -933,6 +1299,9 @@ async function verifyImportedData(paths: DataPaths): Promise<Record<string, unkn
       comments,
       tags,
       aiSummaries: summaries,
+      checkInItems,
+      checkInEntries,
+      checkInMedia,
       serverChanges,
       devices,
       missingMediaFiles,
@@ -969,6 +1338,21 @@ async function countMissingMediaFiles(prisma: PrismaClient, paths: DataPaths): P
       if (!isPathInsideOrEqual(paths.dataDir, absolute) || !(await exists(absolute))) {
         missing += 1;
       }
+    }
+  }
+  const checkInMedia = await prisma.checkInMedia.findMany({
+    select: {
+      compressedPath: true,
+      deletedAt: true,
+    },
+  });
+  for (const item of checkInMedia) {
+    if (item.deletedAt || !item.compressedPath) {
+      continue;
+    }
+    const absolute = path.join(paths.dataDir, item.compressedPath);
+    if (!isPathInsideOrEqual(paths.dataDir, absolute) || !(await exists(absolute))) {
+      missing += 1;
     }
   }
   return missing;
@@ -1084,6 +1468,19 @@ function getDate(record: Record<string, unknown>, key: string): Date | null {
 function getNullableDate(record: Record<string, unknown>, key: string): Date | null {
   const value = getString(record, key);
   return value ? parseDateOrNull(value) : null;
+}
+
+function parseJsonArray(value: string): Array<unknown> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function validCheckInTimeVisualization(value: string): string {
+  return value === "timeLine" || value === "timeHeatmap" ? value : "none";
 }
 
 function parseDate(value: string): Date {

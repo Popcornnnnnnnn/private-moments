@@ -210,6 +210,7 @@ model CheckInItem {
   symbolName            String    @map("symbol_name")
   colorHex              String    @map("color_hex")
   recordMode            String    @map("record_mode")
+  timeVisualization     String    @default("none") @map("time_visualization")
   activeWeekdaysJson    String    @map("active_weekdays_json")
   sortOrder             Int       @default(0) @map("sort_order")
   defaultShowInTimeline Boolean   @default(false) @map("default_show_in_timeline")

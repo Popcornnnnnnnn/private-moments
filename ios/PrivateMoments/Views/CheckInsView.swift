@@ -8,6 +8,7 @@ struct CheckInsView: View {
     @State private var mode: CheckInsMode = .today
     @State private var isManagePresented = false
     @State private var itemEditorRoute: CheckInItemEditorRoute?
+    @State private var itemInsightsRoute: CheckInItemInsightsRoute?
     @State private var contentItem: CheckInItem?
     @State private var detailRoute: CheckInEntryDetailRoute?
     @State private var undoEntry: CheckInEntry?
@@ -98,6 +99,11 @@ struct CheckInsView: View {
             .sheet(item: $itemEditorRoute) { route in
                 CheckInItemEditorView(item: route.itemId.flatMap(store.checkInItem))
             }
+            .sheet(item: $itemInsightsRoute) { route in
+                if let item = store.checkInItem(id: route.itemId) {
+                    CheckInItemInsightsView(item: item)
+                }
+            }
             .sheet(item: $contentItem) { item in
                 CheckInContentEntryView(item: item)
             }
@@ -129,8 +135,8 @@ struct CheckInsView: View {
                     CheckInTodayRow(
                         row: row,
                         onTap: { handlePrimaryTap(row) },
-                        onAddContent: { contentItem = row.item },
-                        onOpenEntry: { entry in detailRoute = CheckInEntryDetailRoute(entryId: entry.id) }
+                        onOpenInsights: { itemInsightsRoute = CheckInItemInsightsRoute(itemId: row.item.id) },
+                        onAddContent: { contentItem = row.item }
                     )
                 }
             }
@@ -142,8 +148,8 @@ struct CheckInsView: View {
                     CheckInTodayRow(
                         row: row,
                         onTap: { handlePrimaryTap(row) },
-                        onAddContent: { contentItem = row.item },
-                        onOpenEntry: { entry in detailRoute = CheckInEntryDetailRoute(entryId: entry.id) }
+                        onOpenInsights: { itemInsightsRoute = CheckInItemInsightsRoute(itemId: row.item.id) },
+                        onAddContent: { contentItem = row.item }
                     )
                 }
             }
@@ -156,8 +162,8 @@ struct CheckInsView: View {
                         CheckInTodayRow(
                             row: row,
                             onTap: { handlePrimaryTap(row) },
-                            onAddContent: { contentItem = row.item },
-                            onOpenEntry: { entry in detailRoute = CheckInEntryDetailRoute(entryId: entry.id) }
+                            onOpenInsights: { itemInsightsRoute = CheckInItemInsightsRoute(itemId: row.item.id) },
+                            onAddContent: { contentItem = row.item }
                         )
                     }
                 }
@@ -282,8 +288,8 @@ private struct CheckInTodayRow: View {
 
     let row: CheckInTodayRowModel
     let onTap: () -> Void
+    let onOpenInsights: () -> Void
     let onAddContent: () -> Void
-    let onOpenEntry: (CheckInEntry) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -297,40 +303,38 @@ private struct CheckInTodayRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(row.isCompletedOnce ? L10n.t("Open check-in", appLanguage) : L10n.t("Check in", appLanguage))
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
-                    Text(row.item.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+            Button(action: onOpenInsights) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 7) {
+                        Text(row.item.name)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
 
-                    if row.item.recordMode == .multiplePerDay, !row.entries.isEmpty {
-                        Text("\(row.entries.count)")
-                            .font(.caption2.weight(.bold).monospacedDigit())
-                            .foregroundStyle(iconColor)
-                            .padding(.horizontal, 6)
-                            .frame(height: 18)
-                            .background(iconColor.opacity(0.12), in: Capsule())
+                        if row.item.recordMode == .multiplePerDay, !row.entries.isEmpty {
+                            Text("\(row.entries.count)")
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .foregroundStyle(iconColor)
+                                .padding(.horizontal, 6)
+                                .frame(height: 18)
+                                .background(iconColor.opacity(0.12), in: Capsule())
+                        }
                     }
-                }
 
-                if let latest = row.entries.first {
-                    Button {
-                        onOpenEntry(latest)
-                    } label: {
+                    if let latest = row.entries.first {
                         Text(subtitle(for: latest))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                    } else {
+                        Text(row.item.defaultShowInTimeline ? L10n.t("Shows in Timeline", appLanguage) : L10n.t("Private to check-ins", appLanguage))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(row.item.defaultShowInTimeline ? L10n.t("Shows in Timeline", appLanguage) : L10n.t("Private to check-ins", appLanguage))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
             }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
 
@@ -774,6 +778,14 @@ private struct CheckInItemEditorRoute: Identifiable {
     }
 }
 
+private struct CheckInItemInsightsRoute: Identifiable {
+    let itemId: String
+
+    var id: String {
+        itemId
+    }
+}
+
 private struct CheckInItemEditorView: View {
     @EnvironmentObject private var store: TimelineStore
     @Environment(\.dismiss) private var dismiss
@@ -785,6 +797,7 @@ private struct CheckInItemEditorView: View {
     @State private var symbolName: String
     @State private var colorHex: String
     @State private var recordMode: CheckInRecordMode
+    @State private var timeVisualization: CheckInTimeVisualization
     @State private var activeWeekdays: Set<Int>
     @State private var defaultShowInTimeline: Bool
     @State private var tagId: String
@@ -800,6 +813,7 @@ private struct CheckInItemEditorView: View {
         _symbolName = State(initialValue: initialSymbolName)
         _colorHex = State(initialValue: item?.colorHex ?? "#61B88D")
         _recordMode = State(initialValue: item?.recordMode ?? .oncePerDay)
+        _timeVisualization = State(initialValue: item?.timeVisualization ?? .none)
         _activeWeekdays = State(initialValue: Set(item?.activeWeekdays ?? [1, 2, 3, 4, 5, 6, 7]))
         _defaultShowInTimeline = State(initialValue: item?.defaultShowInTimeline ?? false)
         _tagId = State(initialValue: item?.tagId ?? "")
@@ -813,6 +827,18 @@ private struct CheckInItemEditorView: View {
                     TextField(L10n.t("Name", appLanguage), text: $name)
                     Picker(L10n.t("Mode", appLanguage), selection: $recordMode) {
                         ForEach(CheckInRecordMode.allCases) { mode in
+                            Label(mode.title(language: appLanguage), systemImage: mode.systemImage)
+                                .tag(mode)
+                        }
+                    }
+                    .onChange(of: recordMode) { _, newValue in
+                        if newValue == .multiplePerDay, timeVisualization == .timeLine {
+                            timeVisualization = .timeHeatmap
+                        }
+                    }
+
+                    Picker(L10n.t("Time visualization", appLanguage), selection: $timeVisualization) {
+                        ForEach(availableTimeVisualizations) { mode in
                             Label(mode.title(language: appLanguage), systemImage: mode.systemImage)
                                 .tag(mode)
                         }
@@ -962,6 +988,20 @@ private struct CheckInItemEditorView: View {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isIconSymbolValid
     }
 
+    private var availableTimeVisualizations: [CheckInTimeVisualization] {
+        CheckInTimeVisualization.allCases.filter { mode in
+            !(recordMode == .multiplePerDay && mode == .timeLine)
+        }
+    }
+
+    private var normalizedTimeVisualization: CheckInTimeVisualization {
+        if recordMode == .multiplePerDay, timeVisualization == .timeLine {
+            return .timeHeatmap
+        }
+
+        return timeVisualization
+    }
+
     private func save() {
         let normalizedSymbolName = CheckInSymbolValidator.normalized(symbolName)
         guard normalizedSymbolName == symbolName.trimmingCharacters(in: .whitespacesAndNewlines) else {
@@ -977,6 +1017,7 @@ private struct CheckInItemEditorView: View {
                 item.symbolName = normalizedSymbolName
                 item.colorHex = colorHex
                 item.recordMode = recordMode
+                item.timeVisualization = normalizedTimeVisualization
                 item.activeWeekdays = Array(activeWeekdays)
                 item.defaultShowInTimeline = defaultShowInTimeline
                 item.tagId = tagId.isEmpty ? nil : tagId
@@ -987,6 +1028,7 @@ private struct CheckInItemEditorView: View {
                     symbolName: normalizedSymbolName,
                     colorHex: colorHex,
                     recordMode: recordMode,
+                    timeVisualization: normalizedTimeVisualization,
                     activeWeekdays: Array(activeWeekdays),
                     defaultShowInTimeline: defaultShowInTimeline,
                     tagId: tagId.isEmpty ? nil : tagId

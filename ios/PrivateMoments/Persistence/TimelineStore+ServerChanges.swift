@@ -423,6 +423,9 @@ extension TimelineStore {
             symbolName: CheckInSymbolValidator.normalized(symbolName),
             colorHex: colorHex,
             recordMode: recordMode,
+            timeVisualization: CheckInTimeVisualization(
+                rawValue: payload["timeVisualization"]?.stringValue ?? "none"
+            ) ?? .none,
             activeWeekdays: activeWeekdays.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : activeWeekdays,
             sortOrder: sortOrder,
             defaultShowInTimeline: defaultShowInTimeline,

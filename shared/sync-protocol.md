@@ -308,6 +308,7 @@ Item payloads use `entityType: "checkin_item"`, `entityId: <item id>`.
   "symbolName": "fork.knife",
   "colorHex": "#D98E73",
   "recordMode": "multiplePerDay",
+  "timeVisualization": "timeHeatmap",
   "activeWeekdays": [1, 2, 3, 4, 5, 6, 7],
   "sortOrder": 2,
   "defaultShowInTimeline": false,
@@ -317,6 +318,8 @@ Item payloads use `entityType: "checkin_item"`, `entityId: <item id>`.
   "archivedAt": null
 }
 ```
+
+`timeVisualization` is synced item metadata. Supported values are `none`, `timeLine`, and `timeHeatmap`; missing legacy payloads default to `none`. `timeLine` is only valid for `oncePerDay` items because the chart plots one occurrence per local day. `timeHeatmap` accepts multiple entries per day and groups occurrence times into one-hour buckets.
 
 `delete_checkin_item` payload:
 

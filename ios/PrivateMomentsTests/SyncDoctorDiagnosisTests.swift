@@ -154,7 +154,8 @@ final class SyncDoctorDiagnosisTests: XCTestCase {
             pendingChanges: pendingChanges,
             pendingUploads: pendingUploads,
             failedUploads: failedUploads,
-            missingMediaDownloads: missingMediaDownloads
+            missingMediaDownloads: missingMediaDownloads,
+            checkIns: LocalCheckInStats(activeItems: 0, entries: 0, pendingChanges: 0, failedChanges: 0)
         )
     }
 

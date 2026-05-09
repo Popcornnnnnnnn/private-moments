@@ -208,6 +208,7 @@ extension TimelineStore {
             "symbolName": item.symbolName,
             "colorHex": item.colorHex,
             "recordMode": item.recordMode.rawValue,
+            "timeVisualization": item.timeVisualization.rawValue,
             "activeWeekdays": item.activeWeekdays,
             "sortOrder": item.sortOrder,
             "defaultShowInTimeline": item.defaultShowInTimeline,

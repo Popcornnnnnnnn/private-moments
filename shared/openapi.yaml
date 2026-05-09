@@ -2601,6 +2601,9 @@ components:
             `post_pin_updated` with `{id, isPinned, pinnedAt, updatedAt}`.
             Check-ins use `checkin_item`, `checkin_entry`, and `checkin_media`
             entity types. Item/entry metadata syncs through `/api/v1/sync`;
+            `upsert_checkin_item` supports `timeVisualization` values `none`,
+            `timeLine`, and `timeHeatmap`; missing legacy values default to
+            `none`, and `timeLine` is valid only for `oncePerDay` items.
             check-in image files upload separately through
             `/api/v1/checkin-media/upload`. `delete_checkin_media` soft-deletes
             one uploaded check-in media record and emits `checkin_media_deleted`.

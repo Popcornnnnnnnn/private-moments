@@ -40,6 +40,18 @@ Moments 是一个没有观众的生活表达空间。它应该像社交一样轻
 - 如果以后需要排序，先评估是否真的超过少量置顶；默认用 `pinnedAt` 排序，不急着做拖拽管理。
 - 当前筛选/搜索启用时，Pinned 应只显示同样匹配筛选的 pinned moments，避免顶部出现和当前上下文无关的内容。
 
+## Check-ins Without Habit Pressure
+
+Check-ins 是生活纹理，不是 KPI habit tracker。它可以帮助用户回看起床、睡觉、喝咖啡、吃饭、运动等时间节奏，但不能把主体验变成任务系统。
+
+设计约束：
+
+- Today row 的日常动作保持轻量：左侧 icon 一键打卡或打开今日 entry，中间区域进入只读 insights，右侧才是补 note、时间、照片和 Timeline 显示的低频入口。
+- Time insights 只在 item 详情页展示，不在 Today row 放 mini chart，避免破坏打卡速度。
+- `Time Line` 只用于一天一次且时间相对稳定的 item；一天多次或时间分散的 item 使用 `Time Heatmap` 或 `None`。
+- 图表解释只展示事实分布，不生成 AI 评价、提醒、连续天数、完成率或目标压力。
+- Calendar 继续承担日期回看，不因为 check-in insights 变成统计面板。
+
 ## iOS-First Operations
 
 Mac Admin 是低频运维工具，不是长期的日常使用中心。后续新增设置、监控、诊断和安全修复动作时，默认先判断能否放在 iOS Settings 或 iOS 内的专用诊断页里。

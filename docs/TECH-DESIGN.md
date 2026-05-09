@@ -166,9 +166,11 @@ Check-ins 是第三个底部 tab，和 Timeline、Calendar 并列；默认启动
 
 Check-in 图标没有单独的 server/database icon 表。同步协议只保存 SF Symbol 名称字符串；iOS 编辑器提供本地精选图标 catalog、类别筛选、搜索、预览和高级 `SF Symbol name` 输入，并在保存前用系统 symbol lookup 校验。只有未来需要跨平台可管理 icon library 时，才重新考虑 icon catalog 表。
 
-一次一天 item 使用本地日期做去重，编辑 entry 时间时也要重新校验同一天是否已有 entry。一天多次 item 不做时间冲突 UI，因为用户不需要在同一时间连续打卡；按发生时间自然排序即可。
+一次一天 item 使用本地日期做去重，编辑 entry 时间时也要重新校验同一天是否已有 entry。一天多次 item 不做时间冲突 UI，因为用户不需要在同一时间连续打卡；按发生时间自然排序即可。Item 还同步一个 `timeVisualization` 配置，取值为 `none`、`timeLine` 或 `timeHeatmap`，旧 item 默认 `none`。`timeLine` 只允许 `oncePerDay` item 使用；`multiplePerDay` item 只能用 `none` 或 `timeHeatmap`。
 
-Check-ins UI 的默认路径必须是 one tap。`Today` 里点击 item 主区域会立即写入本地 SQLite 和 outbox，不弹 sheet，不要求 note 或 media。需要补充内容时，右侧低权重入口打开单独表单，允许填写 note、发生时间和 `Show in Timeline`。Entry detail 支持修改 note、发生时间、Timeline 显示开关，或取消打卡。`Manage` 负责 item 创建、编辑、archive/delete；item row 整行都是编辑入口，并提供按压/hover 式反馈，避免只有图标像可点击。创建 item 可以稍复杂，但日常打卡不能被表单拖慢。
+Check-ins UI 的默认路径必须是 one tap。`Today` row 左侧 icon 负责一键打卡；已经完成的一天一次 item，左侧 icon 打开今日 entry。中间 item 区域打开只读 item insights/trends 页，右侧低权重入口打开单独表单，允许填写 note、发生时间、照片和 `Show in Timeline`。Entry detail 支持修改 note、发生时间、Timeline 显示开关，或取消打卡。`Manage` 负责 item 创建、编辑、archive/delete；item row 整行都是编辑入口，并提供按压/hover 式反馈，避免只有图标像可点击。创建 item 可以稍复杂，但日常打卡不能被表单拖慢。
+
+Item insights 是只读回看页，不进入 Manage。`timeLine` 展示最近 30 天每天的发生时间，缺失日期为空点并断线，Y 轴根据真实最早/最晚时间自动外扩；当晚间/凌晨时间跨午夜时，图表会把凌晨点展开到连续晚间区间。`timeHeatmap` 展示最近 30 天所有非删除 entry 的发生时间，使用 1 小时 bucket，同时显示 `24h distribution` 和 `weekday x hour`，支持一天多次记录。第一版不做聚类、AI 解读、提醒、目标或连续天数。
 
 Timeline 使用混合 feed：普通 `TimelineItem` 加上 `showInTimeline=true` 的 `CheckInFeedEntry`。Check-in row 由 item 图标/颜色和 item 名称表达身份，可显示 note 和可选 tag，但不提供 comments、favorite、pin、AI summary、transcription、OCR 或 AI auto-tagging。关闭某条 entry 的 `Show in Timeline` 只影响 Timeline 和 Timeline search/filter；entry 仍保留在 Check-ins、Calendar 和 sync 数据中。
 
@@ -404,7 +406,7 @@ Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Se
 {
   "app": "PrivateMoments",
   "dataVersion": 1,
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "createdAt": "2026-04-28T00:00:00.000Z",
   "mediaLayoutVersion": 1
 }
@@ -1054,7 +1056,7 @@ POST   /api/v1/admin/archive/jobs/import
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "acceptedOps": ["op-uuid-1", "op-uuid-2"],
   "rejectedOps": [],
   "serverChanges": [
