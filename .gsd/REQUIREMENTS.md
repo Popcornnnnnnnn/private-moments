@@ -223,6 +223,24 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R050,R051
 - Validation: Generic iOS build verifies the view compiles against existing Admin diagnostics models; real-device UAT confirms readability.
 
+### R064 — Runtime doctor must catch directory and service drift after local moves.
+- Class: operational
+- Status: active
+- Description: The project must provide a repeatable command that checks the live Mac service path, LaunchAgent state, listener cwd/fds, generated local tooling paths, SQLite health, Tailscale health, and optional fallback health after the repository or data directory moves.
+- Why it matters: A successful build is not enough if launchd or the live listener still points at an old checkout, old database, or old Python environment.
+- Source: 2026-05-10 directory-migration repair
+- Primary owning slice: maintenance
+- Validation: `npm run doctor:runtime` must report no failures before considering a directory migration or LaunchAgent repair complete.
+
+### R065 — Maintenance doctors must make sync, archive, AI, and release readiness repeatable.
+- Class: operational
+- Status: active
+- Description: The project must expose command-line doctors for authenticated sync-health checks, non-destructive archive drills, AI summary/review quality signals, and current-checkout open-source readiness so owner maintenance does not depend on ad hoc shell sequences.
+- Why it matters: Private Moments stores personal data and relies on local Mac runtime state; repeatable diagnostics reduce the chance that sync queues, archive recovery gaps, AI prompt drift, or public-release boundary issues are missed.
+- Source: 2026-05-10 maintenance checkpoint
+- Primary owning slice: maintenance
+- Validation: `PRIVATE_MOMENTS_SMOKE_PASSWORD=<env-password> npm run doctor:all` must complete without failures. Historical AI/release warnings may remain documented until the underlying data or release policy changes.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active
@@ -708,10 +726,16 @@ This file is the explicit capability and coverage contract for the project.
 | R057 | operational | active | M012 | R036,R050,R053,R054 | Check-in item/entry/media sync and diagnostics stay iOS-first, with Mac Admin reserved for Mac-local recovery and runtime truth. |
 | R058 | functional | active | M012 follow-up | R053,R056,R057 | Check-in time insights are optional per-item synced metadata with line charts only for once-per-day items and heatmaps for multi-entry distributions. |
 | R059 | functional | active | M014 | R058 | Once-per-day check-in items support a synced item-level daily reset hour so sleep-like items can treat early-morning and late-evening entries as adjacent item days rather than the same natural calendar day. |
+| R060 | functional | active | M013 | R055,R058 | Calendar Day Review shows a compact check-ins rhythm strip before the full mixed feed. |
+| R061 | functional | active | M013 | R040,R041,R042,R043,R045,R047 | Weekly Review v2 keeps generation conservative and filters broken anchors before persistence. |
+| R062 | operational | active | M013 | R003,R048 | Real-device install preflight checks server/schema/queues/device visibility before replacing the app. |
+| R063 | operational | active | M013 | R034,R035,R050,R051 | iOS Diagnostics exposes focused read-only Backup Status while restore/promote/export/import execution remains Mac Admin only. |
+| R064 | operational | active | maintenance | R048,R050,R051 | `doctor:runtime` verifies live service path truth, LaunchAgent/listener drift, local tooling paths, SQLite health, Tailscale health, and optional fallback health after directory or service changes. |
+| R065 | operational | active | maintenance | R016,R019,R035,R036,R047 | `doctor:sync`, `doctor:archive`, `doctor:ai`, and `doctor:release` provide repeatable maintenance checks for sync queues, archive recovery, AI output metadata quality, and current-checkout release hygiene. |
 
 ## Coverage Summary
 
-- Active requirements: 48
-- Mapped to slices: 48 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054, R055, R056, R057, R058, R059)
+- Active requirements: 54
+- Mapped to slices: 54 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054, R055, R056, R057, R058, R059, R060, R061, R062, R063, R064, R065)
 - Validated: 9 (R004, R005, R006, R007, R017, R049, R052, R053, R054)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

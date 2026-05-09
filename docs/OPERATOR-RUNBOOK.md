@@ -83,6 +83,27 @@ npm run verify:release-gates
 
 `npm run smoke:admin` 默认只检查 live health。如果设置 `PRIVATE_MOMENTS_SMOKE_PASSWORD`，脚本会登录本机 server，并只读检查 Admin status、Archive maintenance state/job list、Archive repository、Review settings 和 Review list。认证模式会创建或复用一个名为 `Admin Smoke` 的 Mac device row；不要把真实 password 写入脚本或文档。
 
+## 维护 Doctor 入口
+
+`verify:*` 负责构建、测试和 gate；`doctor:*` 负责当前机器的运行态、数据和发布边界。目录迁移、LaunchAgent 重装、Cloudflare/Tailscale 调整、Archive 演练、AI prompt 调整或开源前检查后，优先跑对应 doctor。
+
+```bash
+npm run doctor:runtime
+PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:sync
+npm run doctor:archive
+npm run doctor:ai
+npm run doctor:release
+PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:all
+```
+
+- `doctor:runtime` 检查 `server/.env`、live health、LaunchAgent plist/state、3210 listener cwd/fd、Prisma client、server `.venv` shebang、SQLite `quick_check`、Tailscale health，以及可选 fallback health。它用于确认当前服务没有继续指向旧目录或旧 build。
+- `doctor:sync` 检查 server change cursor、device 表、pending/rejected sync operations、media 队列、AI summary 队列和 maintenance jobs。设置 `PRIVATE_MOMENTS_SMOKE_PASSWORD` 时，它会登录 Admin status 做只读交叉验证；不设置时会跳过认证检查。
+- `doctor:archive` 对 live SQLite 做临时复制和 `quick_check`，统计 posts/media/check-ins/server changes，确认未删除 media 引用有文件，检查 archive config、`restic` 可用性和 pending promote 文件。它只写 `.tmp/archive-drills/<timestamp>/report.json`，不改 live archive。
+- `doctor:ai` 对 live DB 做启发式质量检查：ready summary title 长度、prompt version、document body、recent one-liner、Weekly Review prompt/version/anchors，以及 `ai_usage_events` 记账。旧历史数据可能产生 warning，但不应阻塞运行态修复。
+- `doctor:release` 做当前工作区开源边界扫描：license、tracked API key 形态、个人 Tailscale/fallback 配置、ignore 边界、公开 docs 和 `.gsd` release 策略。真正公开前仍必须额外做 Git history secret scan。
+
+doctor 输出按 `PASS / WARN / FAIL` 聚合。`FAIL` 表示当前 checkpoint 不应继续发布或迁移；`WARN` 表示存在需要记录的历史数据、发布准备或人工判断项。
+
 ## Worktree 开发和数据安全
 
 `main` 工作目录只作为固定版本的集成线。功能开发、测试、构建、打包和真实设备 UAT 默认在独立 worktree 中完成。

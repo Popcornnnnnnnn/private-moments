@@ -51,6 +51,8 @@ npm run setup:local -- --with-ios
 npm run verify:server
 npm run server:dev
 curl -fsS http://127.0.0.1:3210/api/v1/health
+npm run doctor:runtime
+PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:sync
 ```
 
 通过标准：
@@ -60,6 +62,8 @@ curl -fsS http://127.0.0.1:3210/api/v1/health
 - Admin build 通过。
 - Health endpoint 返回成功。
 - Admin UI 可以登录并查看 storage、sync、AI summary diagnostics。
+- Runtime doctor 不再发现旧目录、旧 LaunchAgent cwd、旧 SQLite 路径或旧虚拟环境 shebang。
+- Sync doctor 没有 pending/rejected sync、media、AI summary 或 maintenance job 的阻塞项。
 
 ## iOS 验证门禁
 
@@ -130,6 +134,33 @@ M009 Phase A 完成后，v0.1 内部候选版本还必须满足：
 - Export 不包含 auth token、session、device runtime state。
 - Import 只导入到新/空数据目录，并保留 archive IDs/timestamps/generated metadata；导入后重新初始化 sync/outbox/device 状态。
 
+自动化演练入口：
+
+```bash
+npm run doctor:archive
+```
+
+通过标准：
+
+- live SQLite 的临时副本 `quick_check` 通过。
+- report 中 posts/media/check-ins/server changes 统计符合当前 archive 预期。
+- 未删除 media 引用的文件存在。
+- restic 可用，archive config 可读。
+- 没有遗留的 `archive/pending-promote.json` 挡住下一次 restore/promote 演练。
+
+## AI 质量门禁
+
+```bash
+npm run doctor:ai
+```
+
+通过标准：
+
+- 新 ready summary 使用当前 prompt version，标题不超过当前约束。
+- Weekly Review 使用当前 prompt version，anchors 指向仍存在的 active posts。
+- `ai_usage_events` 有可用的 feature/model/status/token 记账，不包含私密正文。
+- 历史旧 summary/review 可以作为 warning 记录，但不能掩盖新生成路径的回归。
+
 ## 开源前门禁
 
 公开发布前必须完成：
@@ -143,6 +174,14 @@ M009 Phase A 完成后，v0.1 内部候选版本还必须满足：
 - 明确外部 AI provider 的隐私边界。
 - 补齐最小数据安全闭环：backup、restore、promote preparation、export/import 的操作说明或脚本。
 
+当前工作区扫描入口：
+
+```bash
+npm run doctor:release
+```
+
+`doctor:release` 只覆盖当前 checkout，不替代 Git history secret scan。公开发布前仍需要对历史提交、release 分支和最终公开快照单独审计。
+
 ## 当前结论
 
-截至 2026-05-07，项目方向调整为优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 10 个 v0.1 UAT gate 已由用户确认先验收通过。后续 release candidate 前仍需重新运行 `npm run verify:release-gates`，并在发现回归或新增范围时重新打开具体 gate。
+截至 2026-05-10，项目方向仍是优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 UAT gate 已由用户确认先验收通过，但 release candidate 前仍需重新运行 `npm run verify:release-gates` 和对应 `doctor:*`，并在发现回归或新增范围时重新打开具体 gate。

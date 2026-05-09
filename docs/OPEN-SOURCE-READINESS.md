@@ -41,6 +41,7 @@
 
 - 用干净数据目录演练 import/restore 后 health check、Admin UI 和 iOS sync recovery。
 - 明确公开版中 `.gsd/`、历史日志和示例数据的处理策略。
+- 运行 `npm run doctor:archive`，保留本轮 archive drill report 作为当前 checkout 的数据恢复演练证据。
 
 ### 3. 历史敏感信息扫描尚未作为发布门禁
 
@@ -61,6 +62,7 @@ git grep -n "PRIVATE_MOMENTS_INITIAL_PASSWORD\\|AI_SUMMARY_API_KEY\\|sk-" $(git 
 - `server/.env.example` 只包含 AI API key 占位示例。
 - `scripts/setup-local.sh` 只包含写入本地 password 的脚本逻辑，不包含真实 password。
 - `.gsd/activity/` 历史执行日志中仍有个人 Tailscale 值的历史记录片段。公开发布前必须决定是否清理 `.gsd/`、重写历史，或从干净快照创建公开仓库。
+- 2026-05-10 起，当前 checkout 可用 `npm run doctor:release` 做重复扫描；它会检查 license、tracked API key 形态、个人配置片段、ignore 边界、公开 docs 和 `.gsd` release policy。它不扫描 Git history。
 
 ### 4. 外部 AI provider 隐私说明不足
 
