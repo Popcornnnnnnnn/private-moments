@@ -123,3 +123,13 @@ Evidence:
 - An earlier concurrent targeted XCTest attempt failed before test execution because Xcode's shared build database was locked, and a later retry against simulator `99FC9B7B-81FF-4BDD-9562-3DF02EA63D06` was interrupted by CoreSimulator `Invalid device state`; the successful rerun used a clean simulator and isolated DerivedData.
 - `git diff --check` passed.
 - `npm run ios:device` built, signed, installed, and launched Moments on `wwz 的 iphone`.
+
+## 2026-05-09 Time Line Interaction Follow-up
+
+Follow-up scope: add interactive exploration to `Time Line`. Tapping or dragging across the chart selects the nearest real data point, draws a vertical dashed guide, highlights the selected point, and shows a compact date/time tooltip. Missing-day gap points remain visual gaps and are not selected as real records.
+
+Evidence:
+
+- `npm run verify:ios:generic` passed.
+- Targeted XCTest passed with exit code 0 using `xcodebuild -quiet -project PrivateMoments.xcodeproj -scheme PrivateMoments -destination 'platform=iOS Simulator,id=006069EA-BA9A-4689-9C52-36A74F279704' -derivedDataPath /tmp/PrivateMoments-CheckInTimeTooltipTests2 -only-testing:PrivateMomentsTests/CheckInTimeInsightsTests test`.
+- Added unit coverage for nearest real data point selection and single today-only point selection.

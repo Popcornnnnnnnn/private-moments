@@ -145,7 +145,7 @@ private struct CheckInTimeLineView: View {
                     CheckInTimeLineYAxis(insight: insight)
                         .frame(width: 44, height: 156)
 
-                    CheckInTimeLineCanvas(insight: insight, color: color)
+                    CheckInTimeLineCanvas(insight: insight, color: color, language: language)
                         .frame(height: 156)
                 }
 
@@ -214,63 +214,251 @@ private struct CheckInTimeLineYAxis: View {
 private struct CheckInTimeLineCanvas: View {
     let insight: CheckInTimeLineInsight
     let color: Color
+    let language: AppResolvedLanguage
+
+    @State private var selectedIndex: Int?
 
     var body: some View {
-        Canvas { context, size in
-            let width = max(size.width, 1)
-            let height = max(size.height, 1)
-            let xInset = 6.0
-            let yInset = 8.0
-            let plotWidth = max(width - xInset * 2, 1)
-            let plotHeight = max(height - yInset * 2, 1)
-            let count = max(insight.points.count - 1, 1)
-            let range = max(insight.upperMinute - insight.lowerMinute, 1)
-            var previous: CGPoint?
+        GeometryReader { proxy in
+            let layout = CheckInTimeLineChartLayout(insight: insight, size: proxy.size)
 
-            for ratio in [0.0, 0.5, 1.0] {
-                let y = yInset + plotHeight * ratio
-                var gridLine = Path()
-                gridLine.move(to: CGPoint(x: xInset, y: y))
-                gridLine.addLine(to: CGPoint(x: xInset + plotWidth, y: y))
+            ZStack(alignment: .topLeading) {
+                Canvas { context, _ in
+                    drawGrid(context: context, layout: layout)
+                    drawSelectionGuide(context: context, layout: layout)
+                    drawSeries(context: context, layout: layout)
+                }
+
+                if let selected = selectedPlotPoint(in: layout) {
+                    CheckInTimeLineTooltip(point: selected.point, language: language)
+                        .position(tooltipPosition(for: selected.position, in: proxy.size))
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        selectedIndex = layout.nearestDataPointIndex(toX: value.location.x)
+                    }
+            )
+            .animation(.snappy(duration: 0.12), value: selectedIndex)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.t("Time Line", language))
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var accessibilityValue: String {
+        guard
+            let selectedIndex,
+            insight.points.indices.contains(selectedIndex),
+            let minute = insight.points[selectedIndex].minuteOfDay
+        else {
+            return ""
+        }
+
+        return CheckInTimeInsightsBuilder.timeLabel(for: minute)
+    }
+
+    private func selectedPlotPoint(in layout: CheckInTimeLineChartLayout) -> CheckInTimeLinePlotPoint? {
+        guard let selectedIndex else {
+            return nil
+        }
+
+        return layout.plotPoints.first { $0.index == selectedIndex && $0.point.plottedMinute != nil }
+    }
+
+    private func tooltipPosition(for point: CGPoint, in size: CGSize) -> CGPoint {
+        let width = max(size.width, 1)
+        let x = min(max(point.x, 58), max(width - 58, 58))
+        let y = max(point.y - 26, 18)
+        return CGPoint(x: x, y: y)
+    }
+
+    private func drawGrid(context: GraphicsContext, layout: CheckInTimeLineChartLayout) {
+        for ratio in [CGFloat(0), 0.5, 1] {
+            let y = layout.yInset + layout.plotHeight * ratio
+            var gridLine = Path()
+            gridLine.move(to: CGPoint(x: layout.xInset, y: y))
+            gridLine.addLine(to: CGPoint(x: layout.xInset + layout.plotWidth, y: y))
+            context.stroke(
+                gridLine,
+                with: .color(.secondary.opacity(0.15)),
+                style: StrokeStyle(lineWidth: 1, lineCap: .round)
+            )
+        }
+    }
+
+    private func drawSelectionGuide(context: GraphicsContext, layout: CheckInTimeLineChartLayout) {
+        guard let selected = selectedPlotPoint(in: layout) else {
+            return
+        }
+
+        var guide = Path()
+        guide.move(to: CGPoint(x: selected.position.x, y: layout.yInset))
+        guide.addLine(to: CGPoint(x: selected.position.x, y: layout.yInset + layout.plotHeight))
+        context.stroke(
+            guide,
+            with: .color(.secondary.opacity(0.35)),
+            style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+        )
+    }
+
+    private func drawSeries(context: GraphicsContext, layout: CheckInTimeLineChartLayout) {
+        var previous: CGPoint?
+
+        for plotPoint in layout.plotPoints {
+            let isSelected = plotPoint.index == selectedIndex
+
+            guard plotPoint.point.plottedMinute != nil else {
+                previous = nil
                 context.stroke(
-                    gridLine,
-                    with: .color(.secondary.opacity(0.15)),
-                    style: StrokeStyle(lineWidth: 1, lineCap: .round)
+                    Path(ellipseIn: CGRect(x: plotPoint.position.x - 2, y: plotPoint.position.y - 2, width: 4, height: 4)),
+                    with: .color(.secondary.opacity(0.35)),
+                    lineWidth: 1
                 )
+                continue
             }
 
-            for (index, point) in insight.points.enumerated() {
-                let x = xInset + plotWidth * Double(index) / Double(count)
-                guard let plottedMinute = point.plottedMinute else {
-                    previous = nil
-                    let y = yInset + plotHeight
-                    context.stroke(
-                        Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)),
-                        with: .color(.secondary.opacity(0.35)),
-                        lineWidth: 1
-                    )
-                    continue
-                }
+            if let previous {
+                var segment = Path()
+                segment.move(to: previous)
+                segment.addLine(to: plotPoint.position)
+                context.stroke(segment, with: .color(color), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            }
 
-                let ratio = Double(plottedMinute - insight.lowerMinute) / Double(range)
-                let y = yInset + plotHeight - ratio * plotHeight
-                let current = CGPoint(x: x, y: y)
-                if let previous {
-                    var segment = Path()
-                    segment.move(to: previous)
-                    segment.addLine(to: current)
-                    context.stroke(segment, with: .color(color), style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                }
-
+            if isSelected {
                 context.fill(
-                    Path(ellipseIn: CGRect(x: x - 3.5, y: y - 3.5, width: 7, height: 7)),
+                    Path(ellipseIn: CGRect(x: plotPoint.position.x - 6, y: plotPoint.position.y - 6, width: 12, height: 12)),
+                    with: .color(color.opacity(0.18))
+                )
+                context.fill(
+                    Path(ellipseIn: CGRect(x: plotPoint.position.x - 4.5, y: plotPoint.position.y - 4.5, width: 9, height: 9)),
                     with: .color(color)
                 )
-                previous = current
+                context.stroke(
+                    Path(ellipseIn: CGRect(x: plotPoint.position.x - 4.5, y: plotPoint.position.y - 4.5, width: 9, height: 9)),
+                    with: .color(.white.opacity(0.85)),
+                    lineWidth: 1.5
+                )
+            } else {
+                context.fill(
+                    Path(ellipseIn: CGRect(x: plotPoint.position.x - 3.5, y: plotPoint.position.y - 3.5, width: 7, height: 7)),
+                    with: .color(color)
+                )
             }
+
+            previous = plotPoint.position
         }
-        .accessibilityHidden(true)
     }
+}
+
+struct CheckInTimeLinePlotPoint: Equatable {
+    let index: Int
+    let point: CheckInTimeLinePoint
+    let position: CGPoint
+}
+
+struct CheckInTimeLineChartLayout {
+    let insight: CheckInTimeLineInsight
+    let size: CGSize
+
+    let xInset: CGFloat = 6
+    let yInset: CGFloat = 8
+
+    var width: CGFloat {
+        max(size.width, 1)
+    }
+
+    var height: CGFloat {
+        max(size.height, 1)
+    }
+
+    var plotWidth: CGFloat {
+        max(width - xInset * 2, 1)
+    }
+
+    var plotHeight: CGFloat {
+        max(height - yInset * 2, 1)
+    }
+
+    var plotPoints: [CheckInTimeLinePlotPoint] {
+        insight.points.indices.map { index in
+            CheckInTimeLinePlotPoint(
+                index: index,
+                point: insight.points[index],
+                position: position(for: index)
+            )
+        }
+    }
+
+    func nearestDataPointIndex(toX x: CGFloat) -> Int? {
+        plotPoints
+            .filter { $0.point.plottedMinute != nil }
+            .min { lhs, rhs in
+                abs(lhs.position.x - x) < abs(rhs.position.x - x)
+            }?
+            .index
+    }
+
+    private func position(for index: Int) -> CGPoint {
+        let count = max(insight.points.count - 1, 1)
+        let x = xInset + plotWidth * CGFloat(index) / CGFloat(count)
+        guard let plottedMinute = insight.points[index].plottedMinute else {
+            return CGPoint(x: x, y: yInset + plotHeight)
+        }
+
+        let range = max(insight.upperMinute - insight.lowerMinute, 1)
+        let ratio = CGFloat(plottedMinute - insight.lowerMinute) / CGFloat(range)
+        return CGPoint(x: x, y: yInset + plotHeight - ratio * plotHeight)
+    }
+}
+
+private struct CheckInTimeLineTooltip: View {
+    let point: CheckInTimeLinePoint
+    let language: AppResolvedLanguage
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(dayLabel)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(timeLabel)
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(.secondary.opacity(0.18), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+    }
+
+    private var dayLabel: String {
+        if Calendar.current.isDateInToday(point.day) {
+            return L10n.t("Today", language)
+        }
+
+        return Self.dayFormatter.string(from: point.day)
+    }
+
+    private var timeLabel: String {
+        guard let minute = point.minuteOfDay else {
+            return ""
+        }
+
+        return CheckInTimeInsightsBuilder.timeLabel(for: minute)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        return formatter
+    }()
 }
 
 private struct CheckInHeatmapView: View {

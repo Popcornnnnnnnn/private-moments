@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import PrivateMoments
 
 final class CheckInTimeInsightsTests: XCTestCase {
@@ -51,6 +52,45 @@ final class CheckInTimeInsightsTests: XCTestCase {
         XCTAssertEqual(insight.points.count, 1)
         XCTAssertEqual(insight.points.first?.day, calendar.startOfDay(for: now))
         XCTAssertEqual(insight.points.first?.plottedMinute, 480)
+    }
+
+    func testTimeLineLayoutSelectsNearestRealDataPoint() {
+        let item = checkInItem(mode: .oncePerDay, visualization: .timeLine)
+        let now = date(2026, 5, 30, 12, 0)
+        let insight = CheckInTimeInsightsBuilder.lineInsight(
+            item: item,
+            entries: [
+                entry(itemId: item.id, id: "first", at: date(2026, 5, 27, 7, 30)),
+                entry(itemId: item.id, id: "second", at: date(2026, 5, 28, 11, 30)),
+                entry(itemId: item.id, id: "today", at: date(2026, 5, 30, 8, 0)),
+            ],
+            now: now,
+            calendar: calendar
+        )
+        let layout = CheckInTimeLineChartLayout(insight: insight, size: CGSize(width: 212, height: 156))
+
+        XCTAssertEqual(layout.nearestDataPointIndex(toX: 0), 0)
+        XCTAssertEqual(layout.nearestDataPointIndex(toX: 74), 1)
+        XCTAssertEqual(layout.nearestDataPointIndex(toX: 140), 3)
+        XCTAssertEqual(layout.nearestDataPointIndex(toX: 260), 3)
+    }
+
+    func testTimeLineLayoutKeepsSingleTodayPointSelectableAtLeadingEdge() {
+        let item = checkInItem(mode: .oncePerDay, visualization: .timeLine)
+        let now = date(2026, 5, 30, 12, 0)
+        let insight = CheckInTimeInsightsBuilder.lineInsight(
+            item: item,
+            entries: [
+                entry(itemId: item.id, id: "today", at: date(2026, 5, 30, 8, 0)),
+            ],
+            now: now,
+            calendar: calendar
+        )
+        let layout = CheckInTimeLineChartLayout(insight: insight, size: CGSize(width: 212, height: 156))
+
+        XCTAssertEqual(layout.plotPoints.first?.position.x, 6)
+        XCTAssertEqual(layout.nearestDataPointIndex(toX: 0), 0)
+        XCTAssertEqual(layout.nearestDataPointIndex(toX: 212), 0)
     }
 
     func testTimeLineExpandsOvernightTimesIntoOneContinuousRange() {

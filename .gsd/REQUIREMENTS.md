@@ -171,11 +171,11 @@ This file is the explicit capability and coverage contract for the project.
 ### R058 — Check-in time insights are item-scoped and optional.
 - Class: functional
 - Status: active
-- Description: Each check-in item may sync a `timeVisualization` value of `none`, `timeLine`, or `timeHeatmap`, defaulting to `none` for legacy items. `timeLine` is allowed only for `oncePerDay` items and shows recent daily occurrence times with missing-day gaps, overnight continuity, Y-axis time labels, and an X-axis that starts at the first in-window data day instead of reserving leading empty history. `timeHeatmap` uses one-hour buckets and supports multiple entries per day.
+- Description: Each check-in item may sync a `timeVisualization` value of `none`, `timeLine`, or `timeHeatmap`, defaulting to `none` for legacy items. `timeLine` is allowed only for `oncePerDay` items and shows recent daily occurrence times with missing-day gaps, overnight continuity, Y-axis time labels, an X-axis that starts at the first in-window data day instead of reserving leading empty history, and tap/drag exploration with a guide line plus date/time tooltip. `timeHeatmap` uses one-hour buckets and supports multiple entries per day.
 - Why it matters: The user wants trends for stable time-point items such as wake/sleep without turning all check-ins into completion tracking or KPI dashboards.
 - Source: Check-ins Time Insights v1 plan 2026-05-09
 - Primary owning slice: M012 follow-up
-- Validation: Server sync tests cover defaults/valid/invalid modes; iOS tests cover line aggregation from first in-window data day, single-today leading placement, missing gaps, overnight expansion, heatmap buckets, and multiple entries per day.
+- Validation: Server sync tests cover defaults/valid/invalid modes; iOS tests cover line aggregation from first in-window data day, single-today leading placement, nearest-point chart selection, missing gaps, overnight expansion, heatmap buckets, and multiple entries per day.
 
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational

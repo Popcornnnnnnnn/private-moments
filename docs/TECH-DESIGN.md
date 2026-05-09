@@ -170,7 +170,7 @@ Check-in 图标没有单独的 server/database icon 表。同步协议只保存 
 
 Check-ins UI 的默认路径必须是 one tap。`Today` row 左侧 icon 负责一键打卡；已经完成的一天一次 item，左侧 icon 打开今日 entry。中间 item 区域打开只读 item insights/trends 页，右侧低权重入口打开单独表单，允许填写 note、发生时间、照片和 `Show in Timeline`。Entry detail 支持修改 note、发生时间、Timeline 显示开关，或取消打卡。`Manage` 负责 item 创建、编辑、archive/delete；item row 整行都是编辑入口，并提供按压/hover 式反馈，避免只有图标像可点击。创建 item 可以稍复杂，但日常打卡不能被表单拖慢。
 
-Item insights 是只读回看页，不进入 Manage。`timeLine` 使用最近 30 天回看窗口，但绘图区从窗口内第一条有效记录所在日期开始延伸到今天；缺失日期为空点并断线，只有 today 一条记录时点位于左端。发生时间是 Y 轴，Y 轴根据真实最早/最晚时间自动外扩；当晚间/凌晨时间跨午夜时，图表会把凌晨点展开到连续晚间区间。`timeHeatmap` 展示最近 30 天所有非删除 entry 的发生时间，使用 1 小时 bucket，同时显示 `24h distribution` 和 `weekday x hour`，支持一天多次记录。第一版不做聚类、AI 解读、提醒、目标或连续天数。
+Item insights 是只读回看页，不进入 Manage。`timeLine` 使用最近 30 天回看窗口，但绘图区从窗口内第一条有效记录所在日期开始延伸到今天；缺失日期为空点并断线，只有 today 一条记录时点位于左端。发生时间是 Y 轴，Y 轴根据真实最早/最晚时间自动外扩；当晚间/凌晨时间跨午夜时，图表会把凌晨点展开到连续晚间区间。折线图支持点按和横向拖动探索，交互时选择最近的真实记录点，显示竖向虚线 guide、点高亮和日期/时间浮层。`timeHeatmap` 展示最近 30 天所有非删除 entry 的发生时间，使用 1 小时 bucket，同时显示 `24h distribution` 和 `weekday x hour`，支持一天多次记录。第一版不做聚类、AI 解读、提醒、目标或连续天数。
 
 Timeline 使用混合 feed：普通 `TimelineItem` 加上 `showInTimeline=true` 的 `CheckInFeedEntry`。Check-in row 由 item 图标/颜色和 item 名称表达身份，可显示 note 和可选 tag，但不提供 comments、favorite、pin、AI summary、transcription、OCR 或 AI auto-tagging。关闭某条 entry 的 `Show in Timeline` 只影响 Timeline 和 Timeline search/filter；entry 仍保留在 Check-ins、Calendar 和 sync 数据中。
 
