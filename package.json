@@ -27,6 +27,7 @@
     "verify:all": "bash scripts/verify-all.sh",
     "smoke:admin": "node scripts/smoke-admin-maintenance.mjs",
     "ios:simulator": "scripts/run-ios-simulator.sh",
+    "ios:preflight": "node scripts/preflight-ios-device.mjs",
     "ios:device": "scripts/run-ios-device.sh"
   },
   "engines": {

@@ -17,7 +17,7 @@ function reviewFixture(overrides: Partial<Review> = {}): Review {
     trigger: "manual",
     contentJson: "{}",
     inputDigestHash: null,
-    promptVersion: "weekly-review-v1",
+    promptVersion: "weekly-review-v2",
     provider: "test",
     model: "test-model",
     language: null,

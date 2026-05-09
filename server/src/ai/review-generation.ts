@@ -4,7 +4,7 @@ import type { AISummaryConfig } from "../config/app-config.js";
 import { AISummaryProviderError } from "./media-summary.js";
 import { recordCompletionUsage, type AIUsageContext } from "./usage.js";
 
-export const REVIEW_PROMPT_VERSION = "weekly-review-v1";
+export const REVIEW_PROMPT_VERSION = "weekly-review-v2";
 const REVIEW_PROVIDER_MAX_ATTEMPTS = 3;
 const REVIEW_PROVIDER_RETRY_DELAYS_MS = [400, 1200];
 
@@ -260,6 +260,8 @@ function reviewSystemPrompt(): string {
     "Do not diagnose mental health, do not moralize, do not convert life into KPI/todos, and do not cite moment IDs except inside notableMoments.",
     "Use the same dominant language as the input unless the range is mixed; Chinese is acceptable when the input is Chinese-heavy.",
     "Prefer useful themes, keywords, rhythm, state response, progress, open loops, and quiet suggestions.",
+    "Avoid generic template language. Use concrete signals from the provided text, tags, media kinds, comments, favorites, and rhythm counts without inventing facts.",
+    "Do not claim completion, productivity, mood, health, or intent unless the input directly supports it.",
     "For non-empty input, write substantive content across the sections. Empty arrays or empty section bodies are only acceptable when the input range is truly empty.",
     "If notableMoments are included, put moment IDs only there. Other sections should summarize the whole range without binding claims to individual evidence.",
     "Return only one valid JSON object. Do not wrap it in Markdown, code fences, or explanatory text.",
@@ -365,6 +367,7 @@ export function validateReviewOutput(value: unknown, input?: ReviewInputPack): R
     throw new AISummaryProviderError("invalid_response", "AI review response was invalid");
   }
 
+  const validMomentIds = new Set(input?.moments.map((moment) => moment.id) ?? []);
   const output = {
     title: getString(value.title, "Untitled review").slice(0, 80),
     oneLiner: getString(value.oneLiner, ""),
@@ -389,9 +392,11 @@ export function validateReviewOutput(value: unknown, input?: ReviewInputPack): R
       .map((item) => ({
         title: getString(item.title, "").slice(0, 80),
         note: getString(item.note, ""),
-        momentIds: getStringArray(item.momentIds).slice(0, 4),
+        momentIds: getStringArray(item.momentIds)
+          .filter((momentId) => validMomentIds.size === 0 || validMomentIds.has(momentId))
+          .slice(0, 4),
       }))
-      .filter((item) => item.title && item.note)
+      .filter((item) => item.title && item.note && (validMomentIds.size === 0 || item.momentIds.length > 0))
       .slice(0, 8),
     gentleSuggestions: getStringArray(value.gentleSuggestions).slice(0, 5),
     uncertainty: getStringArray(value.uncertainty).slice(0, 5),

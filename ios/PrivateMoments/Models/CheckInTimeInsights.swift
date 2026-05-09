@@ -62,11 +62,40 @@ struct CheckInWeekdayHourBucket: Identifiable, Equatable {
 struct CheckInHeatmapInsight: Equatable {
     let hourBuckets: [CheckInHourBucket]
     let weekdayHourBuckets: [CheckInWeekdayHourBucket]
+    let entries: [CheckInEntry]
     let maxCount: Int
     let totalEntries: Int
 
     var hasData: Bool {
         totalEntries > 0
+    }
+
+    func entries(for selection: CheckInHeatmapSelection, calendar: Calendar = .current) -> [CheckInEntry] {
+        entries.filter { entry in
+            let hour = calendar.component(.hour, from: entry.occurredAt)
+            guard hour == selection.hour else {
+                return false
+            }
+
+            if let weekday = selection.weekday {
+                return calendar.component(.weekday, from: entry.occurredAt) == weekday
+            }
+
+            return true
+        }
+    }
+}
+
+struct CheckInHeatmapSelection: Identifiable, Equatable {
+    let weekday: Int?
+    let hour: Int
+
+    var id: String {
+        if let weekday {
+            return "\(weekday)-\(hour)"
+        }
+
+        return "hour-\(hour)"
     }
 }
 
@@ -183,6 +212,13 @@ enum CheckInTimeInsightsBuilder {
         return CheckInHeatmapInsight(
             hourBuckets: hourBuckets,
             weekdayHourBuckets: weekdayHourBuckets,
+            entries: scopedEntries.sorted { lhs, rhs in
+                if lhs.occurredAt == rhs.occurredAt {
+                    return lhs.id > rhs.id
+                }
+
+                return lhs.occurredAt > rhs.occurredAt
+            },
             maxCount: maxCount,
             totalEntries: scopedEntries.count
         )

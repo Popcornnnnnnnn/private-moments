@@ -135,6 +135,30 @@ final class CheckInTimeInsightsTests: XCTestCase {
         )
     }
 
+    func testHeatmapSelectionReturnsMatchingEntriesNewestFirst() {
+        let item = checkInItem(mode: .multiplePerDay, visualization: .timeHeatmap)
+        let insight = CheckInTimeInsightsBuilder.heatmapInsight(
+            item: item,
+            entries: [
+                entry(itemId: item.id, id: "morning-old", at: date(2026, 5, 27, 9, 5)),
+                entry(itemId: item.id, id: "morning-new", at: date(2026, 5, 28, 9, 45)),
+                entry(itemId: item.id, id: "afternoon", at: date(2026, 5, 28, 15, 0)),
+                entry(itemId: item.id, id: "other-weekday", at: date(2026, 5, 29, 9, 15)),
+            ],
+            now: date(2026, 5, 30, 12, 0),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(
+            insight.entries(for: CheckInHeatmapSelection(weekday: nil, hour: 9), calendar: calendar).map(\.id),
+            ["other-weekday", "morning-new", "morning-old"]
+        )
+        XCTAssertEqual(
+            insight.entries(for: CheckInHeatmapSelection(weekday: 5, hour: 9), calendar: calendar).map(\.id),
+            ["morning-new"]
+        )
+    }
+
     private func checkInItem(
         mode: CheckInRecordMode,
         visualization: CheckInTimeVisualization

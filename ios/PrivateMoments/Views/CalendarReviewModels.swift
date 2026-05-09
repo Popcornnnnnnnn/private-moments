@@ -293,6 +293,16 @@ struct CalendarReviewDay: Identifiable {
     var targetItemID: String? {
         items.first?.id
     }
+
+    var checkInRhythmItems: [CheckInFeedEntry] {
+        checkIns.sorted { lhs, rhs in
+            if lhs.occurredAt == rhs.occurredAt {
+                return lhs.id < rhs.id
+            }
+
+            return lhs.occurredAt < rhs.occurredAt
+        }
+    }
 }
 
 struct CalendarReviewMonth {

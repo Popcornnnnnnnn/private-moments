@@ -5,6 +5,7 @@ import { AISummaryProviderError } from "./media-summary.js";
 import {
   createLocalFallbackReview,
   generateReview,
+  REVIEW_PROMPT_VERSION,
   validateReviewOutput,
   type ReviewInputPack,
 } from "./review-generation.js";
@@ -95,6 +96,34 @@ test("validateReviewOutput accepts substantive output for non-empty ranges", () 
 
   assert.equal(output.title, "Weekly Review");
   assert.equal(output.keywords.length, 1);
+});
+
+test("validateReviewOutput drops notable moment anchors that do not exist in the input pack", () => {
+  const output = validateReviewOutput({
+    title: "Weekly Review",
+    oneLiner: "A focused week with several concrete product steps.",
+    keywords: [{ label: "Product", note: "Several notes were about shaping and testing product behavior." }],
+    themes: [{ title: "Iteration", body: "The week showed repeated small corrections around actual usage." }],
+    emotionalReflection: {
+      tone: "gentle_encouragement",
+      body: "There is a steady effort here, with enough visible progress to deserve some credit.",
+    },
+    progressAndOpenLoops: { progress: ["Improved the review flow."], openLoops: [] },
+    rhythm: { body: "Most captured moments clustered around implementation and verification.", observations: [] },
+    notableMoments: [
+      { title: "Real anchor", note: "A valid revisit anchor.", momentIds: ["moment-1", "missing"] },
+      { title: "Broken anchor", note: "This should not survive.", momentIds: ["missing"] },
+    ],
+    gentleSuggestions: ["Keep the next pass focused on the parts that felt confusing in real use."],
+    uncertainty: [],
+  }, inputPackWithMoments);
+
+  assert.equal(output.notableMoments.length, 1);
+  assert.deepEqual(output.notableMoments[0]?.momentIds, ["moment-1"]);
+});
+
+test("weekly review prompt version tracks the quality-calibration prompt", () => {
+  assert.equal(REVIEW_PROMPT_VERSION, "weekly-review-v2");
 });
 
 test("createLocalFallbackReview returns substantive content for non-empty ranges", () => {

@@ -139,6 +139,22 @@ final class CalendarReviewModelsTests: XCTestCase {
         XCTAssertEqual(month.stats.activeDays, 2)
     }
 
+    func testDayReviewCheckInRhythmIsChronological() {
+        let month = CalendarReviewBuilder.month(
+            containing: now,
+            items: [],
+            checkIns: [
+                checkIn(id: "bed", itemId: "bed", itemName: "Bed", occurredAt: date(year: 2026, month: 4, day: 4, hour: 23), showInTimeline: false),
+                checkIn(id: "coffee", itemId: "coffee", itemName: "Coffee", occurredAt: date(year: 2026, month: 4, day: 4, hour: 10), showInTimeline: false),
+                checkIn(id: "wake", itemId: "wake", itemName: "Wake", occurredAt: date(year: 2026, month: 4, day: 4, hour: 7), showInTimeline: false),
+            ],
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(day(in: month, day: 4).checkInRhythmItems.map(\.id), ["wake", "coffee", "bed"])
+    }
+
     func testDayReviewFiltersMatchExpectedMomentAttributes() {
         let commented = item(
             id: "commented",

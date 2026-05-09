@@ -48,6 +48,8 @@ if [[ -z "$SERVER_URL" ]]; then
   exit 1
 fi
 
+node "$ROOT_DIR/scripts/preflight-ios-device.mjs" --server-url "$SERVER_URL" --device "$DEVICE_NAME"
+
 cd "$IOS_DIR"
 
 if command -v xcodegen >/dev/null 2>&1; then

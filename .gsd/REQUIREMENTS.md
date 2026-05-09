@@ -177,6 +177,52 @@ This file is the explicit capability and coverage contract for the project.
 - Primary owning slice: M012 follow-up
 - Validation: Server sync tests cover defaults/valid/invalid modes; iOS tests cover line aggregation from first in-window data day, single-today leading placement, nearest-point chart selection, missing gaps, overnight expansion, heatmap buckets, and multiple entries per day.
 
+### R059 — Check-in heatmap insights must be explorable without becoming a dashboard.
+- Class: functional
+- Status: active
+- Description: `Time Heatmap` item insights should support tap/drag bucket selection across both `24h distribution` and `weekday x hour`, show the selected hour/weekday, count, and recent records, and let a selected record open the existing check-in entry detail.
+- Why it matters: Time Heatmap is useful only if the user can inspect the records behind a concentration pattern, but it must stay factual and lightweight rather than becoming a KPI dashboard.
+- Source: M013 continuity polish 2026-05-09
+- Primary owning slice: M013
+- Validation: iOS tests cover bucket entry lookup and newest-first ordering; generic iOS build verifies the extracted heatmap component compiles.
+
+### R060 — Day Review should show check-ins as an intra-day rhythm before the full mixed feed.
+- Class: functional
+- Status: active
+- Description: Calendar Day Review should expose a compact chronological check-ins rhythm strip near the top of the day page. The strip should include all non-deleted check-ins for that day, including entries hidden from Timeline, and each item should open the existing entry detail.
+- Why it matters: Check-ins are life texture; Day Review benefits from a quick rhythm glance before the heavier mixed timeline without turning Calendar into a statistics panel.
+- Source: M013 continuity polish 2026-05-09
+- Primary owning slice: M013
+- Validation: Calendar review model tests cover chronological ordering; UI build verifies the strip integrates without changing existing entry-detail navigation.
+
+### R061 — Weekly Review generation should reject broken anchors and avoid unsupported generic claims.
+- Class: functional
+- Status: active
+- Description: New Weekly Review generations use prompt version `weekly-review-v2`, instructing the provider to rely on concrete input signals and avoid completion, productivity, mood, health, or intent claims unless directly supported. Validation must filter `notableMoments` anchors to moment IDs present in the input pack.
+- Why it matters: Weekly Review quality depends more on conservative interpretation than on volume; broken anchors and generic claims erode trust.
+- Source: M013 continuity polish 2026-05-09
+- Primary owning slice: M013
+- Validation: Server tests cover prompt version and invalid anchor filtering.
+
+### R062 — Real-device install should run a lightweight preflight before replacing the app.
+- Class: operational
+- Status: active
+- Description: `npm run ios:device` should run `ios:preflight` after selecting a reachable server URL and before build/install. Preflight checks server reachability, live schema version, local archive queues/media status when SQLite is available, latest backup job visibility, and paired iPhone listing.
+- Why it matters: Most risky iPhone deploy mistakes are environment mismatches rather than compiler failures; preflight makes stale server/schema, queue, or device visibility issues visible before install.
+- Source: M013 continuity polish 2026-05-09
+- Primary owning slice: M013
+- Validation: `node --check scripts/preflight-ios-device.mjs`, `npm run ios:preflight`, and `npm run ios:device` evidence from the current session.
+
+### R063 — Backup visibility should have a focused iOS read-only view while execution stays on Mac.
+- Class: operational
+- Status: active
+- Description: Settings > Storage & Diagnostics > Diagnostics should include a `Backup Status` page focused on repository configured/initialized state, restic availability, latest backup job, latest snapshot, schedule, repository path, and key file path. Backup/restore/promote/export/import execution remains Mac Admin only.
+- Why it matters: The user needs daily confidence that backups exist without making destructive Mac-local operations casual on the phone.
+- Source: M013 continuity polish 2026-05-09
+- Primary owning slice: M013
+- Supporting slices: R050,R051
+- Validation: Generic iOS build verifies the view compiles against existing Admin diagnostics models; real-device UAT confirms readability.
+
 ### R001 — Non-trivial work must end with a minimum closure loop: change summary, verification evidence, known issues or next steps, and updates to affected fact-source or human-facing docs.
 - Class: operational
 - Status: active

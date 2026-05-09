@@ -27,6 +27,7 @@
 | `PRIVATE_MOMENTS_DEVICE_TYPE` | `com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro` | Simulator device type。 |
 | `PRIVATE_MOMENTS_DEVICE_NAME` | `wwz 的 iphone` | `devicectl` 使用的真实 iPhone 名称。 |
 | `PRIVATE_MOMENTS_DEVICE_SERVER_URL` | auto-detected | 真实设备 server URL override。 |
+| `PRIVATE_MOMENTS_PREFLIGHT_STRICT` | unset | 设为 `1` 时，`ios:preflight` 会把 warnings 也视为失败。 |
 | `PRIVATE_MOMENTS_LAUNCHD_LABEL` | `com.private-moments.server` | launchd label。 |
 | `AI_SUMMARY_PROVIDER` | `openai` | AI summary provider label。当前实现使用 OpenAI-compatible Chat Completions API。 |
 | `AI_SUMMARY_BASE_URL` | `https://api.openai.com/v1` | 外部 AI provider base URL。 |
@@ -349,10 +350,24 @@ npm run ios:device
 真实设备脚本会：
 
 1. 检查候选 server URLs。
-2. 如果可用，用 `xcodegen` 重新生成 Xcode project。
-3. 构建 Debug iPhoneOS app。
-4. 使用 `xcrun devicectl` 安装。
-5. 启动 `com.popcornnnnnn.privatemoments`。
+2. 运行 `npm run ios:preflight`，确认 live server 可达、schema 不旧于当前代码、local archive queue/media/backup 状态可见、目标 iPhone 出现在 `devicectl`。
+3. 如果可用，用 `xcodegen` 重新生成 Xcode project。
+4. 构建 Debug iPhoneOS app。
+5. 使用 `xcrun devicectl` 安装。
+6. 启动 `com.popcornnnnnn.privatemoments`。
+
+可以单独运行 preflight：
+
+```bash
+npm run ios:preflight
+npm run ios:preflight -- --server-url http://127.0.0.1:3210 --device "wwz 的 iphone"
+```
+
+Preflight 的 warning 用来提示安装前应注意的环境状态，例如历史 rejected ops、没有最新 backup job、设备暂未出现在列表中。默认只有 server 不可达或 live schema 旧于当前代码会阻止安装；如果要把 warning 也作为阻断，设置：
+
+```bash
+PRIVATE_MOMENTS_PREFLIGHT_STRICT=1 npm run ios:preflight
+```
 
 如果 iPhone 阻止未信任开发者 app，在手机上信任开发者：
 
@@ -742,7 +757,7 @@ AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示
 
 Settings > Storage & Diagnostics 总是显示本机 iPhone usage。只有在 app 已登录且 `/api/v1/admin/status` 成功时，Mac Server section 才会出现。如果 Mac section 被隐藏，检查 server URL、token state 和 Tailscale reachability。
 
-AI Summaries subsection 来自 `/api/v1/admin/status.aiSummaries`，AI Token Usage subsection 来自 `/api/v1/admin/status.aiUsage`，Tags subsection 来自 `/api/v1/admin/status.tags`。如果 Mac Server section 出现但这些 subsection 不出现，先确认已安装包含 Storage & Diagnostics 更新的 iOS build，再用 curl 检查 admin status 响应是否包含对应字段。
+AI Summaries subsection 来自 `/api/v1/admin/status.aiSummaries`，AI Token Usage subsection 来自 `/api/v1/admin/status.aiUsage`，Tags subsection 来自 `/api/v1/admin/status.tags`。Diagnostics > Backup Status 还会读取 maintenance jobs、Archive repository 和 snapshots，用于显示 repository、latest job、latest snapshot、schedule、repository path 和 key file path；备份/恢复/切换执行仍只在 Mac Admin。若 Mac Server 出现但 Backup Status 缺数据，先用 curl 检查 `/api/v1/admin/archive/repository`、`/api/v1/admin/archive/snapshots` 和 `/api/v1/admin/maintenance/jobs` 是否能从当前 server 返回。
 
 ### Build Fails With Signing/Profile Errors
 

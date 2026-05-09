@@ -133,7 +133,7 @@ struct StorageSummaryLink: View {
     }
 }
 
-private struct MacOperationsDiagnostics {
+struct MacOperationsDiagnostics {
     let maintenanceState: AdminMaintenanceStateResponse?
     let maintenanceJobs: [AdminMaintenanceJob]
     let repository: AdminArchiveRepositoryState?
@@ -149,6 +149,10 @@ private struct MacOperationsDiagnostics {
 
     var latestSnapshot: AdminArchiveSnapshot? {
         snapshots.sorted { $0.time > $1.time }.first
+    }
+
+    var latestBackupJob: AdminMaintenanceJob? {
+        maintenanceJobs.first { $0.type == "backup_create" }
     }
 }
 
@@ -342,6 +346,17 @@ struct StorageDetailsView: View {
 
             if let macOperations {
                 NavigationLink {
+                    diagnosticsForm(title: "Backup Status") {
+                        MacBackupStatusView(diagnostics: macOperations)
+                    }
+                } label: {
+                    diagnosticsLinkLabel(
+                        title: "Backup Status",
+                        detail: backupStatusSummary(macOperations)
+                    )
+                }
+
+                NavigationLink {
                     diagnosticsForm(title: "Mac Operations") {
                         macOperationsSection(macOperations)
                     }
@@ -472,6 +487,34 @@ struct StorageDetailsView: View {
 
         if let repository = diagnostics.repository {
             return "\(L10n.t("Archive repository", appLanguage)) · \(L10n.t(repository.configured ? "Configured" : "Not configured", appLanguage))"
+        }
+
+        return L10n.t("Unavailable", appLanguage)
+    }
+
+    private func backupStatusSummary(_ diagnostics: MacOperationsDiagnostics) -> String {
+        if let runningJob = diagnostics.runningJob, runningJob.type.hasPrefix("backup_") {
+            return "\(L10n.t("Running job", appLanguage)) · \(jobSummary(runningJob))"
+        }
+
+        if let repository = diagnostics.repository {
+            if !repository.configured {
+                return L10n.t("Not configured", appLanguage)
+            }
+
+            if !repository.initialized {
+                return L10n.t("Not initialized", appLanguage)
+            }
+
+            if let latestSnapshot = diagnostics.latestSnapshot {
+                return "\(L10n.t("Latest snapshot", appLanguage)) · \(shortTimestamp(latestSnapshot.time))"
+            }
+
+            if let latestJob = diagnostics.latestBackupJob {
+                return "\(L10n.t("Latest backup job", appLanguage)) · \(jobSummary(latestJob))"
+            }
+
+            return L10n.t("Initialized", appLanguage)
         }
 
         return L10n.t("Unavailable", appLanguage)

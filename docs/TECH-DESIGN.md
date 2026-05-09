@@ -170,11 +170,11 @@ Check-in 图标没有单独的 server/database icon 表。同步协议只保存 
 
 Check-ins UI 的默认路径必须是 one tap。`Today` row 左侧 icon 负责一键打卡；已经完成的一天一次 item，左侧 icon 打开今日 entry。中间 item 区域打开只读 item insights/trends 页，右侧低权重入口打开单独表单，允许填写 note、发生时间、照片和 `Show in Timeline`。Entry detail 支持修改 note、发生时间、Timeline 显示开关，或取消打卡。`Manage` 负责 item 创建、编辑、archive/delete；item row 整行都是编辑入口，并提供按压/hover 式反馈，避免只有图标像可点击。创建 item 可以稍复杂，但日常打卡不能被表单拖慢。
 
-Item insights 是只读回看页，不进入 Manage。`timeLine` 使用最近 30 天回看窗口，但绘图区从窗口内第一条有效记录所在日期开始延伸到今天；缺失日期为空点并断线，只有 today 一条记录时点位于左端。发生时间是 Y 轴，Y 轴根据真实最早/最晚时间自动外扩；当晚间/凌晨时间跨午夜时，图表会把凌晨点展开到连续晚间区间。折线图支持点按和横向拖动探索，交互时选择最近的真实记录点，显示竖向虚线 guide、点高亮和日期/时间浮层。`timeHeatmap` 展示最近 30 天所有非删除 entry 的发生时间，使用 1 小时 bucket，同时显示 `24h distribution` 和 `weekday x hour`，支持一天多次记录。第一版不做聚类、AI 解读、提醒、目标或连续天数。
+Item insights 是只读回看页，不进入 Manage。`timeLine` 使用最近 30 天回看窗口，但绘图区从窗口内第一条有效记录所在日期开始延伸到今天；缺失日期为空点并断线，只有 today 一条记录时点位于左端。发生时间是 Y 轴，Y 轴根据真实最早/最晚时间自动外扩；当晚间/凌晨时间跨午夜时，图表会把凌晨点展开到连续晚间区间。折线图支持点按和横向拖动探索，交互时选择最近的真实记录点，显示竖向虚线 guide、点高亮和日期/时间浮层。`timeHeatmap` 展示最近 30 天所有非删除 entry 的发生时间，使用 1 小时 bucket，同时显示 `24h distribution` 和 `weekday x hour`，支持一天多次记录；小时分布可点选，weekday x hour 行可横向滑动选择，选中后显示该 bucket 的记录数和最近记录，并通过既有 entry detail 查看单条记录。第一版不做聚类、AI 解读、提醒、目标或连续天数。
 
 Timeline 使用混合 feed：普通 `TimelineItem` 加上 `showInTimeline=true` 的 `CheckInFeedEntry`。Check-in row 由 item 图标/颜色和 item 名称表达身份，可显示 note 和可选 tag，但不提供 comments、favorite、pin、AI summary、transcription、OCR 或 AI auto-tagging。关闭某条 entry 的 `Show in Timeline` 只影响 Timeline 和 Timeline search/filter；entry 仍保留在 Check-ins、Calendar 和 sync 数据中。
 
-Calendar 使用 check-ins 作为 activity signal。Heatmap、每日 activity count、Day Review 和 Month Stats 都纳入非删除 check-in entries，并在 Month Stats 中区分 `Moments` 和 `Check-ins`。Day Review 显示当天所有 check-ins，包括隐藏于 Timeline 的 entry。真正统计型信息仍以 Calendar Month Stats 为主；Check-ins History 只显示最近周/月和 item 概况，避免把 Check-ins 变成 KPI dashboard。
+Calendar 使用 check-ins 作为 activity signal。Heatmap、每日 activity count、Day Review 和 Month Stats 都纳入非删除 check-in entries，并在 Month Stats 中区分 `Moments` 和 `Check-ins`。Day Review 显示当天所有 check-ins，包括隐藏于 Timeline 的 entry；页面顶部可以先展示一个按发生时间排序的 compact check-ins rhythm strip，作为当天生活节奏的一眼扫读入口，点击仍进入既有 entry detail。真正统计型信息仍以 Calendar Month Stats 为主；Check-ins History 只显示最近周/月和 item 概况，避免把 Check-ins 变成 KPI dashboard。
 
 Sync 使用四个独立 operation：
 
@@ -279,7 +279,7 @@ AI Language 与 App Language 分离。iOS 在 `/api/v1/media/upload` 和 `/api/v
 
 AI Periodic Reviews 是通用回看系统。第一版是 `Weekly Review`，但 schema、API 和服务层不命名为 `weekly_reviews`，而是使用 `reviews.kind`、`rangeMode`、`rangeStart` 和 `rangeEnd`，为后续 monthly/custom review 复用同一基础。
 
-Weekly Review 放在 Calendar 的 `Reviews` 入口下，而不是 Timeline。它是 generated review artifact，不默认成为 moment；用户只能通过显式 `Publish as Moment` 把 ready review 转成一条普通 server post。Settings > Feature Modules 提供 `Auto-generate Weekly Review` 和 `Publish Weekly Review`，两个默认关闭。自动生成由 Mac server 在本地时间每周日 21:00 后触发，生成 rolling 7 days，不通知、不自动发布。
+Weekly Review 放在 Calendar 的 `Reviews` 入口下，而不是 Timeline。它是 generated review artifact，不默认成为 moment；用户只能通过显式 `Publish as Moment` 把 ready review 转成一条普通 server post。Settings > Feature Modules 提供 `Auto-generate Weekly Review` 和 `Publish Weekly Review`，两个默认关闭。自动生成由 Mac server 在本地时间每周日 21:00 后触发，生成 rolling 7 days，不通知、不自动发布。新生成 prompt version `weekly-review-v2` 更强调只依据输入中的文本、标签、媒体 metadata、评论、收藏和 rhythm 信号，不凭空推断完成度、效率、情绪、健康或意图；服务端 validation 会过滤 `notableMoments` 中不存在于输入 pack 的 moment IDs，避免 Review 内出现坏 anchor。
 
 Review 输入由 server 构建：
 
@@ -331,7 +331,7 @@ iOS Settings 的 Storage & Diagnostics 功能按语义拆成两个入口。主 S
 
 Mac server 统计通过 `GET /api/v1/admin/status` 获取。服务端的 `server/src/storage/stats.ts` 统计数据目录总量、SQLite 相关文件、media 目录、logs 目录和数据目录所在卷的可用空间；同一个响应还返回 runtime、sync、`aiSummaries`、`aiUsage` 和 tags 轻量诊断。iOS 已登录且请求成功时，`Storage` 模块显示 `Mac Storage`，`Diagnostics` 模块显示 Mac Server runtime、AI summary 诊断和 AI token usage；如果 Mac 不在线、token 不可用或请求失败，入口只保留 Mac reachability 摘要，不弹错误。
 
-iOS Settings > Storage & Diagnostics 的 `Diagnostics` 模块还会只读请求 maintenance state、最近 maintenance jobs、Archive repository 和 snapshots，用于展示 Mac Operations：maintenance mode、running job、最近失败 job、repository configured、restic availability/version、last backup/snapshot 和 next backup。该区域不触发 sync，也不提供 backup、restore、promote、export/import 等 Mac 本地恢复动作。
+iOS Settings > Storage & Diagnostics 的 `Diagnostics` 模块还会只读请求 maintenance state、最近 maintenance jobs、Archive repository 和 snapshots。`Backup Status` 是更聚焦的备份可见性入口，显示 repository configured/initialized、restic availability/version、latest backup job、latest snapshot、schedule、repository path 和 key file path；`Mac Operations` 继续显示 maintenance mode、running job、最近失败 job、repository configured、restic availability/version、last backup/snapshot 和 next backup。该区域不触发 sync，也不提供 backup、restore、promote、export/import 等 Mac 本地恢复动作。
 
 Storage 不提供删除归档内容、重建数据库或迁移操作，避免 Settings 主界面变成后台管理台。当前清理动作只删除已上传且可重新下载的本机完整语音/视频文件；不会删除视频 poster、本地待上传媒体或 Mac 归档内容。
 

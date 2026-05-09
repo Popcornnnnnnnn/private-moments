@@ -1,6 +1,6 @@
 # Admin 迁移计划
 
-Last updated: 2026-05-07
+Last updated: 2026-05-09
 
 ## 目标
 
@@ -64,7 +64,7 @@ Mac Admin 只保留必须依赖 Mac 本地文件系统、server 进程、Archive
 - Mac storage 摘要：server total、database、media、logs、available disk。
 - Mac runtime 摘要：server version、schema version、data dir、uptime。
 - Maintenance 摘要：maintenance mode、running job、recent failed job。
-- Archive 摘要：repository configured、restic availability/version、last backup/snapshot、next backup。
+- Archive 摘要：repository configured/initialized、restic availability/version、last backup job、last snapshot、next backup、repository path、key file path。iOS 侧用 `Backup Status` 做 focused read-only 入口，`Mac Operations` 继续保留 broader maintenance 摘要。
 
 触发备份、restore、promote、export/import 仍留在 Mac Admin，避免 iPhone 误操作 Mac 本地恢复流程。
 

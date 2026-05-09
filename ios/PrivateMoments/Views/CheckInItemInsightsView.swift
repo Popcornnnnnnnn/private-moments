@@ -46,7 +46,10 @@ struct CheckInItemInsightsView: View {
                         CheckInHeatmapView(
                             insight: CheckInTimeInsightsBuilder.heatmapInsight(item: item, entries: entries),
                             color: itemColor,
-                            language: appLanguage
+                            language: appLanguage,
+                            onOpenEntry: { entry in
+                                detailRoute = CheckInEntryDetailRoute(entryId: entry.id)
+                            }
                         )
                     }
                 }
@@ -461,100 +464,6 @@ private struct CheckInTimeLineTooltip: View {
     }()
 }
 
-private struct CheckInHeatmapView: View {
-    let insight: CheckInHeatmapInsight
-    let color: Color
-    let language: AppResolvedLanguage
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if insight.hasData {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.t("24h distribution", language))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    CheckInHourDistributionView(buckets: insight.hourBuckets, color: color)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.t("Weekday x time", language))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    CheckInWeekdayHeatmapGrid(buckets: insight.weekdayHourBuckets, color: color)
-                }
-            } else {
-                Text(L10n.t("No check-ins yet", language))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 6)
-    }
-}
-
-private struct CheckInHourDistributionView: View {
-    let buckets: [CheckInHourBucket]
-    let color: Color
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
-            ForEach(buckets) { bucket in
-                VStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(color.opacity(insightOpacity(for: bucket.intensity, isEmpty: bucket.count == 0)))
-                        .frame(height: 18)
-                    Text(String(format: "%02d", bucket.hour))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityLabel("\(bucket.hour):00 \(bucket.count)")
-            }
-        }
-    }
-}
-
-private struct CheckInWeekdayHeatmapGrid: View {
-    let buckets: [CheckInWeekdayHourBucket]
-    let color: Color
-
-    var body: some View {
-        VStack(spacing: 4) {
-            ForEach(1...7, id: \.self) { weekday in
-                HStack(spacing: 3) {
-                    Text(weekdayLabel(weekday))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, alignment: .trailing)
-
-                    ForEach(0..<24, id: \.self) { hour in
-                        let bucket = bucket(weekday: weekday, hour: hour)
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(color.opacity(insightOpacity(for: bucket.intensity, isEmpty: bucket.count == 0)))
-                            .frame(height: 10)
-                            .accessibilityLabel("\(weekdayLabel(weekday)) \(hour):00 \(bucket.count)")
-                    }
-                }
-            }
-        }
-    }
-
-    private func bucket(weekday: Int, hour: Int) -> CheckInWeekdayHourBucket {
-        buckets.first { $0.weekday == weekday && $0.hour == hour }
-            ?? CheckInWeekdayHourBucket(weekday: weekday, hour: hour, count: 0, maxCount: 0)
-    }
-
-    private func weekdayLabel(_ weekday: Int) -> String {
-        let symbols = Calendar.current.shortWeekdaySymbols
-        guard symbols.indices.contains(weekday - 1) else {
-            return "\(weekday)"
-        }
-
-        return symbols[weekday - 1]
-    }
-}
-
 private struct CheckInInsightsEntryRow: View {
     let entry: CheckInEntry
 
@@ -584,12 +493,4 @@ private struct CheckInInsightsEntryRow: View {
         formatter.timeStyle = .short
         return formatter
     }()
-}
-
-private func insightOpacity(for intensity: Double, isEmpty: Bool) -> Double {
-    if isEmpty {
-        return 0.08
-    }
-
-    return 0.18 + min(max(intensity, 0), 1) * 0.72
 }

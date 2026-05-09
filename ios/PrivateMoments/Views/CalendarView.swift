@@ -913,6 +913,16 @@ private struct CalendarDayReviewView: View {
                 CalendarDayReviewHeader(day: day, calendar: calendar)
                     .padding(.bottom, day.activityCount == 0 ? 18 : 12)
 
+                CalendarDayCheckInRhythmStrip(
+                    checkIns: day.checkInRhythmItems,
+                    calendar: calendar,
+                    onOpen: { checkIn in
+                        playbackCenter.pause()
+                        checkInDetailRoute = CheckInEntryDetailRoute(entryId: checkIn.id)
+                    }
+                )
+                .padding(.bottom, day.checkInRhythmItems.isEmpty ? 0 : 18)
+
                 if day.activityCount == 0 {
                     ContentUnavailableView(L10n.t("No moments", appLanguage), systemImage: "calendar")
                         .frame(maxWidth: .infinity)
