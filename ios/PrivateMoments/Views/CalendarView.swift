@@ -364,8 +364,7 @@ private struct CalendarMonthGrid: View {
                                         onSelectDay(day)
                                     }
                                 } label: {
-                                    CalendarDayCell(day: day, calendar: calendar)
-                                        .frame(width: dayCellSide, height: dayCellSide)
+                                    CalendarDayCell(day: day, calendar: calendar, side: dayCellSide)
                                 }
                                 .buttonStyle(CalendarDayButtonStyle(isEnabled: day.isSelectable))
                                 .disabled(!day.isSelectable)
@@ -434,48 +433,47 @@ private struct CalendarDayCell: View {
 
     let day: CalendarReviewDay
     let calendar: Calendar
+    let side: CGFloat
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(dayBackground)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(dayNumber)
+                .font(.subheadline.weight(day.isToday ? .bold : .medium))
+                .fontDesign(.rounded)
+                .foregroundStyle(day.isInDisplayedMonth ? Color.primary : Color.secondary)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(dayNumber)
-                    .font(.subheadline.weight(day.isToday ? .bold : .medium))
-                    .fontDesign(.rounded)
-                    .foregroundStyle(day.isInDisplayedMonth ? Color.primary : Color.secondary)
+            Spacer(minLength: 0)
 
-                Spacer(minLength: 0)
-
-                if !day.mediaHints.isEmpty || day.activityCount > 0 {
-                    HStack(spacing: 4) {
-                        if !day.mediaHints.isEmpty {
-                            HStack(spacing: 3) {
-                                ForEach(day.mediaHints, id: \.rawValue) { hint in
-                                    Image(systemName: hint.systemImage)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                }
+            if !day.mediaHints.isEmpty || day.activityCount > 0 {
+                HStack(spacing: 4) {
+                    if !day.mediaHints.isEmpty {
+                        HStack(spacing: 3) {
+                            ForEach(day.mediaHints, id: \.rawValue) { hint in
+                                Image(systemName: hint.systemImage)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
                             }
                         }
+                    }
 
-                        Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                        if day.activityCount > 0 {
-                            Text("\(day.activityCount)")
-                                .font(.caption2.weight(.bold).monospacedDigit())
-                                .foregroundStyle(.primary.opacity(0.72))
-                                .minimumScaleFactor(0.72)
-                                .lineLimit(1)
-                        }
+                    if day.activityCount > 0 {
+                        Text("\(day.activityCount)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .foregroundStyle(.primary.opacity(0.72))
+                            .minimumScaleFactor(0.72)
+                            .lineLimit(1)
                     }
                 }
             }
-            .padding(6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(6)
+        .frame(width: side, height: side, alignment: .topLeading)
+        .background {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(dayBackground)
+        }
         .overlay {
             if day.isToday {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
