@@ -10,7 +10,9 @@ test("upsert_checkin_item defaults missing timeVisualization to none", async () 
   await applyCheckInOperation(tx, checkInItemOperation({ timeVisualization: undefined }));
 
   assert.equal(state.itemCreate?.timeVisualization, "none");
+  assert.equal(state.itemCreate?.dayStartHour, 0);
   assert.equal(JSON.parse(state.changePayloadJson ?? "{}").timeVisualization, "none");
+  assert.equal(JSON.parse(state.changePayloadJson ?? "{}").dayStartHour, 0);
 });
 
 test("upsert_checkin_item accepts synced timeVisualization modes", async () => {
@@ -45,10 +47,44 @@ test("upsert_checkin_item rejects timeLine for multiplePerDay items", async () =
   );
 });
 
+test("upsert_checkin_item accepts synced dayStartHour", async () => {
+  const { tx, state } = fakeCheckInTx();
+
+  await applyCheckInOperation(tx, checkInItemOperation({ dayStartHour: 12 }));
+
+  assert.equal(state.itemCreate?.dayStartHour, 12);
+  assert.equal(JSON.parse(state.changePayloadJson ?? "{}").dayStartHour, 12);
+});
+
+test("upsert_checkin_item ignores dayStartHour for multiplePerDay items", async () => {
+  const { tx, state } = fakeCheckInTx();
+
+  await applyCheckInOperation(tx, checkInItemOperation({
+    recordMode: "multiplePerDay",
+    timeVisualization: "timeHeatmap",
+    dayStartHour: 12,
+  }));
+
+  assert.equal(state.itemCreate?.dayStartHour, 0);
+  assert.equal(JSON.parse(state.changePayloadJson ?? "{}").dayStartHour, 0);
+});
+
+test("upsert_checkin_item rejects invalid dayStartHour", async () => {
+  for (const dayStartHour of [-1, 1.5, 24]) {
+    const { tx } = fakeCheckInTx();
+
+    await assert.rejects(
+      applyCheckInOperation(tx, checkInItemOperation({ dayStartHour })),
+      OperationRejectedError,
+    );
+  }
+});
+
 function checkInItemOperation(
   overrides: {
     recordMode?: string;
     timeVisualization?: string;
+    dayStartHour?: number;
   } = {},
 ): SyncOperationInput {
   const payload: Record<string, unknown> = {
@@ -67,6 +103,9 @@ function checkInItemOperation(
   };
   if (overrides.timeVisualization !== undefined) {
     payload.timeVisualization = overrides.timeVisualization;
+  }
+  if (overrides.dayStartHour !== undefined) {
+    payload.dayStartHour = overrides.dayStartHour;
   }
 
   return {

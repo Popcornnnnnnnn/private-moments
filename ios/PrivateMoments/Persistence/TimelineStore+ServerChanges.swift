@@ -426,6 +426,7 @@ extension TimelineStore {
             timeVisualization: CheckInTimeVisualization(
                 rawValue: payload["timeVisualization"]?.stringValue ?? "none"
             ) ?? .none,
+            dayStartHour: recordMode == .oncePerDay ? normalizedCheckInDayStartHour(payload["dayStartHour"]?.intValue) : 0,
             activeWeekdays: activeWeekdays.isEmpty ? [1, 2, 3, 4, 5, 6, 7] : activeWeekdays,
             sortOrder: sortOrder,
             defaultShowInTimeline: defaultShowInTimeline,
@@ -582,5 +583,9 @@ extension TimelineStore {
 
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: value)
+    }
+
+    private func normalizedCheckInDayStartHour(_ value: Int?) -> Int {
+        CheckInDayBoundary.normalizedHour(value ?? 0)
     }
 }

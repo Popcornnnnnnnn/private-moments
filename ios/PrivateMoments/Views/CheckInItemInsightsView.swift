@@ -442,11 +442,12 @@ private struct CheckInTimeLineTooltip: View {
     }
 
     private var dayLabel: String {
-        if Calendar.current.isDateInToday(point.day) {
+        let date = point.entry?.occurredAt ?? point.day
+        if Calendar.current.isDateInToday(date) {
             return L10n.t("Today", language)
         }
 
-        return Self.dayFormatter.string(from: point.day)
+        return Self.dayFormatter.string(from: date)
     }
 
     private var timeLabel: String {

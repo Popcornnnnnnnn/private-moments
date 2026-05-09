@@ -109,12 +109,26 @@ enum CheckInTimeInsightsBuilder {
         calendar: Calendar = .current,
         dayCount: Int = defaultDayCount
     ) -> CheckInTimeLineInsight {
-        let windowDays = insightDays(endingAt: now, calendar: calendar, dayCount: dayCount)
-        let range = insightRange(endingAt: now, calendar: calendar, dayCount: dayCount)
+        let windowDays = insightDays(
+            endingAt: now,
+            dayStartHour: item.dayStartHour,
+            calendar: calendar,
+            dayCount: dayCount
+        )
+        let range = insightRange(
+            endingAt: now,
+            dayStartHour: item.dayStartHour,
+            calendar: calendar,
+            dayCount: dayCount
+        )
         let entriesByDay = Dictionary(
             grouping: activeEntries(for: item, entries: entries, in: range)
         ) { entry in
-            calendar.startOfDay(for: entry.occurredAt)
+            CheckInDayBoundary.dayStart(
+                containing: entry.occurredAt,
+                dayStartHour: item.dayStartHour,
+                calendar: calendar
+            )
         }
         let firstEntryByDay: [Date: CheckInEntry] = Dictionary(uniqueKeysWithValues: entriesByDay.compactMap { day, dayEntries in
             guard let first = dayEntries.sorted(by: { lhs, rhs in
@@ -182,7 +196,7 @@ enum CheckInTimeInsightsBuilder {
         calendar: Calendar = .current,
         dayCount: Int = defaultDayCount
     ) -> CheckInHeatmapInsight {
-        let range = insightRange(endingAt: now, calendar: calendar, dayCount: dayCount)
+        let range = insightRange(endingAt: now, dayStartHour: 0, calendar: calendar, dayCount: dayCount)
         let scopedEntries = activeEntries(for: item, entries: entries, in: range)
         var hourCounts = Array(repeating: 0, count: 24)
         var weekdayHourCounts = [String: Int]()
@@ -243,11 +257,16 @@ enum CheckInTimeInsightsBuilder {
 
     private static func insightDays(
         endingAt now: Date,
+        dayStartHour: Int,
         calendar: Calendar,
         dayCount: Int
     ) -> [Date] {
         let count = max(dayCount, 1)
-        let endDay = calendar.startOfDay(for: now)
+        let endDay = CheckInDayBoundary.dayStart(
+            containing: now,
+            dayStartHour: dayStartHour,
+            calendar: calendar
+        )
         let startDay = calendar.date(byAdding: .day, value: -(count - 1), to: endDay) ?? endDay
         return (0..<count).compactMap { offset in
             calendar.date(byAdding: .day, value: offset, to: startDay)
@@ -256,11 +275,21 @@ enum CheckInTimeInsightsBuilder {
 
     private static func insightRange(
         endingAt now: Date,
+        dayStartHour: Int,
         calendar: Calendar,
         dayCount: Int
     ) -> Range<Date> {
-        let days = insightDays(endingAt: now, calendar: calendar, dayCount: dayCount)
-        let start = days.first ?? calendar.startOfDay(for: now)
+        let days = insightDays(
+            endingAt: now,
+            dayStartHour: dayStartHour,
+            calendar: calendar,
+            dayCount: dayCount
+        )
+        let start = days.first ?? CheckInDayBoundary.dayStart(
+            containing: now,
+            dayStartHour: dayStartHour,
+            calendar: calendar
+        )
         let endDay = days.last ?? start
         let end = calendar.date(byAdding: .day, value: 1, to: endDay) ?? now
         return start..<end

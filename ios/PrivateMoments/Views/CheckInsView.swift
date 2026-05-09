@@ -798,6 +798,7 @@ private struct CheckInItemEditorView: View {
     @State private var colorHex: String
     @State private var recordMode: CheckInRecordMode
     @State private var timeVisualization: CheckInTimeVisualization
+    @State private var dayStartHour: Int
     @State private var activeWeekdays: Set<Int>
     @State private var defaultShowInTimeline: Bool
     @State private var tagId: String
@@ -814,6 +815,7 @@ private struct CheckInItemEditorView: View {
         _colorHex = State(initialValue: item?.colorHex ?? "#61B88D")
         _recordMode = State(initialValue: item?.recordMode ?? .oncePerDay)
         _timeVisualization = State(initialValue: item?.timeVisualization ?? .none)
+        _dayStartHour = State(initialValue: item?.dayStartHour ?? 0)
         _activeWeekdays = State(initialValue: Set(item?.activeWeekdays ?? [1, 2, 3, 4, 5, 6, 7]))
         _defaultShowInTimeline = State(initialValue: item?.defaultShowInTimeline ?? false)
         _tagId = State(initialValue: item?.tagId ?? "")
@@ -835,12 +837,23 @@ private struct CheckInItemEditorView: View {
                         if newValue == .multiplePerDay, timeVisualization == .timeLine {
                             timeVisualization = .timeHeatmap
                         }
+                        if newValue == .multiplePerDay {
+                            dayStartHour = 0
+                        }
                     }
 
                     Picker(L10n.t("Time visualization", appLanguage), selection: $timeVisualization) {
                         ForEach(availableTimeVisualizations) { mode in
                             Label(mode.title(language: appLanguage), systemImage: mode.systemImage)
                                 .tag(mode)
+                        }
+                    }
+
+                    if recordMode == .oncePerDay {
+                        Picker(L10n.t("Daily reset", appLanguage), selection: $dayStartHour) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(Self.resetLabel(for: hour)).tag(hour)
+                            }
                         }
                     }
                 }
@@ -1002,6 +1015,10 @@ private struct CheckInItemEditorView: View {
         return timeVisualization
     }
 
+    private var normalizedDayStartHour: Int {
+        recordMode == .oncePerDay ? CheckInDayBoundary.normalizedHour(dayStartHour) : 0
+    }
+
     private func save() {
         let normalizedSymbolName = CheckInSymbolValidator.normalized(symbolName)
         guard normalizedSymbolName == symbolName.trimmingCharacters(in: .whitespacesAndNewlines) else {
@@ -1018,6 +1035,7 @@ private struct CheckInItemEditorView: View {
                 item.colorHex = colorHex
                 item.recordMode = recordMode
                 item.timeVisualization = normalizedTimeVisualization
+                item.dayStartHour = normalizedDayStartHour
                 item.activeWeekdays = Array(activeWeekdays)
                 item.defaultShowInTimeline = defaultShowInTimeline
                 item.tagId = tagId.isEmpty ? nil : tagId
@@ -1029,6 +1047,7 @@ private struct CheckInItemEditorView: View {
                     colorHex: colorHex,
                     recordMode: recordMode,
                     timeVisualization: normalizedTimeVisualization,
+                    dayStartHour: normalizedDayStartHour,
                     activeWeekdays: Array(activeWeekdays),
                     defaultShowInTimeline: defaultShowInTimeline,
                     tagId: tagId.isEmpty ? nil : tagId
@@ -1050,6 +1069,10 @@ private struct CheckInItemEditorView: View {
             trimmed = String(trimmed.prefix(7))
         }
         return trimmed
+    }
+
+    private static func resetLabel(for hour: Int) -> String {
+        String(format: "%02d:00", CheckInDayBoundary.normalizedHour(hour))
     }
 }
 

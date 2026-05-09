@@ -2604,6 +2604,9 @@ components:
             `upsert_checkin_item` supports `timeVisualization` values `none`,
             `timeLine`, and `timeHeatmap`; missing legacy values default to
             `none`, and `timeLine` is valid only for `oncePerDay` items.
+            Item payloads also support `dayStartHour` from `0` to `23`, defaulting
+            to `0`; it defines the once-per-day reset boundary and Time Line item
+            day grouping.
             check-in image files upload separately through
             `/api/v1/checkin-media/upload`. `delete_checkin_media` soft-deletes
             one uploaded check-in media record and emits `checkin_media_deleted`.

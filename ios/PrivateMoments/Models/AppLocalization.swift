@@ -569,6 +569,7 @@ enum L10n {
         "This week": "本周",
         "Today": "今天",
         "Choose Time Line or Time Heatmap in Manage to show insights here.": "在 Manage 中选择时间折线或时间热力图后，这里会显示洞察。",
+        "Daily reset": "每日重置",
         "This removes": "这会移除",
         "This removes only the generated AI summary.": "这只会移除生成的 AI 摘要。",
         "This removes the moment from your timeline and syncs the deletion to your Mac.": "这会从时间线删除该 moment，并把删除同步到 Mac。",

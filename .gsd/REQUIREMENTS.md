@@ -707,10 +707,11 @@ This file is the explicit capability and coverage contract for the project.
 | R056 | constraint | active | M012 | R052,R053,R054 | Check-ins v1 avoids AI, reminders, streaks, goals, comments, favorite, pin, presets, Mac Admin editing, and separate export UI. |
 | R057 | operational | active | M012 | R036,R050,R053,R054 | Check-in item/entry/media sync and diagnostics stay iOS-first, with Mac Admin reserved for Mac-local recovery and runtime truth. |
 | R058 | functional | active | M012 follow-up | R053,R056,R057 | Check-in time insights are optional per-item synced metadata with line charts only for once-per-day items and heatmaps for multi-entry distributions. |
+| R059 | functional | active | M014 | R058 | Once-per-day check-in items support a synced item-level daily reset hour so sleep-like items can treat early-morning and late-evening entries as adjacent item days rather than the same natural calendar day. |
 
 ## Coverage Summary
 
-- Active requirements: 47
-- Mapped to slices: 47 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054, R055, R056, R057, R058)
+- Active requirements: 48
+- Mapped to slices: 48 (R008, R009, R010, R011, R012, R013, R014, R015, R016, R018, R019, R020, R021, R022, R023, R024, R025, R026, R027, R028, R029, R030, R031, R032, R033, R034, R035, R036, R037, R038, R039, R040, R041, R042, R043, R044, R045, R046, R047, R050, R051, R053, R054, R055, R056, R057, R058, R059)
 - Validated: 9 (R004, R005, R006, R007, R017, R049, R052, R053, R054)
 - Unmapped active requirements: 4 global operational requirements (R001, R002, R003, R048)

@@ -209,6 +209,7 @@ extension TimelineStore {
             "colorHex": item.colorHex,
             "recordMode": item.recordMode.rawValue,
             "timeVisualization": item.timeVisualization.rawValue,
+            "dayStartHour": CheckInDayBoundary.normalizedHour(item.dayStartHour),
             "activeWeekdays": item.activeWeekdays,
             "sortOrder": item.sortOrder,
             "defaultShowInTimeline": item.defaultShowInTimeline,

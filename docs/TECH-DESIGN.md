@@ -161,12 +161,12 @@ Check-ins 是第三个底部 tab，和 Timeline、Calendar 并列；默认启动
 
 数据模型分两层：
 
-- `checkin_items` / `local_checkin_items` 定义活动：名称、SF Symbol `symbolName`、颜色、`oncePerDay` 或 `multiplePerDay`、活跃星期、手动排序、默认 `showInTimeline`、可选 tag、archive/delete 状态和 sync 状态。
+- `checkin_items` / `local_checkin_items` 定义活动：名称、SF Symbol `symbolName`、颜色、`oncePerDay` 或 `multiplePerDay`、可选 `dayStartHour`、活跃星期、手动排序、默认 `showInTimeline`、可选 tag、archive/delete 状态和 sync 状态。
 - `checkin_entries` / `local_checkin_entries` 定义一次打卡：item id、发生时间、可选 note、entry-level `showInTimeline`、soft delete 状态和 sync 状态。
 
 Check-in 图标没有单独的 server/database icon 表。同步协议只保存 SF Symbol 名称字符串；iOS 编辑器提供本地精选图标 catalog、类别筛选、搜索、预览和高级 `SF Symbol name` 输入，并在保存前用系统 symbol lookup 校验。只有未来需要跨平台可管理 icon library 时，才重新考虑 icon catalog 表。
 
-一次一天 item 使用本地日期做去重，编辑 entry 时间时也要重新校验同一天是否已有 entry。一天多次 item 不做时间冲突 UI，因为用户不需要在同一时间连续打卡；按发生时间自然排序即可。Item 还同步一个 `timeVisualization` 配置，取值为 `none`、`timeLine` 或 `timeHeatmap`，旧 item 默认 `none`。`timeLine` 只允许 `oncePerDay` item 使用；`multiplePerDay` item 只能用 `none` 或 `timeHeatmap`。
+一次一天 item 使用 item day 做去重，item day 由 `dayStartHour` 定义，默认 00:00；例如 Bed 可以把 `Daily reset` 设为 12:00，使 00:30 属于前一晚、23:30 属于下一晚。编辑 entry 时间时也要按同一 item day 重新校验是否已有 entry。一天多次 item 不做时间冲突 UI，因为用户不需要在同一时间连续打卡；按发生时间自然排序即可。Item 还同步一个 `timeVisualization` 配置，取值为 `none`、`timeLine` 或 `timeHeatmap`，旧 item 默认 `none`。`timeLine` 只允许 `oncePerDay` item 使用；`multiplePerDay` item 只能用 `none` 或 `timeHeatmap`。
 
 Check-ins UI 的默认路径必须是 one tap。`Today` row 左侧 icon 负责一键打卡；已经完成的一天一次 item，左侧 icon 打开今日 entry。中间 item 区域打开只读 item insights/trends 页，右侧低权重入口打开单独表单，允许填写 note、发生时间、照片和 `Show in Timeline`。Entry detail 支持修改 note、发生时间、Timeline 显示开关，或取消打卡。`Manage` 负责 item 创建、编辑、archive/delete；item row 整行都是编辑入口，并提供按压/hover 式反馈，避免只有图标像可点击。创建 item 可以稍复杂，但日常打卡不能被表单拖慢。
 

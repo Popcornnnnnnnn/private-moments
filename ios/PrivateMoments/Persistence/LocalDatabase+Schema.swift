@@ -154,6 +154,7 @@ extension LocalDatabase {
                 colorHex TEXT NOT NULL,
                 recordMode TEXT NOT NULL,
                 timeVisualization TEXT NOT NULL DEFAULT 'none',
+                dayStartHour INTEGER NOT NULL DEFAULT 0,
                 activeWeekdays TEXT NOT NULL,
                 sortOrder INTEGER NOT NULL,
                 defaultShowInTimeline INTEGER NOT NULL DEFAULT 0,
@@ -247,6 +248,7 @@ extension LocalDatabase {
         try addColumnIfNeeded(table: "local_ai_summaries", column: "oneLiner", definition: "TEXT")
         try addColumnIfNeeded(table: "local_ai_summaries", column: "documentBlocksJson", definition: "TEXT NOT NULL DEFAULT '[]'")
         try addColumnIfNeeded(table: "local_checkin_items", column: "timeVisualization", definition: "TEXT NOT NULL DEFAULT 'none'")
+        try addColumnIfNeeded(table: "local_checkin_items", column: "dayStartHour", definition: "INTEGER NOT NULL DEFAULT 0")
         try execute("CREATE INDEX IF NOT EXISTS idx_local_media_deletedAt ON local_media(deletedAt)")
         try seedDefaultTags()
     }

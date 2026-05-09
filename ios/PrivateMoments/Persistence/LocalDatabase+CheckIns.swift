@@ -5,7 +5,8 @@ extension LocalDatabase {
     func fetchCheckInItems(includeArchived: Bool = true, includeDeleted: Bool = false) throws -> [CheckInItem] {
         let statement = try prepare(
             """
-            SELECT id, name, symbolName, colorHex, recordMode, timeVisualization, activeWeekdays, sortOrder,
+            SELECT id, name, symbolName, colorHex, recordMode, timeVisualization, dayStartHour,
+                   activeWeekdays, sortOrder,
                    defaultShowInTimeline, tagId, createdAt, updatedAt, archivedAt, deletedAt, syncStatus
             FROM local_checkin_items
             WHERE (? = 1 OR deletedAt IS NULL)
@@ -30,7 +31,8 @@ extension LocalDatabase {
     func fetchCheckInItem(id: String) throws -> CheckInItem? {
         let statement = try prepare(
             """
-            SELECT id, name, symbolName, colorHex, recordMode, timeVisualization, activeWeekdays, sortOrder,
+            SELECT id, name, symbolName, colorHex, recordMode, timeVisualization, dayStartHour,
+                   activeWeekdays, sortOrder,
                    defaultShowInTimeline, tagId, createdAt, updatedAt, archivedAt, deletedAt, syncStatus
             FROM local_checkin_items
             WHERE id = ?
@@ -286,9 +288,18 @@ extension LocalDatabase {
         }
     }
 
-    func hasCheckInEntry(itemId: String, on date: Date, excluding entryId: String? = nil, calendar: Calendar = .current) throws -> Bool {
-        let dayStart = calendar.startOfDay(for: date)
-        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86_400)
+    func hasCheckInEntry(
+        itemId: String,
+        on date: Date,
+        excluding entryId: String? = nil,
+        dayStartHour: Int = 0,
+        calendar: Calendar = .current
+    ) throws -> Bool {
+        let dayRange = CheckInDayBoundary.dayRange(
+            containing: date,
+            dayStartHour: dayStartHour,
+            calendar: calendar
+        )
         let statement = try prepare(
             """
             SELECT COUNT(*)
@@ -305,8 +316,8 @@ extension LocalDatabase {
         }
 
         try bind(itemId, to: 1, in: statement)
-        try bind(dayStart, to: 2, in: statement)
-        try bind(dayEnd, to: 3, in: statement)
+        try bind(dayRange.lowerBound, to: 2, in: statement)
+        try bind(dayRange.upperBound, to: 3, in: statement)
         try bind(entryId, to: 4, in: statement)
         try bind(entryId, to: 5, in: statement)
 
@@ -393,6 +404,7 @@ extension LocalDatabase {
                 colorHex: "#F4C95D",
                 recordMode: .oncePerDay,
                 timeVisualization: .none,
+                dayStartHour: 0,
                 activeWeekdays: weekdays,
                 sortOrder: 0,
                 defaultShowInTimeline: true,
@@ -410,6 +422,7 @@ extension LocalDatabase {
                 colorHex: "#61B88D",
                 recordMode: .oncePerDay,
                 timeVisualization: .none,
+                dayStartHour: 0,
                 activeWeekdays: [2, 3, 4, 5, 6],
                 sortOrder: 1,
                 defaultShowInTimeline: true,
@@ -427,6 +440,7 @@ extension LocalDatabase {
                 colorHex: "#D98E73",
                 recordMode: .multiplePerDay,
                 timeVisualization: .none,
+                dayStartHour: 0,
                 activeWeekdays: weekdays,
                 sortOrder: 2,
                 defaultShowInTimeline: false,
@@ -526,15 +540,17 @@ extension LocalDatabase {
         let statement = try prepare(
             """
             INSERT INTO local_checkin_items
-                (id, name, symbolName, colorHex, recordMode, timeVisualization, activeWeekdays, sortOrder,
+                (id, name, symbolName, colorHex, recordMode, timeVisualization, dayStartHour,
+                 activeWeekdays, sortOrder,
                  defaultShowInTimeline, tagId, createdAt, updatedAt, archivedAt, deletedAt, syncStatus)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 symbolName = excluded.symbolName,
                 colorHex = excluded.colorHex,
                 recordMode = excluded.recordMode,
                 timeVisualization = excluded.timeVisualization,
+                dayStartHour = excluded.dayStartHour,
                 activeWeekdays = excluded.activeWeekdays,
                 sortOrder = excluded.sortOrder,
                 defaultShowInTimeline = excluded.defaultShowInTimeline,
@@ -555,15 +571,16 @@ extension LocalDatabase {
         try bind(item.colorHex, to: 4, in: statement)
         try bind(item.recordMode.rawValue, to: 5, in: statement)
         try bind(item.timeVisualization.rawValue, to: 6, in: statement)
-        try bind(Self.weekdayStorageString(item.activeWeekdays), to: 7, in: statement)
-        try bind(item.sortOrder, to: 8, in: statement)
-        try bind(item.defaultShowInTimeline ? 1 : 0, to: 9, in: statement)
-        try bind(item.tagId, to: 10, in: statement)
-        try bind(item.createdAt, to: 11, in: statement)
-        try bind(item.updatedAt, to: 12, in: statement)
-        try bind(item.archivedAt, to: 13, in: statement)
-        try bind(item.deletedAt, to: 14, in: statement)
-        try bind(item.syncStatus, to: 15, in: statement)
+        try bind(CheckInDayBoundary.normalizedHour(item.dayStartHour), to: 7, in: statement)
+        try bind(Self.weekdayStorageString(item.activeWeekdays), to: 8, in: statement)
+        try bind(item.sortOrder, to: 9, in: statement)
+        try bind(item.defaultShowInTimeline ? 1 : 0, to: 10, in: statement)
+        try bind(item.tagId, to: 11, in: statement)
+        try bind(item.createdAt, to: 12, in: statement)
+        try bind(item.updatedAt, to: 13, in: statement)
+        try bind(item.archivedAt, to: 14, in: statement)
+        try bind(item.deletedAt, to: 15, in: statement)
+        try bind(item.syncStatus, to: 16, in: statement)
         try stepDone(statement)
     }
 
@@ -607,15 +624,16 @@ extension LocalDatabase {
             colorHex: try text(statement, 3),
             recordMode: CheckInRecordMode(rawValue: try text(statement, 4)) ?? .oncePerDay,
             timeVisualization: CheckInTimeVisualization(rawValue: try text(statement, 5)) ?? .none,
-            activeWeekdays: Self.weekdays(from: try text(statement, 6)),
-            sortOrder: optionalInt(statement, 7) ?? 0,
-            defaultShowInTimeline: sqlite3_column_int(statement, 8) == 1,
-            tagId: optionalText(statement, 9),
-            createdAt: try date(statement, 10),
-            updatedAt: try date(statement, 11),
-            archivedAt: try optionalDate(statement, 12),
-            deletedAt: try optionalDate(statement, 13),
-            syncStatus: try text(statement, 14)
+            dayStartHour: CheckInDayBoundary.normalizedHour(optionalInt(statement, 6) ?? 0),
+            activeWeekdays: Self.weekdays(from: try text(statement, 7)),
+            sortOrder: optionalInt(statement, 8) ?? 0,
+            defaultShowInTimeline: sqlite3_column_int(statement, 9) == 1,
+            tagId: optionalText(statement, 10),
+            createdAt: try date(statement, 11),
+            updatedAt: try date(statement, 12),
+            archivedAt: try optionalDate(statement, 13),
+            deletedAt: try optionalDate(statement, 14),
+            syncStatus: try text(statement, 15)
         )
     }
 

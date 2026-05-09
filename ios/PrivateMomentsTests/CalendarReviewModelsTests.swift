@@ -369,6 +369,7 @@ final class CalendarReviewModelsTests: XCTestCase {
             colorHex: "#61B88D",
             recordMode: .oncePerDay,
             timeVisualization: .none,
+            dayStartHour: 0,
             activeWeekdays: [1, 2, 3, 4, 5, 6, 7],
             sortOrder: 0,
             defaultShowInTimeline: showInTimeline,

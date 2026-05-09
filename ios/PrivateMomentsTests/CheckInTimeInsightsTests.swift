@@ -111,6 +111,27 @@ final class CheckInTimeInsightsTests: XCTestCase {
         XCTAssertEqual(CheckInTimeInsightsBuilder.timeLabel(for: 1_470), "00:30")
     }
 
+    func testTimeLineUsesCustomDayStartForBedtimeAcrossMidnight() {
+        let item = checkInItem(mode: .oncePerDay, visualization: .timeLine, dayStartHour: 12)
+        let insight = CheckInTimeInsightsBuilder.lineInsight(
+            item: item,
+            entries: [
+                entry(itemId: item.id, id: "after-midnight", at: date(2026, 5, 28, 0, 30)),
+                entry(itemId: item.id, id: "late-night", at: date(2026, 5, 28, 23, 30)),
+            ],
+            now: date(2026, 5, 29, 13, 0),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(insight.points.count, 3)
+        XCTAssertEqual(insight.points[0].day, date(2026, 5, 27, 12, 0))
+        XCTAssertEqual(insight.points[1].day, date(2026, 5, 28, 12, 0))
+        XCTAssertEqual(insight.points[2].day, date(2026, 5, 29, 12, 0))
+        XCTAssertTrue(insight.usesOvernightExpansion)
+        XCTAssertEqual(insight.points.compactMap(\.entry?.id), ["after-midnight", "late-night"])
+        XCTAssertEqual(insight.points.compactMap(\.plottedMinute), [1_470, 1_410])
+    }
+
     func testHeatmapUsesOneHourBucketsAndCountsMultipleEntriesPerDay() {
         let item = checkInItem(mode: .multiplePerDay, visualization: .timeHeatmap)
         let insight = CheckInTimeInsightsBuilder.heatmapInsight(
@@ -161,7 +182,8 @@ final class CheckInTimeInsightsTests: XCTestCase {
 
     private func checkInItem(
         mode: CheckInRecordMode,
-        visualization: CheckInTimeVisualization
+        visualization: CheckInTimeVisualization,
+        dayStartHour: Int = 0
     ) -> CheckInItem {
         let now = date(2026, 5, 1, 12, 0)
         return CheckInItem(
@@ -171,6 +193,7 @@ final class CheckInTimeInsightsTests: XCTestCase {
             colorHex: "#61B88D",
             recordMode: mode,
             timeVisualization: visualization,
+            dayStartHour: dayStartHour,
             activeWeekdays: [1, 2, 3, 4, 5, 6, 7],
             sortOrder: 0,
             defaultShowInTimeline: false,

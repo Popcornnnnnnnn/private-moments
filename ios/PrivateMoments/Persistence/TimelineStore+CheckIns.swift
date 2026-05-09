@@ -8,6 +8,7 @@ extension TimelineStore {
         colorHex: String,
         recordMode: CheckInRecordMode,
         timeVisualization: CheckInTimeVisualization,
+        dayStartHour: Int = 0,
         activeWeekdays: [Int],
         defaultShowInTimeline: Bool,
         tagId: String?
@@ -31,6 +32,7 @@ extension TimelineStore {
                 colorHex: normalizedCheckInColor(colorHex),
                 recordMode: recordMode,
                 timeVisualization: normalizedTimeVisualization(timeVisualization, recordMode: recordMode),
+                dayStartHour: normalizedDayStartHour(recordMode == .oncePerDay ? dayStartHour : 0),
                 activeWeekdays: normalizedWeekdays(activeWeekdays),
                 sortOrder: try database.nextCheckInSortOrder(),
                 defaultShowInTimeline: defaultShowInTimeline,
@@ -78,6 +80,7 @@ extension TimelineStore {
                 updated.timeVisualization,
                 recordMode: updated.recordMode
             )
+            updated.dayStartHour = normalizedDayStartHour(updated.recordMode == .oncePerDay ? updated.dayStartHour : 0)
             updated.activeWeekdays = normalizedWeekdays(updated.activeWeekdays)
             updated.updatedAt = Date()
             updated.syncStatus = "pending"
@@ -160,8 +163,8 @@ extension TimelineStore {
             }
 
             if item.recordMode == .oncePerDay,
-               try database.hasCheckInEntry(itemId: item.id, on: occurredAt) {
-                errorMessage = "Already checked in today."
+               try database.hasCheckInEntry(itemId: item.id, on: occurredAt, dayStartHour: item.dayStartHour) {
+                errorMessage = "Already checked in for this day."
                 return nil
             }
 
@@ -219,8 +222,13 @@ extension TimelineStore {
             }
 
             if item.recordMode == .oncePerDay,
-               try database.hasCheckInEntry(itemId: item.id, on: entry.occurredAt, excluding: entry.id) {
-                errorMessage = "Already checked in on that day."
+               try database.hasCheckInEntry(
+                itemId: item.id,
+                on: entry.occurredAt,
+                excluding: entry.id,
+                dayStartHour: item.dayStartHour
+               ) {
+                errorMessage = "Already checked in for that day."
                 return false
             }
 
@@ -316,7 +324,12 @@ extension TimelineStore {
             .filter { entry in
                 entry.itemId == item.id
                     && entry.deletedAt == nil
-                    && calendar.isDate(entry.occurredAt, inSameDayAs: date)
+                    && CheckInDayBoundary.isSameItemDay(
+                        entry.occurredAt,
+                        date,
+                        dayStartHour: item.dayStartHour,
+                        calendar: calendar
+                    )
             }
             .sorted { lhs, rhs in
                 if lhs.occurredAt == rhs.occurredAt {
@@ -372,6 +385,10 @@ extension TimelineStore {
         }
 
         return value
+    }
+
+    private func normalizedDayStartHour(_ value: Int) -> Int {
+        CheckInDayBoundary.normalizedHour(value)
     }
 
     private func normalizedWeekdays(_ value: [Int]) -> [Int] {

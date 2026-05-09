@@ -66,6 +66,7 @@ struct CheckInItem: Identifiable, Codable, Equatable {
     var colorHex: String
     var recordMode: CheckInRecordMode
     var timeVisualization: CheckInTimeVisualization
+    var dayStartHour: Int
     var activeWeekdays: [Int]
     var sortOrder: Int
     var defaultShowInTimeline: Bool
@@ -81,7 +82,12 @@ struct CheckInItem: Identifiable, Codable, Equatable {
     }
 
     func isScheduled(on date: Date, calendar: Calendar = .current) -> Bool {
-        activeWeekdays.contains(calendar.component(.weekday, from: date))
+        let itemDayStart = CheckInDayBoundary.dayStart(
+            containing: date,
+            dayStartHour: dayStartHour,
+            calendar: calendar
+        )
+        return activeWeekdays.contains(calendar.component(.weekday, from: itemDayStart))
     }
 }
 

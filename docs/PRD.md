@@ -188,8 +188,8 @@ Mac 通过 Tailscale 或私有 VPN 被 iPhone 访问，不直接暴露公网。
 - `Check-ins` 默认显示 `Today`；可以在同一界面切到 `History`，查看最近一周、一个月和按 item 的概况。
 - 点击 Today 中某个 check-in item 左侧 icon 会立即打卡，不弹出必填表单；已经完成的一天一次 item，左侧 icon 打开今日 entry。
 - Today row 中间 item 区域打开只读 item insights/trends 页；右侧独立入口添加 note、发生时间、照片和 `Show in Timeline` 开关。默认打卡可以什么内容都没有。
-- 新建 item 时可以选择一天一次或一天多次，设置名称、通过精选选择器或高级输入设置 SF Symbol 图标、HEX 或预设高对比度颜色、活跃星期、默认是否显示到 Timeline，以及可选 `Time visualization`。
-- `Time visualization` 默认 `None`。`Time Line` 只用于一天一次且发生时间相对稳定的 item，展示最近 30 天每日发生时间，缺失日期断线，跨午夜按连续晚间区间处理，并支持点按/拖动查看日期时间。`Time Heatmap` 用 1 小时 bucket 展示最近 30 天发生时间分布，支持一天多次记录，也支持选择 bucket 查看对应记录并进入 entry detail。
+- 新建 item 时可以选择一天一次或一天多次，设置名称、通过精选选择器或高级输入设置 SF Symbol 图标、HEX 或预设高对比度颜色、活跃星期、默认是否显示到 Timeline，以及可选 `Time visualization`。一天一次 item 还可以设置 `Daily reset`，默认 00:00；睡觉这类跨午夜语义可以设为 12:00，避免凌晨和当晚记录被自然日挤在一起。
+- `Time visualization` 默认 `None`。`Time Line` 只用于一天一次且发生时间相对稳定的 item，展示最近 30 个 item day 的发生时间，缺失日期断线，跨午夜按连续晚间区间处理，并支持点按/拖动查看真实发生日期时间。`Time Heatmap` 用 1 小时 bucket 展示最近 30 天发生时间分布，支持一天多次记录，也支持选择 bucket 查看对应记录并进入 entry detail。
 - 每条 check-in entry 的 `Show in Timeline` 与 entry 是否存在相互独立；即使不显示到 Timeline，仍然进入 Check-ins History、Calendar heatmap、Day Review 和 Month Stats。
 - Timeline 只显示 `Show in Timeline` 打开的 check-in entry，并使用紧凑 check-in row，不提供 favorite、pin 或 comments。
 - Calendar heatmap、Day Review 和 Month Stats 把 check-ins 作为生活 activity 计入，并区分普通 moments 和 check-ins；带照片的 check-ins 也计入 Photos 相关过滤和回看。

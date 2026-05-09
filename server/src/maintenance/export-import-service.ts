@@ -458,6 +458,7 @@ interface ExportedCheckInItemRecord {
   colorHex: string;
   recordMode: string;
   timeVisualization: string;
+  dayStartHour: number;
   activeWeekdays: Array<unknown>;
   sortOrder: number;
   defaultShowInTimeline: boolean;
@@ -523,6 +524,7 @@ function serializeCheckInItemRecord(item: ExportCheckInItem): ExportedCheckInIte
     colorHex: item.colorHex,
     recordMode: item.recordMode,
     timeVisualization: item.timeVisualization,
+    dayStartHour: item.dayStartHour,
     activeWeekdays: parseJsonArray(item.activeWeekdaysJson),
     sortOrder: item.sortOrder,
     defaultShowInTimeline: item.defaultShowInTimeline,
@@ -762,6 +764,7 @@ async function importCheckIns(tx: Prisma.TransactionClient, archive: ExportArchi
         colorHex: item.colorHex,
         recordMode: item.recordMode,
         timeVisualization: validCheckInTimeVisualization(item.timeVisualization),
+        dayStartHour: validCheckInDayStartHour(item.dayStartHour, item.recordMode),
         activeWeekdaysJson: JSON.stringify(activeWeekdays.length ? activeWeekdays : [1, 2, 3, 4, 5, 6, 7]),
         sortOrder: item.sortOrder,
         defaultShowInTimeline: item.defaultShowInTimeline,
@@ -1008,6 +1011,7 @@ async function rebuildServerChanges(tx: Prisma.TransactionClient, archive: Expor
               colorHex: item.colorHex,
               recordMode: item.recordMode,
               timeVisualization: validCheckInTimeVisualization(item.timeVisualization),
+              dayStartHour: validCheckInDayStartHour(item.dayStartHour, item.recordMode),
               activeWeekdays: item.activeWeekdays,
               sortOrder: item.sortOrder,
               defaultShowInTimeline: item.defaultShowInTimeline,
@@ -1481,6 +1485,14 @@ function parseJsonArray(value: string): Array<unknown> {
 
 function validCheckInTimeVisualization(value: string): string {
   return value === "timeLine" || value === "timeHeatmap" ? value : "none";
+}
+
+function validCheckInDayStartHour(value: number, recordMode: string): number {
+  if (recordMode !== "oncePerDay") {
+    return 0;
+  }
+
+  return Number.isInteger(value) && value >= 0 && value <= 23 ? value : 0;
 }
 
 function parseDate(value: string): Date {

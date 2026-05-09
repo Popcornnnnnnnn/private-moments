@@ -58,6 +58,7 @@ async function applyUpsertCheckInItem(
   const colorHex = getString(operation.payload, "colorHex") ?? "#61B88D";
   const recordMode = getString(operation.payload, "recordMode");
   const timeVisualization = getString(operation.payload, "timeVisualization") ?? "none";
+  const parsedDayStartHour = getOptionalHour(operation.payload, "dayStartHour");
   const activeWeekdays = getIntegerArray(operation.payload, "activeWeekdays", 7);
   const sortOrder = getNonNegativeInteger(operation.payload, "sortOrder") ?? 0;
   const defaultShowInTimeline = getBoolean(operation.payload, "defaultShowInTimeline");
@@ -82,6 +83,12 @@ async function applyUpsertCheckInItem(
   if (recordMode === "multiplePerDay" && timeVisualization === "timeLine") {
     throw new OperationRejectedError("upsert_checkin_item.payload.timeVisualization is incompatible with multiplePerDay");
   }
+
+  if (parsedDayStartHour === null) {
+    throw new OperationRejectedError("upsert_checkin_item.payload.dayStartHour must be between 0 and 23");
+  }
+
+  const dayStartHour = recordMode === "oncePerDay" ? parsedDayStartHour ?? 0 : 0;
 
   if (!activeWeekdays || activeWeekdays.some((weekday) => weekday < 1 || weekday > 7)) {
     throw new OperationRejectedError("upsert_checkin_item.payload.activeWeekdays is invalid");
@@ -113,6 +120,7 @@ async function applyUpsertCheckInItem(
       colorHex,
       recordMode,
       timeVisualization,
+      dayStartHour,
       activeWeekdaysJson: JSON.stringify(activeWeekdays),
       sortOrder,
       defaultShowInTimeline,
@@ -128,6 +136,7 @@ async function applyUpsertCheckInItem(
       colorHex,
       recordMode,
       timeVisualization,
+      dayStartHour,
       activeWeekdaysJson: JSON.stringify(activeWeekdays),
       sortOrder,
       defaultShowInTimeline,
@@ -139,6 +148,19 @@ async function applyUpsertCheckInItem(
   });
 
   await emitCheckInItemChange(tx, item, "checkin_item_updated");
+}
+
+function getOptionalHour(payload: Record<string, unknown>, key: string): number | null | undefined {
+  const value = payload[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 23) {
+    return null;
+  }
+
+  return value;
 }
 
 async function applyDeleteCheckInItem(
@@ -368,6 +390,7 @@ async function emitCheckInItemChange(
           colorHex: item.colorHex,
           recordMode: item.recordMode,
           timeVisualization: item.timeVisualization,
+          dayStartHour: item.dayStartHour,
           activeWeekdays: parseJsonArray(item.activeWeekdaysJson),
           sortOrder: item.sortOrder,
           defaultShowInTimeline: item.defaultShowInTimeline,

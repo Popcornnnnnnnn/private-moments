@@ -136,7 +136,7 @@ Request shape：
 - `delete_checkin_entry`
 - `delete_checkin_media`
 
-Check-in operations 也使用同一个 sync endpoint。`checkin_item` 定义活动本身，`checkin_entry` 定义某一次打卡，`checkin_media` 只表示 check-in entry 自己的照片附件。它们不会创建 ordinary post；只有 entry payload 的 `showInTimeline` 为 `true` 时，iOS Timeline 会直接渲染 compact check-in row。Calendar 和 Day Review 会读取所有未删除 check-in entries，不受 `showInTimeline` 影响。Item payload 的 `timeVisualization` 支持 `none`、`timeLine`、`timeHeatmap`，旧 payload 缺省为 `none`；`timeLine` 只允许 `oncePerDay` item 使用。
+Check-in operations 也使用同一个 sync endpoint。`checkin_item` 定义活动本身，`checkin_entry` 定义某一次打卡，`checkin_media` 只表示 check-in entry 自己的照片附件。它们不会创建 ordinary post；只有 entry payload 的 `showInTimeline` 为 `true` 时，iOS Timeline 会直接渲染 compact check-in row。Calendar 和 Day Review 会读取所有未删除 check-in entries，不受 `showInTimeline` 影响。Item payload 的 `timeVisualization` 支持 `none`、`timeLine`、`timeHeatmap`，旧 payload 缺省为 `none`；`timeLine` 只允许 `oncePerDay` item 使用。Item payload 的 `dayStartHour` 支持 `0...23`，旧 payload 缺省为 `0`，用于一天一次 item 的重置边界和 Time Line item day 聚合。
 
 Comment operations 使用同一个 sync endpoint。`create_comment` 的 `entityType` 是 `comment`，`entityId` 是 comment id，payload 至少包含父 `postId` 和 `text`：
 
@@ -428,7 +428,7 @@ Response shape：
 ```json
 {
   "serverVersion": "0.1.0",
-  "schemaVersion": 16,
+  "schemaVersion": 17,
   "dataDir": "/path/to/PrivateMoments",
   "uptimeSeconds": 123,
   "counts": {
