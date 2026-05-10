@@ -13,6 +13,14 @@ SERVER_URL="${PRIVATE_MOMENTS_SERVER_URL:-http://127.0.0.1:3210}"
 SIM_NAME="${PRIVATE_MOMENTS_SIM_NAME:-Private Moments iPhone 13 Pro}"
 DEVICE_TYPE="${PRIVATE_MOMENTS_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro}"
 BUNDLE_ID="${PRIVATE_MOMENTS_IOS_BUNDLE_ID:-dev.privatemoments.app}"
+launch_args=()
+if [[ "${PRIVATE_MOMENTS_SIM_DEMO_DATA:-}" == "1" || "${PRIVATE_MOMENTS_SIM_DEMO_DATA:-}" == "true" ]]; then
+  launch_args+=("--private-moments-demo-data" "--private-moments-demo-data-reset")
+fi
+if [[ -n "${PRIVATE_MOMENTS_SIM_LAUNCH_ARGS:-}" ]]; then
+  read -r -a extra_launch_args <<<"$PRIVATE_MOMENTS_SIM_LAUNCH_ARGS"
+  launch_args+=("${extra_launch_args[@]}")
+fi
 
 cd "$ROOT_DIR"
 
@@ -76,18 +84,30 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   "${xcodebuild_overrides[@]}"
 
-app_path="$(find "$IOS_DIR/build/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name "*.app" -print -quit)"
+app_path="$(
+  find "$IOS_DIR/build/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name "*.app" -print \
+    | while IFS= read -r candidate; do
+        candidate_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$candidate/Info.plist" 2>/dev/null || true)"
+        if [[ "$candidate_bundle_id" == "$BUNDLE_ID" ]]; then
+          printf '%s\n' "$candidate"
+          break
+        fi
+      done
+)"
 if [[ -z "$app_path" ]]; then
-  echo "Built app was not found under $IOS_DIR/build/Build/Products/Debug-iphonesimulator" >&2
+  echo "Built app for bundle id $BUNDLE_ID was not found under $IOS_DIR/build/Build/Products/Debug-iphonesimulator" >&2
   exit 1
 fi
 
 xcrun simctl install "$sim_udid" "$app_path"
-xcrun simctl launch "$sim_udid" "$BUNDLE_ID"
+xcrun simctl launch "$sim_udid" "$BUNDLE_ID" "${launch_args[@]}"
 
 echo
 echo "Moments is running in Simulator."
 echo "Server: $SERVER_URL"
+if [[ "${#launch_args[@]}" -gt 0 ]]; then
+  echo "Launch args: ${launch_args[*]}"
+fi
 if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
   echo "Bundled fallback URL: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
 fi

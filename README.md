@@ -1,8 +1,26 @@
 # Private Moments
 
-Private Moments is a private, self-hosted personal timeline. The iOS app is the primary capture surface, and a Mac runs the local server, storage, sync API, and admin UI.
+Private Moments is a private, self-hosted personal timeline for iPhone and Mac.
 
-Current status: MVP local build. The Mac server, admin UI, sync API, and native iOS app build locally. The current app supports local-first text, image, audio, video, and text + media moments; Share Sheet import through `Save to Moments`; main-timeline private comments; smart primary/topic tags with color presets, HEX input, and batch primary color editing; editable occurred time; composer/edit drafts; lightweight H1/H2 body editing; offline outbox sync with delayed retry; image compression; video compression with posters; audio recording/playback; server-side AI summaries for uploaded audio/video using Mac-local `mlx-whisper` transcription plus an external summary API, structured document rendering, conservative AI tag suggestions for new audio, and optional AI title insertion for new audio; remote media recovery; Settings storage, Sync Health, and AI-summary diagnostics; English human-friendly timeline dates; floating month hints while scrolling; timeline search/filter/month jump; favorites; detail/edit views; soft delete sync; and the Mac admin dashboard with Posts management plus restic-backed Archive backup/restore controls.
+The iOS app is the main capture and browsing surface. A Mac runs the local server, SQLite archive, media storage, sync API, AI-summary jobs, and a small admin UI. The app is local-first: new moments are saved on the phone immediately, then synced when the Mac server is reachable.
+
+Private Moments is meant for personal archives, not social sharing. It supports text, photos, audio, video, comments, favorites, smart tags, check-ins, calendar review, Share Sheet import, offline retry, media recovery, restic-backed archive backup/restore, and optional server-side AI summaries for uploaded audio/video.
+
+## Screenshots
+
+<p>
+  <img src="docs/assets/screenshots/ios-timeline-demo.jpg" alt="Private Moments timeline with audio summary, tags, comments, pinned moments, and check-ins" width="260">
+  <img src="docs/assets/screenshots/ios-calendar-demo.jpg" alt="Private Moments calendar with per-day activity markers" width="260">
+  <img src="docs/assets/screenshots/ios-checkins-demo.jpg" alt="Private Moments check-ins list" width="260">
+</p>
+
+Screenshots are generated from the simulator demo fixture:
+
+```bash
+npm run ios:simulator:demo
+```
+
+The demo fixture is opt-in and only runs when the app is launched with `--private-moments-demo-data`. It writes deterministic local posts, tags, comments, AI-summary metadata, media placeholders, and check-ins into the simulator database. The normal app path never seeds demo data.
 
 - [PRD](docs/PRD.md)
 - [Technical Design](docs/TECH-DESIGN.md)
@@ -66,10 +84,16 @@ The Admin `Archive` tab can configure a restic backup repository, create a proje
 
 ## iOS App
 
-Run the Mac server if needed, build the iOS app, install it into the iPhone 13 Pro simulator, and launch it:
+Run the Mac server if needed, build the iOS app, install it into the simulator, and launch it:
 
 ```bash
 npm run ios:simulator
+```
+
+Run the simulator with reusable demo data for screenshots and UI review:
+
+```bash
+npm run ios:simulator:demo
 ```
 
 Install and launch on the paired iPhone:
@@ -88,7 +112,7 @@ cp .env.local.example .env.local
 
 `npm run ios:simulator` and `npm run ios:device` read `.env.local` and generate an ignored `ios/Config/Local.xcconfig` for local iOS overrides.
 
-The iOS app stores local posts, comments, tags, generated AI summary metadata, pending operations, compressed images, audio/video media, posters, legacy transcript metadata, Share Extension imports, and drafts under the app's Application Support or App Group directories. New audio/video posts do not run iOS speech transcription. Posting does not wait for network success; sync retries when the server is reachable, and failed pending work uses delayed automatic retry. Settings includes Storage & Diagnostics for local iPhone usage, Sync Health, AI summary diagnostics, re-downloadable audio/video cache cleanup, tag management, feature module toggles, and Mac server storage when the server is online.
+The iOS app stores local posts, comments, tags, generated AI summary metadata, pending operations, compressed images, audio/video media, posters, legacy transcript metadata, Share Extension imports, and drafts under the app's Application Support or App Group directories. New audio/video posts do not run iOS speech transcription. Posting does not wait for network success; sync retries when the server is reachable, and failed pending work uses delayed automatic retry. Settings includes Storage & Diagnostics for local iPhone usage, Sync Health, AI summary diagnostics, re-downloadable audio/video cache cleanup, tag management, appearance/language settings, feature module toggles, and Mac server storage when the server is online.
 
 After iOS code changes, rebuild and reinstall to the real device with `npm run ios:device`.
 

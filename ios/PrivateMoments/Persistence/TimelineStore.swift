@@ -44,10 +44,27 @@ final class TimelineStore: ObservableObject {
 
     func bootstrap() async {
         do {
+            let launchArguments = ProcessInfo.processInfo.arguments
+            let shouldSeedDemoData = launchArguments.contains("--private-moments-demo-data")
+            let shouldResetDemoData = launchArguments.contains("--private-moments-demo-data-reset")
+
+            if shouldSeedDemoData {
+                AppSettings.showTagsInTimeline = true
+                AppSettings.automaticSyncEnabled = false
+                AppSettings.appAppearanceMode = .light
+                AppSettings.appLanguageMode = .english
+                showTagsInTimeline = AppSettings.showTagsInTimeline
+                automaticSyncEnabled = AppSettings.automaticSyncEnabled
+                appAppearanceMode = AppSettings.appAppearanceMode
+                appLanguageMode = AppSettings.appLanguageMode
+            }
+
             AppSettings.ensureAITitleAutoInsertCutoff()
             database = try LocalDatabase.open()
             loadSessionState()
-            if ProcessInfo.processInfo.arguments.contains("--private-moments-checkins-mock") {
+            if shouldSeedDemoData {
+                try database?.seedDemoDataIfNeeded(reset: shouldResetDemoData)
+            } else if launchArguments.contains("--private-moments-checkins-mock") {
                 try database?.seedCheckInMockDataIfNeeded()
             }
             try await reload()

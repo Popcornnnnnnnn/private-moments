@@ -536,7 +536,7 @@ extension LocalDatabase {
         )
     }
 
-    private func upsertCheckInItemOnly(_ item: CheckInItem) throws {
+    func upsertCheckInItemOnly(_ item: CheckInItem) throws {
         let statement = try prepare(
             """
             INSERT INTO local_checkin_items

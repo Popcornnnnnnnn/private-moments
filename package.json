@@ -33,6 +33,7 @@
     "doctor:release": "node scripts/open-source-scan.mjs",
     "doctor:all": "npm run doctor:runtime && npm run doctor:sync && npm run doctor:archive && npm run doctor:ai && npm run doctor:release",
     "ios:simulator": "scripts/run-ios-simulator.sh",
+    "ios:simulator:demo": "PRIVATE_MOMENTS_SIM_DEMO_DATA=1 scripts/run-ios-simulator.sh",
     "ios:preflight": "node scripts/preflight-ios-device.mjs",
     "ios:device": "scripts/run-ios-device.sh"
   },

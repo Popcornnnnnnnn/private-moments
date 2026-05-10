@@ -79,6 +79,12 @@ Run server:
 npm run server:dev
 ```
 
+Run iOS simulator with reusable demo data for screenshots and UI review:
+
+```bash
+npm run ios:simulator:demo
+```
+
 Build checks:
 
 ```bash

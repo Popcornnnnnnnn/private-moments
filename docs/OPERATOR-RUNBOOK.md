@@ -367,6 +367,14 @@ Simulator：
 npm run ios:simulator
 ```
 
+带可重复 demo 数据的 Simulator，用于 README 截图和 UI review：
+
+```bash
+npm run ios:simulator:demo
+```
+
+`ios:simulator:demo` 会以 `--private-moments-demo-data --private-moments-demo-data-reset` 启动 app。该入口只写入 `demo-` 前缀的本地 posts、tags、comments、AI summary metadata、media placeholders 和 check-ins；普通 `ios:simulator` 不会写入 demo 数据。
+
 真实 iPhone：
 
 ```bash

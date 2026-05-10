@@ -52,6 +52,7 @@
 		7CB57536BA060EB37948C294 /* CheckInIconCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3E61DA66159FA00980A5E84 /* CheckInIconCatalog.swift */; };
 		7CF532183B00A5E1CB08E031 /* TimelineStore+ServerChanges.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5207F65CDC882108E77793 /* TimelineStore+ServerChanges.swift */; };
 		7E979029C976CE9055C612AD /* CalendarReviewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AED633151E78BB9DDF90C6E4 /* CalendarReviewModels.swift */; };
+		7FF7526BF00500D043C2FA6D /* LocalDatabase+DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F55FDD48DC099140A88A6CB /* LocalDatabase+DemoData.swift */; };
 		8145E1A25968BA4B5D0B8BF2 /* TimelineSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C22E66C755B0B80F0A074F /* TimelineSearchTests.swift */; };
 		86754801B78F2286E25BB660 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 760078F878FD9467869EF749 /* libsqlite3.tbd */; };
 		87C81C69A397CA20C225796F /* TimelineSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CCF9FD74E68E259238299B1 /* TimelineSearch.swift */; };
@@ -154,6 +155,7 @@
 		557DC784DBE27580AAFA41C3 /* PrivateMoments.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PrivateMoments.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C498131861F0CB40E275D05 /* TimelineStore+Mutations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TimelineStore+Mutations.swift"; sourceTree = "<group>"; };
 		5DA220AD7A9BB2EB5E4FF597 /* PinnedMomentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedMomentsView.swift; sourceTree = "<group>"; };
+		5F55FDD48DC099140A88A6CB /* LocalDatabase+DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocalDatabase+DemoData.swift"; sourceTree = "<group>"; };
 		60C741B22DB2197F4C4FCE36 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		62C32804BF97CFD935FF5F65 /* PlainTextListContinuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainTextListContinuationTests.swift; sourceTree = "<group>"; };
 		68C7A23276DB83BA4B52DB68 /* AppDirectories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDirectories.swift; sourceTree = "<group>"; };
@@ -291,6 +293,7 @@
 				F3F93C4123630840571499AE /* LocalDatabase.swift */,
 				7387EB26D388FC960ACCEE9B /* LocalDatabase+CheckInMedia.swift */,
 				7757863F1E8D873D8F4C2BDE /* LocalDatabase+CheckIns.swift */,
+				5F55FDD48DC099140A88A6CB /* LocalDatabase+DemoData.swift */,
 				B77A3A3C2AC04543BD816C10 /* LocalDatabase+Records.swift */,
 				492094AF4110A2A00F546356 /* LocalDatabase+Schema.swift */,
 				E9DD43FFCB17EBC3A4CE7816 /* LocalDatabase+SQLite.swift */,
@@ -585,6 +588,7 @@
 				269C0EE21134E29692F97A93 /* KeychainStore.swift in Sources */,
 				E5359F0FDAAA7E54AB5BA3CD /* LocalDatabase+CheckInMedia.swift in Sources */,
 				27D8F3BDF69A2C856ABBD813 /* LocalDatabase+CheckIns.swift in Sources */,
+				7FF7526BF00500D043C2FA6D /* LocalDatabase+DemoData.swift in Sources */,
 				D33FE600111948D5785CEFBA /* LocalDatabase+Records.swift in Sources */,
 				FF9B654974D1D17E7BCDD890 /* LocalDatabase+SQLite.swift in Sources */,
 				B6CD530279BFABD43C52F1E7 /* LocalDatabase+Schema.swift in Sources */,
