@@ -8,6 +8,7 @@ Current status: MVP local build. The Mac server, admin UI, sync API, and native 
 - [Technical Design](docs/TECH-DESIGN.md)
 - [Integration Guide](docs/INTEGRATION-GUIDE.md)
 - [Operator Runbook](docs/OPERATOR-RUNBOOK.md)
+- [Networking](docs/NETWORKING.md)
 - [Workflow](docs/WORKFLOW.md)
 - [Handoff](docs/HANDOFF.md)
 - [Design Principles](docs/DESIGN-PRINCIPLES.md)
@@ -77,7 +78,15 @@ Install and launch on the paired iPhone:
 npm run ios:device
 ```
 
-In the app, open Settings, enter the Mac server URL and the initial password, then log in. In the simulator, use `http://127.0.0.1:3210`. On a real iPhone, prefer the Mac's Tailscale Serve HTTPS address, such as `https://your-mac.tailnet-name.ts.net`, or override it with `PRIVATE_MOMENTS_DEVICE_SERVER_URL`.
+In the app, open Settings, enter the Mac server URL and the initial password, then log in. In the simulator, use `http://127.0.0.1:3210`. On a real iPhone, configure any URL that can reach your Mac server: LAN, Tailscale/private VPN, Cloudflare Tunnel, or another protected HTTPS endpoint. Private Moments does not require a specific networking provider; see [Networking](docs/NETWORKING.md).
+
+For machine-specific device, signing, bundle identifier, App Group, and remote URL settings:
+
+```bash
+cp .env.local.example .env.local
+```
+
+`npm run ios:simulator` and `npm run ios:device` read `.env.local` and generate an ignored `ios/Config/Local.xcconfig` for local iOS overrides.
 
 The iOS app stores local posts, comments, tags, generated AI summary metadata, pending operations, compressed images, audio/video media, posters, legacy transcript metadata, Share Extension imports, and drafts under the app's Application Support or App Group directories. New audio/video posts do not run iOS speech transcription. Posting does not wait for network success; sync retries when the server is reachable, and failed pending work uses delayed automatic retry. Settings includes Storage & Diagnostics for local iPhone usage, Sync Health, AI summary diagnostics, re-downloadable audio/video cache cleanup, tag management, feature module toggles, and Mac server storage when the server is online.
 

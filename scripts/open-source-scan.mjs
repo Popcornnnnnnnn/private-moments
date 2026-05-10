@@ -43,7 +43,7 @@ function checkTrackedSecrets() {
 
   const personalResult = commandOutput("sh", [
     "-lc",
-    `git grep -n -E ${shellQuote("100\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}|moments\\.popcornnn\\.xyz|wwz 的 iphone")} -- ':!docs/OPEN-SOURCE-READINESS.md' ':!docs/OPERATOR-RUNBOOK.md' ':!AGENTS.md'`,
+    `git grep -n -E ${shellQuote("100\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}|moments\\.popcornnn\\.xyz|wwz 的 iphone")} -- ':!docs/OPEN-SOURCE-READINESS.md' ':!docs/OPERATOR-RUNBOOK.md' ':!AGENTS.md' ':!scripts/open-source-scan.mjs'`,
   ], { timeoutMs: 15_000 });
   if (personalResult.status === 0) {
     reporter.warn("tracked personal config scan", "tracked files still contain personal deployment details", firstLines(personalResult.stdout));

@@ -1,7 +1,20 @@
 import Foundation
 
 enum ShareImportConstants {
-    static let appGroupIdentifier = "group.com.popcornnnnnn.privatemoments"
+    static let appGroupIdentifier: String = {
+        let key = "PrivateMomentsAppGroupIdentifier"
+        let fallback = "group.dev.privatemoments.app"
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
+            return fallback
+        }
+
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains("$(") else {
+            return fallback
+        }
+
+        return trimmed
+    }()
     static let inboxDirectoryName = "ShareImports"
     static let filesDirectoryName = "files"
     static let metadataFilename = "import.json"

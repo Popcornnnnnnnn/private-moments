@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.com.popcornnnnnn.privatemoments</string>
+		<string>$(PRIVATE_MOMENTS_IOS_APP_GROUP)</string>
 	</array>
 </dict>
 </plist>

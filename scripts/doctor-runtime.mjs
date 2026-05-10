@@ -214,9 +214,9 @@ async function checkNetworkEntrypoints() {
     reporter.warn("Tailscale IP health", "tailscale ip -4 did not return an address");
   }
 
-  const cloudflareUrl = process.env.PRIVATE_MOMENTS_FALLBACK_SERVER_URL ?? readRootEnvLocalCloudflareEndpoint();
-  if (cloudflareUrl) {
-    await checkOptionalHealth(`${trimTrailingSlash(cloudflareUrl)}/api/v1/health`, "Cloudflare endpoint health");
+  const fallbackUrl = process.env.PRIVATE_MOMENTS_FALLBACK_SERVER_URL ?? readRootEnvLocalCloudflareEndpoint();
+  if (fallbackUrl) {
+    await checkOptionalHealth(`${trimTrailingSlash(fallbackUrl)}/api/v1/health`, "Configured fallback URL health");
   }
 
   const serveHostname = args["tailscale-serve-hostname"];

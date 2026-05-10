@@ -93,17 +93,17 @@ Install to real iPhone after iOS changes:
 npm run ios:device
 ```
 
-The paired phone is commonly named `wwz 的 iphone`; the real-device script can be overridden with `PRIVATE_MOMENTS_DEVICE_NAME`.
+The real-device script uses `PRIVATE_MOMENTS_DEVICE_NAME`; keep personal device names in ignored `.env.local`.
 
 ## Runtime Facts
 
 - Development server port: `3210`.
-- Bundle id: `com.popcornnnnnn.privatemoments`.
+- Public default bundle id: `dev.privatemoments.app`; local owner builds can override it through ignored iOS config.
 - App display name: `Moments`.
 - Current schema version: `13`.
 - Read the development password from `server/.env`; do not hard-code it into reusable docs or code.
-- Default iOS Settings server URL should use the configured Cloudflare HTTPS endpoint for the owner setup.
-- Get the current Mac Tailscale IP with `tailscale ip -4` only for emergency fallback or Tailscale-specific diagnostics.
+- Default iOS Settings server URL is user-configured. It may be LAN, Tailscale/private VPN, Cloudflare Tunnel, or another protected endpoint.
+- Get the current Mac Tailscale IP with `tailscale ip -4` only for private-network diagnostics, not as a reusable public default.
 
 Do not hard-code personal Cloudflare or Tailscale values into reusable code unless the user asks for a personal-only shortcut. Prefer ignored `.env.local` or script/env overrides.
 

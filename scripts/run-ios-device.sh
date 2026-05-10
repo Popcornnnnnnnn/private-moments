@@ -9,8 +9,8 @@ if [[ -f "$ROOT_DIR/.env.local" ]]; then
   source "$ROOT_DIR/.env.local"
   set +a
 fi
-DEVICE_NAME="${PRIVATE_MOMENTS_DEVICE_NAME:-wwz 的 iphone}"
-BUNDLE_ID="com.popcornnnnnn.privatemoments"
+DEVICE_NAME="${PRIVATE_MOMENTS_DEVICE_NAME:-Your iPhone}"
+BUNDLE_ID="${PRIVATE_MOMENTS_IOS_BUNDLE_ID:-dev.privatemoments.app}"
 TAILSCALE_DNS="$(tailscale status --self --json 2>/dev/null | jq -r '.Self.DNSName // "" | rtrimstr(".")' 2>/dev/null || true)"
 TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
 LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
@@ -56,6 +56,7 @@ node "$ROOT_DIR/scripts/preflight-ios-device.mjs" --server-url "$SERVER_URL" --d
 cd "$IOS_DIR"
 
 if command -v xcodegen >/dev/null 2>&1; then
+  "$ROOT_DIR/scripts/write-ios-local-config.sh"
   xcodegen generate >/dev/null
 fi
 
@@ -128,9 +129,9 @@ echo "Moments is installed and launched on $DEVICE_NAME."
 echo "In app Settings, use:"
 echo "Server: $SERVER_URL"
 if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
-  echo "Cloudflare endpoint: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+  echo "Bundled fallback URL: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
 fi
 if [[ -n "$TAILSCALE_IP" && "$SERVER_URL" != "http://$TAILSCALE_IP:3210" ]]; then
-  echo "Emergency Tailscale: http://$TAILSCALE_IP:3210"
+  echo "Detected private-network URL: http://$TAILSCALE_IP:3210"
 fi
 echo "Password: use PRIVATE_MOMENTS_INITIAL_PASSWORD from server/.env"

@@ -102,7 +102,7 @@ struct SyncDoctorDiagnosis: Equatable {
                     id: "mac-unavailable",
                     status: .blocked,
                     titleKey: "Mac server unavailable",
-                    detailKey: "Tap Sync Now to retry. If it still fails, check the Mac server, Cloudflare endpoint, or emergency Tailscale path.",
+                    detailKey: "Tap Sync Now to retry. If it still fails, check the Mac server or configured remote access URL.",
                     value: nil,
                     action: .syncNow
                 )

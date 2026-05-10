@@ -5,10 +5,13 @@ Private Moments is designed for private, self-hosted use. Do not expose the Mac 
 ## Recommended Network Boundary
 
 - Run the server on your Mac.
-- Access it from your iPhone through a restricted Cloudflare Tunnel HTTPS endpoint for the owner setup.
-- Keep Tailscale or another private VPN as an emergency fallback or diagnostic route, not the daily default.
+- Access it from your iPhone through a private network, LAN address, or a protected HTTPS endpoint that you control.
+- Tailscale, Cloudflare Tunnel, and other VPN/tunnel products are optional network layers, not required Private Moments components.
+- If you use Cloudflare Tunnel or another public HTTPS endpoint, add your own access controls and avoid exposing the full Admin UI without additional protection.
 - Keep `HOST=127.0.0.1` for purely local development.
 - Use a private-network address only when you intentionally need iPhone access.
+
+See `docs/NETWORKING.md` for the supported configuration model.
 
 ## Secrets
 

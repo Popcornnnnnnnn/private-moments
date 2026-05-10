@@ -9,6 +9,7 @@ dist/
 ios/PrivateMoments.xcodeproj/
 ios/build/
 ios/build-*/
+ios/Config/Local.xcconfig
 DerivedData/
 *.xcuserstate
 xcuserdata/
@@ -53,6 +54,7 @@ Thumbs.db
 *.code-workspace
 .env.*
 !.env.example
+!.env.local.example
 .next/
 build/
 __pycache__/

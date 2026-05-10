@@ -12,7 +12,7 @@ fi
 SERVER_URL="${PRIVATE_MOMENTS_SERVER_URL:-http://127.0.0.1:3210}"
 SIM_NAME="${PRIVATE_MOMENTS_SIM_NAME:-Private Moments iPhone 13 Pro}"
 DEVICE_TYPE="${PRIVATE_MOMENTS_DEVICE_TYPE:-com.apple.CoreSimulator.SimDeviceType.iPhone-13-Pro}"
-BUNDLE_ID="com.popcornnnnnn.privatemoments"
+BUNDLE_ID="${PRIVATE_MOMENTS_IOS_BUNDLE_ID:-dev.privatemoments.app}"
 
 cd "$ROOT_DIR"
 
@@ -38,6 +38,7 @@ fi
 cd "$IOS_DIR"
 
 if command -v xcodegen >/dev/null 2>&1; then
+  "$ROOT_DIR/scripts/write-ios-local-config.sh"
   xcodegen generate >/dev/null
 fi
 
@@ -88,6 +89,6 @@ echo
 echo "Moments is running in Simulator."
 echo "Server: $SERVER_URL"
 if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
-  echo "Cloudflare endpoint: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+  echo "Bundled fallback URL: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
 fi
 echo "Password: use PRIVATE_MOMENTS_INITIAL_PASSWORD from server/.env"

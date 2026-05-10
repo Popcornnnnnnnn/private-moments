@@ -18,13 +18,16 @@ targets:
       - target: MomentsShareExtension
         embed: true
         codeSign: true
+    configFiles:
+      Debug: Config/Public.xcconfig
+      Release: Config/Public.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.popcornnnnnn.privatemoments
+        PRODUCT_BUNDLE_IDENTIFIER: $(PRIVATE_MOMENTS_IOS_BUNDLE_ID)
         PRODUCT_NAME: $(TARGET_NAME)
         PRODUCT_MODULE_NAME: PrivateMoments
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: R26X7B8XDT
+        DEVELOPMENT_TEAM: $(PRIVATE_MOMENTS_DEVELOPMENT_TEAM)
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 2
         PRIVATE_MOMENTS_FALLBACK_SERVER_URL: ""
@@ -43,13 +46,16 @@ targets:
     sources:
       - ShareExtension
       - Shared
+    configFiles:
+      Debug: Config/Public.xcconfig
+      Release: Config/Public.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.popcornnnnnn.privatemoments.share
+        PRODUCT_BUNDLE_IDENTIFIER: $(PRIVATE_MOMENTS_IOS_SHARE_BUNDLE_ID)
         PRODUCT_NAME: Save to Moments
         PRODUCT_MODULE_NAME: MomentsShareExtension
         CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: R26X7B8XDT
+        DEVELOPMENT_TEAM: $(PRIVATE_MOMENTS_DEVELOPMENT_TEAM)
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 2
         SWIFT_VERSION: 5.0
@@ -69,9 +75,12 @@ targets:
     dependencies:
       - target: PrivateMoments
     hostApplication: PrivateMoments
+    configFiles:
+      Debug: Config/Public.xcconfig
+      Release: Config/Public.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.popcornnnnnn.privatemoments.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(PRIVATE_MOMENTS_IOS_TESTS_BUNDLE_ID)
         PRODUCT_NAME: PrivateMomentsTests
         PRODUCT_MODULE_NAME: PrivateMomentsTests
         SWIFT_VERSION: 5.0
@@ -87,9 +96,12 @@ targets:
     dependencies:
       - target: PrivateMoments
     hostApplication: PrivateMoments
+    configFiles:
+      Debug: Config/Public.xcconfig
+      Release: Config/Public.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.popcornnnnnn.privatemoments.list-continuation-tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(PRIVATE_MOMENTS_IOS_LIST_TESTS_BUNDLE_ID)
         PRODUCT_NAME: PrivateMomentsListContinuationTests
         PRODUCT_MODULE_NAME: PrivateMomentsListContinuationTests
         SWIFT_VERSION: 5.0

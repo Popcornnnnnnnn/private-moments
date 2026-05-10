@@ -553,7 +553,7 @@ enum L10n {
         "Summary unavailable": "摘要不可用",
         "Sync Doctor only uses existing Sync Health signals. Repair actions run only when tapped.": "Sync Doctor 只使用现有 Sync Health 信号。修复动作只会在你点击后执行。",
         "Tag names are shared across": "标签名称在以下类型中共享：",
-        "Tap Sync Now to retry. If it still fails, check the Mac server, Cloudflare endpoint, or emergency Tailscale path.": "点击立即同步重试。如果仍然失败，请检查 Mac 服务器、Cloudflare endpoint 或紧急 Tailscale 路径。",
+        "Tap Sync Now to retry. If it still fails, check the Mac server or configured remote access URL.": "点击立即同步重试。如果仍然失败，请检查 Mac 服务器或已配置的远程访问 URL。",
         "Text": "文本",
         "Time Heatmap": "时间热力图",
         "Time Insights": "时间洞察",

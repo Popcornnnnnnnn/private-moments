@@ -8,7 +8,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const args = parseArgs(process.argv.slice(2));
 const cloudflareEndpoint = process.env.PRIVATE_MOMENTS_FALLBACK_SERVER_URL ?? readRootEnvLocal("PRIVATE_MOMENTS_FALLBACK_SERVER_URL");
 const serverUrl = args["server-url"] ?? process.env.PRIVATE_MOMENTS_DEVICE_SERVER_URL ?? cloudflareEndpoint ?? "http://127.0.0.1:3210";
-const deviceName = args.device ?? process.env.PRIVATE_MOMENTS_DEVICE_NAME ?? "wwz 的 iphone";
+const deviceName = args.device ?? process.env.PRIVATE_MOMENTS_DEVICE_NAME ?? "Your iPhone";
 const strict = process.env.PRIVATE_MOMENTS_PREFLIGHT_STRICT === "1" || args.strict === "1";
 
 const checks = [];

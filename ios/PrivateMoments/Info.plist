@@ -10,7 +10,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.popcornnnnnn.privatemoments</string>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>moments</string>
@@ -48,6 +48,8 @@
 	<string>Moments uses your photo library to attach images to posts.</string>
 	<key>PrivateMomentsFallbackServerURL</key>
 	<string>$(PRIVATE_MOMENTS_FALLBACK_SERVER_URL)</string>
+	<key>PrivateMomentsAppGroupIdentifier</key>
+	<string>$(PRIVATE_MOMENTS_IOS_APP_GROUP)</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Moments saves selected moment images to your photo library when you choose Save.</string>
 		<key>UILaunchScreen</key>

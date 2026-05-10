@@ -1,0 +1,13 @@
+// Public defaults for source builds.
+// Copy .env.local.example to .env.local or create ios/Config/Local.xcconfig
+// to override identifiers for your own Apple Developer account.
+
+PRIVATE_MOMENTS_IOS_BUNDLE_ID = dev.privatemoments.app
+PRIVATE_MOMENTS_IOS_SHARE_BUNDLE_ID = dev.privatemoments.app.share
+PRIVATE_MOMENTS_IOS_TESTS_BUNDLE_ID = dev.privatemoments.app.tests
+PRIVATE_MOMENTS_IOS_LIST_TESTS_BUNDLE_ID = dev.privatemoments.app.list-continuation-tests
+PRIVATE_MOMENTS_IOS_APP_GROUP = group.dev.privatemoments.app
+PRIVATE_MOMENTS_DEVELOPMENT_TEAM =
+PRIVATE_MOMENTS_FALLBACK_SERVER_URL =
+
+#include? "Local.xcconfig"
