@@ -91,6 +91,8 @@ The 2026-05-10 directory-migration repair turned the maintenance loop into repea
 
 Pending sync incidents now follow a fixed evidence order: Mac runtime doctor, server sync doctor, localhost/Tailscale/fallback reachability, real iPhone container inspection, queue classification, then code-level investigation only if the facts show an app/server logic gap. Treat Tailscale-offline plus fallback `530` as a network-path outage until proven otherwise; treat raw pending media under deleted parent posts as stale local rows unless they appear in the app-counted active upload queue.
 
+The 2026-05-10 fallback `530` repair found a Mac-side Cloudflare Tunnel path issue, not a Private Moments server issue. The stable local setup is: keep Cloudflare Tunnel edge discovery domains out of Clash fake-ip, leave the fallback hostname itself on normal Clash fake-ip for local curl checks, route Cloudflare/Tunnel/fallback domains through the currently working proxy strategy rather than forced DIRECT, keep macOS `Wi-Fi`/`Tailscale` DNS on `1.1.1.1` and `8.8.8.8`, keep `cloudflared` on `protocol: http2`, and set `TUNNEL_DNS_RESOLVER_ADDRS=1.1.1.1:53,8.8.8.8:53` in `com.popcornnnnnn.cloudflared.blog` so SRV discovery does not depend on system DNS `114.114.114.114`.
+
 ## Design Constraints
 
 - The main iOS timeline must stay simple. Low-frequency controls belong in toolbar menus, swipe actions, detail views, or settings.

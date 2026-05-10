@@ -513,7 +513,15 @@ tail -n 80 ~/Library/Logs/cloudflared-blog.err.log
 dig +short region1.v2.argotunnel.com A
 ```
 
-健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 本身不一定是错误，关键是 tunnel 能稳定注册到 Cloudflare edge。不要把 Cloudflare Tunnel 相关域名盲目设成 `DIRECT`；也不要在 `cloudflared` LaunchAgent 里强塞 `HTTP_PROXY` / `HTTPS_PROXY`，这曾导致 edge `TLS handshake EOF` 和 fallback `530`。当前本机建议是：`cloudflared` 配置固定 `protocol: http2`，LaunchAgent 只保留本地 `NO_PROXY`，让系统/TUN 路由处理 Cloudflare edge 连接。修改 plist 后重载 LaunchAgent，再用连续 health check 验证：
+健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 时要继续查：Cloudflare Tunnel edge 连接不能长期停在 fake-ip。不要把 Cloudflare Tunnel 相关域名盲目设成 `DIRECT`；2026-05-10 验证过，当前网络下强制 `cloudflared` / Cloudflare edge IP 直连会让 7844 TLS 变成 EOF，反而无法注册 tunnel。当前本机有效组合是：
+
+- Clash Verge profile 的 `fake-ip-filter` 覆盖 `api.cloudflare.com`、`*.cloudflare.com`、`*.cfargotunnel.com`、`*.argotunnel.com`、`*.v2.argotunnel.com`、`*.cftunnel.com` 和 `update.argotunnel.com`。不要把 `moments.popcornnn.xyz` 放进 `fake-ip-filter`；本机 curl fallback 域名时可以继续走 Clash fake-ip。
+- Clash Verge rules 保持这些 Cloudflare/Tunnel/fallback 域名走当前可用的 `扬帆云` 策略，不强制 `DIRECT`。
+- macOS `Wi-Fi` 和 `Tailscale` DNS 服务器使用 `1.1.1.1`、`8.8.8.8`，避免本机 resolver 优先走 `114.114.114.114` 时解析 Cloudflare Tunnel SRV 失败。
+- `cloudflared` LaunchAgent 不设置 `HTTP_PROXY` / `HTTPS_PROXY`，只保留本地 `NO_PROXY`，并设置 `TUNNEL_DNS_RESOLVER_ADDRS=1.1.1.1:53,8.8.8.8:53`，避免系统 DNS `114.114.114.114` 解析 `_v2-origintunneld._tcp.argotunnel.com` 失败。
+- `cloudflared` 配置继续固定 `protocol: http2`。
+
+修改 Clash 或 plist 后重载 LaunchAgent，再用连续 health check 验证：
 
 ```bash
 for i in {1..30}; do
