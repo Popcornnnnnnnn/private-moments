@@ -544,6 +544,77 @@ curl -fsS http://127.0.0.1:3210/api/v1/admin/status \
 
 Sync Health 还应包含 server-side `pendingOperations`、`rejectedOperations`、`failedMediaUploads`、`aiNonReady`、`lastServerChangeAt`、`lastSyncOperationAt`、`lastSuccessfulSyncAt` 和 `lastRejectedSyncAt`。iOS Settings > Storage & Diagnostics 会把这些 Mac 侧计数和本机 cursor、outbox、pending upload、failed upload、missing media download 状态合并展示。`Diagnostics > Sync Doctor` 是优先查看的诊断向导，会把这些原始信号分类成未登录、Mac 不可达、cursor lag、pending outbox、failed uploads、missing media、active server rejected ops、server failed media 和 AI non-ready 等状态，并只提供安全的显式动作：`Sync Now`、`Pull Server Changes`、`Retry Uploads`、`Re-download Missing Media`。`rejectedOperations` 是 Mac 侧原始历史计数；只有本机仍有 pending outbox 且最新 rejected timestamp 晚于最近 successful sync 时，Sync Doctor 才把它视为当前阻塞。原始计数和 timestamps 仍保留在 `Sync Health` 子页。
 
+### Pending Sync 固定排查流程
+
+遇到 iPhone 显示 pending、partial、Waiting、Retrying 或 Sync Health 数字长期不归零时，按同一个顺序排查，不要先从 UI 文案猜原因：
+
+1. 确认 Mac 当前服务真实运行态：
+
+```bash
+PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:runtime
+PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:sync
+curl -fsS http://127.0.0.1:3210/api/v1/health
+```
+
+`doctor:runtime` 应证明 live server、LaunchAgent、3210 listener、SQLite、Tailscale health 都指向当前 checkout。`doctor:sync` 应证明 server cursor、server pending/rejected operations、media queue、AI queue 和 maintenance jobs 没有 Mac 侧阻塞。
+
+2. 分开检查 iPhone 到 Mac 的两条网络路径：
+
+```bash
+tailscale status
+tailscale ip -4
+curl -fsS --max-time 5 "http://$(tailscale ip -4):3210/api/v1/health"
+curl -fsS -i --max-time 10 https://your-private-fallback.example/api/v1/health
+```
+
+如果 iPhone 在 `tailscale status` 里是 `offline`，主 Tailscale URL 对 Mac 自己可达也不能证明 iPhone 可达。如果 fallback 返回 Cloudflare `530` / `1033`，说明公网 fallback connector 没有 active connection；先修 tunnel，再让 iPhone 重试。
+
+3. 复制真实 iPhone container，看本机 queue 的事实：
+
+```bash
+rm -rf .tmp/device-app-library-sync-check
+mkdir -p .tmp/device-app-library-sync-check
+xcrun devicectl device copy from \
+  --device "wwz 的 iphone" \
+  --domain-type appDataContainer \
+  --domain-identifier com.popcornnnnnn.privatemoments \
+  --source Library \
+  --destination .tmp/device-app-library-sync-check \
+  --timeout 60
+```
+
+读取 Settings 和 SQLite 时优先使用只读快照 URL，避免 live copy 的 lock 误导：
+
+```bash
+plutil -p .tmp/device-app-library-sync-check/Preferences/com.popcornnnnnn.privatemoments.plist \
+  | rg "server|Server|Sync|sync|device|Device|cursor|Cursor|reachable|Reachable"
+
+DB=".tmp/device-app-library-sync-check/Application Support/PrivateMoments/private-moments.sqlite"
+sqlite3 "file:$DB?mode=ro&immutable=1" \
+  "SELECT status, type, COUNT(*) FROM outbox_operations GROUP BY status, type ORDER BY status, type;"
+sqlite3 "file:$DB?mode=ro&immutable=1" \
+  "SELECT uploadStatus, kind, COUNT(*) FROM local_media WHERE deletedAt IS NULL GROUP BY uploadStatus, kind ORDER BY uploadStatus, kind;"
+sqlite3 "file:$DB?mode=ro&immutable=1" \
+  "SELECT uploadStatus, COUNT(*) FROM local_checkin_media WHERE deletedAt IS NULL GROUP BY uploadStatus ORDER BY uploadStatus;"
+sqlite3 "file:$DB?mode=ro&immutable=1" \
+  "SELECT (SELECT COUNT(*) FROM outbox_operations WHERE status IN ('pending','failed')) AS app_pending_changes,
+          (SELECT COUNT(*) FROM local_media m JOIN local_posts p ON p.id=m.postId
+             WHERE m.uploadStatus IN ('pending','failed') AND m.deletedAt IS NULL AND p.deletedAt IS NULL)
+        + (SELECT COUNT(*) FROM local_checkin_media m
+             JOIN local_checkin_entries e ON e.id=m.entryId
+             JOIN local_checkin_items i ON i.id=e.itemId
+             WHERE m.uploadStatus IN ('pending','failed')
+               AND m.deletedAt IS NULL AND e.deletedAt IS NULL AND i.deletedAt IS NULL) AS app_pending_uploads;"
+```
+
+4. 解释 pending 类型：
+
+- `lastSyncCursor` 低于 Mac `server_changes.MAX(version)`：优先判断为远端变更未拉取，用 `Pull Server Changes` 或 `Sync Now` 验证。
+- `outbox_operations` 有 pending/failed：这是本机 metadata 未发送或被拒绝；看 `type`、`attemptCount`、`lastError`，再查 server `sync_operations` 是否收到同一个 `op_id`。
+- app 口径 `pending_uploads > 0`：这是活跃 moment 或 check-in 附件未上传；查本机文件是否存在，再看 server upload stage logs。
+- raw `local_media` 有 pending 但 app 口径 `pending_uploads = 0`：通常是已删除父 moment 的遗留本地行，不是当前活跃上传阻塞；后续可以用清理迁移或维护脚本收口。
+- Mac 端 `doctor:sync` 全绿，但 iPhone 有 pending 且 `attemptCount = 0`：通常是 iPhone 还没有成功连到任何 server candidate，先修 Tailscale 或 fallback，不要先改 sync protocol。
+
 iOS 无签名编译检查：
 
 ```bash

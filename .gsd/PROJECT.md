@@ -89,6 +89,8 @@ M013 is a continuity polish and maintenance loop rather than a new product modul
 
 The 2026-05-10 directory-migration repair turned the maintenance loop into repeatable command-line doctors. `verify:*` remains the build/test/gate layer, while `doctor:*` checks the live machine and data state: runtime path truth, LaunchAgent/listener drift, authenticated sync health, archive drill safety, AI summary/review quality signals, and current-checkout release hygiene. These scripts are intended for owner maintenance and incident response, not as new product UI.
 
+Pending sync incidents now follow a fixed evidence order: Mac runtime doctor, server sync doctor, localhost/Tailscale/fallback reachability, real iPhone container inspection, queue classification, then code-level investigation only if the facts show an app/server logic gap. Treat Tailscale-offline plus fallback `530` as a network-path outage until proven otherwise; treat raw pending media under deleted parent posts as stale local rows unless they appear in the app-counted active upload queue.
+
 ## Design Constraints
 
 - The main iOS timeline must stay simple. Low-frequency controls belong in toolbar menus, swipe actions, detail views, or settings.
