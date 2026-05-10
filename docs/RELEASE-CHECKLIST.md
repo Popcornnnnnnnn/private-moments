@@ -169,7 +169,7 @@ npm run doctor:ai
 - `.gitignore` 覆盖本地数据、构建产物、依赖目录和运行时缓存。
 - `README.md` 能让新用户通过 `npm run setup:local` 完成本地安装。
 - `docs/OPERATOR-RUNBOOK.md` 覆盖常见启动、安装、排查路径。
-- `docs/OPEN-SOURCE-READINESS.md` 中没有 release-blocking 项。
+- `docs/OPEN-SOURCE-READINESS.md` 中没有未解释的 release-blocking 项，剩余风险有明确处理路径。
 - 明确 license。
 - 明确外部 AI provider 的隐私边界。
 - 补齐最小数据安全闭环：backup、restore、promote preparation、export/import 的操作说明或脚本。
@@ -184,4 +184,4 @@ npm run doctor:release
 
 ## 当前结论
 
-截至 2026-05-10，项目方向仍是优先服务作者本人长期稳定自用。公开发布暂时不是主线；当前 UAT gate 已由用户确认先验收通过，但 release candidate 前仍需重新运行 `npm run verify:release-gates` 和对应 `doctor:*`，并在发现回归或新增范围时重新打开具体 gate。
+截至 2026-05-10，GitHub `main` 已更新为当前 public source snapshot，并保留旧 GitHub `main` 到远端备份分支 `backup/github-main-before-local-refresh-20260510`。项目仍优先服务作者本人长期稳定自用；公开源码不等同于 stable release。正式 tag/Release 前仍需重新运行 `npm run verify:release-gates`、`npm run doctor:release`、必要的 `doctor:*`，并完成 Git history secret scan、`.gsd` 公开策略和 release-grade archive 演练。

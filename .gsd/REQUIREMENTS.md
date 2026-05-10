@@ -365,10 +365,10 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: M003/S03,M005/S03
 - Validation: iOS build proves the Timeline search model and filter UI compile; manual UAT should verify multi-keyword search, Chinese substring, light English typo tolerance, summary hits, source badges, active chips, clear filters, Calendar day filter handoff, and non-persistent filter state.
 
-### R019 — v0.1 close-out and open-source preparation must keep setup simple while blocking private data and secret exposure.
+### R019 — Public source maintenance must keep setup simple while blocking private data and secret exposure.
 - Class: operational
 - Status: active
-- Description: The project must provide a simple local setup path, release checklist, open-source readiness assessment, and privacy/security notes before any public release. Public release remains blocked until license, Git history secret scan, and backup/restore/export closure are complete.
+- Description: The project must provide a simple local setup path, release checklist, open-source readiness assessment, and privacy/security notes for the public source snapshot. GitHub `main` is now public source, but stable release/tag work remains blocked until Git history secret scan, `.gsd` public strategy, and backup/restore/export release-grade validation are complete.
 - Why it matters: A private local-first app can work well for the owner while still being unsafe or confusing to publish. Open-source readiness must cover setup reproducibility, private data boundaries, external AI privacy, and recoverability.
 - Source: v0.1 close-out discussion 2026-05-02
 - Primary owning slice: maintenance
@@ -685,7 +685,7 @@ This file is the explicit capability and coverage contract for the project.
 | R016 | operational | active | M005/S04 | M005/S01,M005/S02,M005/S03 | Verification proves server-only API keys, no private body logging, failure isolation, summary delete/regenerate behavior, and sync recovery for generated AI metadata. |
 | R017 | functional | validated | M005/S04 | M005/S02,M005/S03 | 2026-05-01 paired iPhone container advanced to `lastSyncCursor=196` with `local_ai_summaries ready=10 failed=0` after server-only summary changes; 2026-05-06 follow-ups keep diagnostics refresh read-only, use explicit `Sync Now` / `Pull Server Changes` for manual pull, and prevent background idle sync from appearing as an endless Settings spinner. |
 | R018 | functional | active | maintenance | M003/S03,M005/S03 | iPhone Timeline search covers text, comments, AI summary metadata, and historical transcript metadata with lightweight fuzzy matching plus composable local filters and active chips. |
-| R019 | operational | active | maintenance | none | `npm run setup:local` plus release/open-source/security docs provide the current setup and publication gate; public release still requires license, Git history secret scan, and release-grade backup/restore/export/import validation. |
+| R019 | operational | active | maintenance | none | `npm run setup:local` plus release/open-source/security docs provide the current setup and publication gate; GitHub `main` is public source, while stable release/tag still requires Git history secret scan, `.gsd` public strategy, and release-grade backup/restore/export/import validation. |
 | R020 | functional | active | maintenance | R003,R013,R014 | `Save to Moments` stages supported Share Sheet content into an App Group inbox and opens the main app composer for final editing and publish; user accepted `UAT-SHARE-EXTENSION` on 2026-05-07. |
 | R021 | operational | active | maintenance | R003,R014,R020 | Media upload uses temp-file atomic finalization and staged logs; verification checks server build, health, no stale write fds, no leftover temp files, and real-device retry behavior when feasible. |
 | R022 | functional | active | M006/S01 | M006/S02,M006/S04,M006/S06 | Default primary tags, topic canonicalization, aliases, uniqueness, archive behavior, and custom-primary constraints are verified by schema/seed checks and Settings/Edit UAT. |

@@ -14,8 +14,8 @@ Private Moments 采用 iOS 原生 App + Mac 自托管服务端的本地优先架
   outbox sync queue
   media compression
         |
-        | Cloudflare Tunnel HTTPS
-        | Tailscale only as emergency backup
+        | Configured Server URL
+        | LAN / private VPN / protected tunnel
         v
 Mac Server
   Node.js + TypeScript

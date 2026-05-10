@@ -10,14 +10,15 @@
 http://127.0.0.1:3210
 ```
 
-真实 iPhone 通过 Tailscale 测试时，通常使用：
+真实 iPhone 只需要一个能从手机访问 Mac server 的 URL。这个 URL 可以来自 LAN、Tailscale/private VPN、Cloudflare Tunnel、反向代理或其他受保护 HTTPS endpoint，例如：
 
 ```text
-http://<mac-tailscale-ip>:3210
-https://<mac-tailscale-serve-name>
+http://<mac-lan-ip>:3210
+http://<mac-private-vpn-ip>:3210
+https://<your-protected-endpoint>
 ```
 
-iOS app 在 Settings 中保存 server URL。真实设备安装脚本会自动探测可访问的 Tailscale Serve hostname、Tailscale IP 或 LAN IP；也可以通过 `PRIVATE_MOMENTS_DEVICE_SERVER_URL` override。
+iOS app 在 Settings 中保存 server URL。真实设备安装脚本优先使用 `PRIVATE_MOMENTS_DEVICE_SERVER_URL`；如果没有设置，会依次尝试 ignored `.env.local` 中的 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL`、Tailscale DNS、Tailscale IP 和 LAN IP。公开配置不要写入个人域名、tunnel id、tailnet 名称或设备名。
 
 ## Authentication
 

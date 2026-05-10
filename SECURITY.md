@@ -53,4 +53,4 @@ Security implication:
 
 ## Reporting Issues
 
-This project is currently a personal/local-first app. If it becomes public, add a stable contact or GitHub Security Advisory policy here before accepting external reports.
+This project is public source but still personal/local-first software. Do not include private timeline content, media files, credentials, device names, tunnel IDs, or server logs with sensitive payloads in public issue reports. Before accepting external vulnerability reports at release scale, add a stable private contact or enable GitHub Security Advisories.

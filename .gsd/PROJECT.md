@@ -17,6 +17,8 @@ The iOS app, named `Moments`, is the primary capture and browsing surface. A Mac
 
 For real-device setup, Private Moments depends only on a user-configured Server URL. LAN, Tailscale/private VPN, Cloudflare Tunnel, or another protected HTTPS endpoint can provide that URL. Public/reusable config must avoid hard-coded personal hostnames, tunnel IDs, tailnet names, device names, bundle identifiers, or Apple Team IDs; local owner builds inject personal endpoint and signing settings from ignored local config. The project is not designed as a public cloud service.
 
+As of 2026-05-10, `origin` points to `git@github.com:Popcornnnnnnnn/private-moments.git`; GitHub `main` is the public source snapshot line that replaced the previous unrelated GitHub snapshot at checkpoint `b2b147f`, and that previous snapshot is preserved at remote branch `backup/github-main-before-local-refresh-20260510` (`0a6e4d6`). Treat this as source-public maintenance, not a stable packaged release.
+
 ## Current Architecture
 
 - iOS app: SwiftUI, local SQLite, local media cache, drafts, outbox sync, and real-device install support.

@@ -499,7 +499,7 @@ MVP 不做应用级加密，不做端到端加密。
 
 - 如何在 Mac 上安装和启动服务。
 - 如何配置 launchd。
-- 如何配置 Cloudflare Tunnel 受限同步入口，并保留 Tailscale 紧急备选。
+- 如何配置一个可从 iPhone 访问的 Server URL；LAN、Tailscale/private VPN、Cloudflare Tunnel 或其他受保护 HTTPS endpoint 都只是可选网络层。
 - 如何用 Xcode 安装 iOS App。
 - 如何备份和迁移数据目录。
 

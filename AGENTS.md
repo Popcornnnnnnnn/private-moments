@@ -2,7 +2,7 @@
 
 ## Scope
 
-Work only inside `private-moments/`. The user explicitly asked not to work directly in the parent `07-github` root.
+Work only inside `private-moments/`. Do not work directly in the parent collection root unless the user explicitly asks.
 
 ## Product Shape
 
@@ -10,7 +10,7 @@ Private Moments is a private, local-first personal timeline:
 
 - iOS app is the primary capture and browsing surface.
 - Mac runs the self-hosted server, SQLite archive, media storage, sync API, and Admin UI.
-- Cloudflare Tunnel is the default remote access path for the owner's real-device setup; Tailscale is an emergency backup and diagnostic path, not the default first path.
+- Real-device access is provider-neutral: the app uses the configured Server URL, which may come from LAN, Tailscale/private VPN, Cloudflare Tunnel, or another protected HTTPS endpoint. Cloudflare and Tailscale are optional network layers, not app requirements.
 - Main timeline simplicity is a design constraint. Put low-frequency controls in toolbar menus, swipe actions, detail views, or settings rather than crowding the timeline.
 - New settings, monitoring, diagnostics, and safe repair controls should prefer iOS Settings / diagnostics first. Keep Mac Admin for low-frequency Mac-local operations such as archive backup/restore, staged promote, export/import artifacts, server logs, and filesystem/process recovery.
 - App-facing UI copy should stay primarily English unless the user explicitly requests localization.
@@ -106,7 +106,7 @@ The real-device script uses `PRIVATE_MOMENTS_DEVICE_NAME`; keep personal device 
 - Development server port: `3210`.
 - Public default bundle id: `dev.privatemoments.app`; local owner builds can override it through ignored iOS config.
 - App display name: `Moments`.
-- Current schema version: `13`.
+- Current schema version: `17`.
 - Read the development password from `server/.env`; do not hard-code it into reusable docs or code.
 - Default iOS Settings server URL is user-configured. It may be LAN, Tailscale/private VPN, Cloudflare Tunnel, or another protected endpoint.
 - Get the current Mac Tailscale IP with `tailscale ip -4` only for private-network diagnostics, not as a reusable public default.
