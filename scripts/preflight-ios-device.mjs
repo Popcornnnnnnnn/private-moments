@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = parseArgs(process.argv.slice(2));
-const serverUrl = args["server-url"] ?? process.env.PRIVATE_MOMENTS_DEVICE_SERVER_URL ?? "http://127.0.0.1:3210";
+const cloudflareEndpoint = process.env.PRIVATE_MOMENTS_FALLBACK_SERVER_URL ?? readRootEnvLocal("PRIVATE_MOMENTS_FALLBACK_SERVER_URL");
+const serverUrl = args["server-url"] ?? process.env.PRIVATE_MOMENTS_DEVICE_SERVER_URL ?? cloudflareEndpoint ?? "http://127.0.0.1:3210";
 const deviceName = args.device ?? process.env.PRIVATE_MOMENTS_DEVICE_NAME ?? "wwz 的 iphone";
 const strict = process.env.PRIVATE_MOMENTS_PREFLIGHT_STRICT === "1" || args.strict === "1";
 
@@ -161,6 +162,17 @@ function liveDatabasePath() {
 
   value = value.slice("file:".length);
   return path.isAbsolute(value) ? value : path.resolve(rootDir, "server", value);
+}
+
+function readRootEnvLocal(key) {
+  const envLocalPath = path.join(rootDir, ".env.local");
+  if (!existsSync(envLocalPath)) {
+    return null;
+  }
+
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = readFileSync(envLocalPath, "utf8").match(new RegExp(`^${escapedKey}=(.+)$`, "m"));
+  return match ? match[1].trim().replace(/^["']|["']$/g, "") : null;
 }
 
 function queryInt(databasePath, sql) {

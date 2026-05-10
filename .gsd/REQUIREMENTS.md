@@ -226,7 +226,7 @@ This file is the explicit capability and coverage contract for the project.
 ### R064 — Runtime doctor must catch directory and service drift after local moves.
 - Class: operational
 - Status: active
-- Description: The project must provide a repeatable command that checks the live Mac service path, LaunchAgent state, listener cwd/fds, generated local tooling paths, SQLite health, Tailscale health, and optional fallback health after the repository or data directory moves.
+- Description: The project must provide a repeatable command that checks the live Mac service path, LaunchAgent state, listener cwd/fds, generated local tooling paths, SQLite health, default Cloudflare endpoint health, and emergency Tailscale health after the repository or data directory moves.
 - Why it matters: A successful build is not enough if launchd or the live listener still points at an old checkout, old database, or old Python environment.
 - Source: 2026-05-10 directory-migration repair
 - Primary owning slice: maintenance
@@ -385,7 +385,7 @@ This file is the explicit capability and coverage contract for the project.
 - Supporting slices: R003,R013,R014
 - Validation: XcodeGen project generation, iOS unit tests, and generic iOS build must prove the app and extension compile together. User accepted `UAT-SHARE-EXTENSION` on 2026-05-07 for Photos/Safari/Files/Voice Memos/video share flows, composer launch, publish, import queue cleanup, and provisioning/App Group behavior.
 
-### R021 — Media upload must be atomic, retryable, and diagnosable under iPhone/Tailscale disconnects.
+### R021 — Media upload must be atomic, retryable, and diagnosable under real-device network disconnects.
 - Class: operational
 - Status: active
 - Description: Server media upload must write multipart streams to hidden temp files, commit by atomic rename only after complete receipt, remove only temp files on failure, and log safe staged upload metadata/error codes without media bodies. iOS media retry must keep interrupted audio/video uploadable after offline periods, prioritize fresh `pending` media before older `failed` retries, and avoid holding full audio/video multipart bodies in memory.
@@ -598,7 +598,7 @@ This file is the explicit capability and coverage contract for the project.
 ### R053 — Sync Doctor should guide diagnosis and safe repair from existing Sync Health evidence.
 - Class: functional
 - Status: validated
-- Description: Sync Doctor uses existing local and Mac-side Sync Health evidence to classify common sync problems such as unreachable server, stale fallback endpoint, auth failure, cursor lag, pending outbox, failed media uploads, missing media, active rejected operations, and AI non-ready state. It recommends or triggers only safe explicit next actions: Sync Now, Pull Server Changes, Retry Uploads, Re-download Missing Media, or manual Mac-side service/tunnel/log inspection. Historical Mac-side rejected operation counts remain raw Sync Health evidence; they should not block Sync Doctor when local pending work is clear or a newer successful sync has happened.
+- Description: Sync Doctor uses existing local and Mac-side Sync Health evidence to classify common sync problems such as unreachable server, unhealthy Cloudflare endpoint, emergency Tailscale route failure, auth failure, cursor lag, pending outbox, failed media uploads, missing media, active rejected operations, and AI non-ready state. It recommends or triggers only safe explicit next actions: Sync Now, Pull Server Changes, Retry Uploads, Re-download Missing Media, or manual Mac-side service/tunnel/log inspection. Historical Mac-side rejected operation counts remain raw Sync Health evidence; they should not block Sync Doctor when local pending work is clear or a newer successful sync has happened.
 - Why it matters: The project already exposes many diagnostics, but repeated real-use incidents still require manual interpretation. A guided flow can reduce recovery time without crowding Timeline or moving dangerous Mac archive actions to iOS.
 - Source: post-M011 feature triage 2026-05-08
 - Primary owning slice: maintenance
@@ -661,7 +661,7 @@ This file is the explicit capability and coverage contract for the project.
 - Source: real-device AI summary diagnostics 2026-05-01
 - Primary owning slice: M005/S04
 - Supporting slices: M005/S02,M005/S03
-- Validation: Validated on 2026-05-01 after implementing remote-only pull on app foreground, Storage & Diagnostics refresh, and manual Sync Now. Server admin status returned `sync.latestServerChangeVersion=196` and `aiSummaries ready=10 failed=0`; a paired iPhone container copied after install/launch showed `lastSyncCursor=196`, `local_ai_summaries ready=10 failed=0`, and outbox pending/failed `0`. 2026-05-06 follow-up changed Storage & Diagnostics refresh to read-only status loading; app foreground, `Sync Now`, and `Pull Server Changes` remain remote-only pull paths, while diagnostics still compares iPhone cursor with Mac change version. A later 2026-05-06 follow-up made Settings root show the sync spinner only for user-tapped `Sync Now` and added short timeouts to idle sync checks before fallback.
+- Validation: Validated on 2026-05-01 after implementing remote-only pull on app foreground, Storage & Diagnostics refresh, and manual Sync Now. Server admin status returned `sync.latestServerChangeVersion=196` and `aiSummaries ready=10 failed=0`; a paired iPhone container copied after install/launch showed `lastSyncCursor=196`, `local_ai_summaries ready=10 failed=0`, and outbox pending/failed `0`. 2026-05-06 follow-up changed Storage & Diagnostics refresh to read-only status loading; app foreground, `Sync Now`, and `Pull Server Changes` remain remote-only pull paths, while diagnostics still compares iPhone cursor with Mac change version. A later 2026-05-06 follow-up made Settings root show the sync spinner only for user-tapped `Sync Now` and added short timeouts to idle sync checks before trying the next endpoint candidate.
 
 ## Traceability
 
@@ -730,7 +730,7 @@ This file is the explicit capability and coverage contract for the project.
 | R061 | functional | active | M013 | R040,R041,R042,R043,R045,R047 | Weekly Review v2 keeps generation conservative and filters broken anchors before persistence. |
 | R062 | operational | active | M013 | R003,R048 | Real-device install preflight checks server/schema/queues/device visibility before replacing the app. |
 | R063 | operational | active | M013 | R034,R035,R050,R051 | iOS Diagnostics exposes focused read-only Backup Status while restore/promote/export/import execution remains Mac Admin only. |
-| R064 | operational | active | maintenance | R048,R050,R051 | `doctor:runtime` verifies live service path truth, LaunchAgent/listener drift, local tooling paths, SQLite health, Tailscale health, and optional fallback health after directory or service changes. |
+| R064 | operational | active | maintenance | R048,R050,R051 | `doctor:runtime` verifies live service path truth, LaunchAgent/listener drift, local tooling paths, SQLite health, default Cloudflare endpoint health, and emergency Tailscale health after directory or service changes. |
 | R065 | operational | active | maintenance | R016,R019,R035,R036,R047 | `doctor:sync`, `doctor:archive`, `doctor:ai`, and `doctor:release` provide repeatable maintenance checks for sync queues, archive recovery, AI output metadata quality, and current-checkout release hygiene. |
 
 ## Coverage Summary

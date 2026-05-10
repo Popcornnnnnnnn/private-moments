@@ -1,6 +1,6 @@
 # Project State
 
-Last updated: 2026-05-09
+Last updated: 2026-05-10
 
 ## What This Project Is
 
@@ -15,7 +15,7 @@ The product should preserve four north-star ideas:
 
 The iOS app, named `Moments`, is the primary capture and browsing surface. A Mac runs the self-hosted server, SQLite archive, media storage, sync API, and Admin UI.
 
-The intended network boundary is Tailscale or another private VPN. Private owner builds may inject an additional HTTPS fallback endpoint from ignored local config when iOS is connected to another VPN and cannot keep Tailscale active, but reusable project config and public-facing docs should stay Tailscale/private-VPN-first. The project is not designed as a public cloud service.
+For the owner's real-device setup, Cloudflare Tunnel is the default remote access path and Tailscale is only an emergency backup and diagnostic route. Public/reusable config must still avoid hard-coded personal hostnames or tunnel IDs; owner builds inject the Cloudflare HTTPS endpoint from ignored local config. The project is not designed as a public cloud service.
 
 ## Current Architecture
 
@@ -89,9 +89,9 @@ M013 is a continuity polish and maintenance loop rather than a new product modul
 
 The 2026-05-10 directory-migration repair turned the maintenance loop into repeatable command-line doctors. `verify:*` remains the build/test/gate layer, while `doctor:*` checks the live machine and data state: runtime path truth, LaunchAgent/listener drift, authenticated sync health, archive drill safety, AI summary/review quality signals, and current-checkout release hygiene. These scripts are intended for owner maintenance and incident response, not as new product UI.
 
-Pending sync incidents now follow a fixed evidence order: Mac runtime doctor, server sync doctor, localhost/Tailscale/fallback reachability, real iPhone container inspection, queue classification, then code-level investigation only if the facts show an app/server logic gap. Treat Tailscale-offline plus fallback `530` as a network-path outage until proven otherwise; treat raw pending media under deleted parent posts as stale local rows unless they appear in the app-counted active upload queue.
+Pending sync incidents now follow a fixed evidence order: Mac runtime doctor, server sync doctor, localhost and Cloudflare reachability, real iPhone container inspection, queue classification, then code-level investigation only if the facts show an app/server logic gap. Tailscale is checked only as an emergency backup or to explain a known Tailscale-specific route. Treat Cloudflare `530` / `1033` as a primary network-path outage until proven otherwise; treat raw pending media under deleted parent posts as stale local rows unless they appear in the app-counted active upload queue.
 
-The 2026-05-10 fallback `530` repair found a Mac-side Cloudflare Tunnel path issue, not a Private Moments server issue. The stable local setup is: keep Cloudflare Tunnel edge discovery domains out of Clash fake-ip, leave the fallback hostname itself on normal Clash fake-ip for local curl checks, route Cloudflare/Tunnel/fallback domains through the currently working proxy strategy rather than forced DIRECT, keep macOS `Wi-Fi`/`Tailscale` DNS on `1.1.1.1` and `8.8.8.8`, keep `cloudflared` on `protocol: http2`, and set `TUNNEL_DNS_RESOLVER_ADDRS=1.1.1.1:53,8.8.8.8:53` in `com.popcornnnnnn.cloudflared.blog` so SRV discovery does not depend on system DNS `114.114.114.114`.
+The 2026-05-10 Cloudflare repair found a Mac-side Cloudflare Tunnel path issue, not a Private Moments server issue. The stable local setup is: keep Cloudflare Tunnel edge discovery domains out of Clash fake-ip, leave the owner endpoint hostname itself on normal Clash fake-ip for local curl checks, route Cloudflare/Tunnel endpoint domains through the currently working proxy strategy rather than forced DIRECT, keep macOS `Wi-Fi`/`Tailscale` DNS on `1.1.1.1` and `8.8.8.8`, keep `cloudflared` on `protocol: quic`, and set `TUNNEL_DNS_RESOLVER_ADDRS=1.1.1.1:53,8.8.8.8:53` in `com.popcornnnnnn.cloudflared.blog` so SRV discovery does not depend on system DNS `114.114.114.114`.
 
 ## Design Constraints
 
@@ -112,8 +112,8 @@ The 2026-05-10 fallback `530` repair found a Mac-side Cloudflare Tunnel path iss
 - Sync cursor advancement is data-sensitive: the client must only advance after all returned server changes are applied.
 - Media recovery should prefer robust batch thumbnail recovery for iOS/Tailscale reliability.
 - Media upload must not commit partial files. Interrupted uploads should leave the iPhone local queue retryable, remove only server temp files, and emit enough structured logs to distinguish client/Tailscale disconnects from server write failures. iOS uploads audio/video through temporary multipart files, prioritizes `pending` media before `failed` retries, and exposes a safe `Retry Uploads` action in Storage & Diagnostics.
-- Real-device Server URL should prefer Tailscale Serve HTTPS. Debug iOS builds may allow plain HTTP fallback for private development, but should not depend on `NSAllowsLocalNetworking` to cover Tailscale `100.x` addresses. If using a private fallback endpoint, expose only the iOS sync API surface, not the full Admin UI, and keep owner-specific hostnames/tunnel IDs out of tracked files. iOS should treat route-level fallback misses, including Cloudflare empty-body `404`, as a signal to try the next server candidate so stale fallback allowlists cannot block the primary Tailscale URL.
-- Personal Tailscale values and secrets must not be hard-coded into reusable code or docs.
+- Real-device Server URL should prefer the owner Cloudflare HTTPS endpoint injected from ignored local config. Debug iOS builds may allow plain HTTP fallback for private development, but Tailscale `100.x` addresses are emergency backup paths, not the default daily path. Expose only the iOS sync API surface, not the full Admin UI, and keep owner-specific hostnames/tunnel IDs out of tracked reusable files. iOS should treat route-level endpoint misses, including Cloudflare empty-body `404`, as a signal to try the next server candidate.
+- Personal Cloudflare/Tailscale values and secrets must not be hard-coded into reusable code or public docs.
 
 ## Documentation System
 

@@ -88,6 +88,6 @@ echo
 echo "Moments is running in Simulator."
 echo "Server: $SERVER_URL"
 if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
-  echo "Fallback server: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+  echo "Cloudflare endpoint: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
 fi
 echo "Password: use PRIVATE_MOMENTS_INITIAL_PASSWORD from server/.env"

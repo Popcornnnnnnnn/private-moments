@@ -19,6 +19,9 @@ SERVER_URL_CANDIDATES=()
 if [[ -n "${PRIVATE_MOMENTS_DEVICE_SERVER_URL:-}" ]]; then
   SERVER_URL_CANDIDATES+=("$PRIVATE_MOMENTS_DEVICE_SERVER_URL")
 else
+  if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
+    SERVER_URL_CANDIDATES+=("$PRIVATE_MOMENTS_FALLBACK_SERVER_URL")
+  fi
   if [[ -n "$TAILSCALE_DNS" && "$TAILSCALE_DNS" != "null" ]]; then
     SERVER_URL_CANDIDATES+=("https://$TAILSCALE_DNS")
   fi
@@ -125,6 +128,9 @@ echo "Moments is installed and launched on $DEVICE_NAME."
 echo "In app Settings, use:"
 echo "Server: $SERVER_URL"
 if [[ -n "${PRIVATE_MOMENTS_FALLBACK_SERVER_URL:-}" ]]; then
-  echo "Fallback server: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+  echo "Cloudflare endpoint: $PRIVATE_MOMENTS_FALLBACK_SERVER_URL"
+fi
+if [[ -n "$TAILSCALE_IP" && "$SERVER_URL" != "http://$TAILSCALE_IP:3210" ]]; then
+  echo "Emergency Tailscale: http://$TAILSCALE_IP:3210"
 fi
 echo "Password: use PRIVATE_MOMENTS_INITIAL_PASSWORD from server/.env"

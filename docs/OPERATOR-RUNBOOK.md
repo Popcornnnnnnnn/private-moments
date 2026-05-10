@@ -8,7 +8,7 @@
 - Node.js `>=22`。
 - `npm`。
 - `xcodegen`，用于重新生成 `ios/PrivateMoments.xcodeproj`。只运行 Mac server 时不是必需项。
-- Tailscale，用于真实 iPhone 访问 simulator localhost 之外的 Mac server。
+- Cloudflare Tunnel，用于作者真实 iPhone 默认访问 simulator localhost 之外的 Mac server；Tailscale 仅作为紧急备选和专项排障路径。
 - 已配对的 iPhone 需要解锁，并信任当前 Mac，才能通过命令行安装。
 - `restic`，用于 Mac Admin 的 Archive backup/restore 功能。可通过 `brew install restic` 安装。
 
@@ -16,7 +16,7 @@
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Server bind address。真实 iPhone 通过 LAN/Tailscale 访问时使用 `0.0.0.0`。 |
+| `HOST` | `127.0.0.1` | Server bind address。真实 iPhone 通过 Cloudflare Tunnel / LAN / Tailscale 访问时使用 `0.0.0.0`。 |
 | `PORT` | `3210` | Server port。 |
 | `LOG_LEVEL` | `info` | Fastify log level。 |
 | `PRIVATE_MOMENTS_INITIAL_PASSWORD` | unset | 数据库没有 user 时，用于创建第一个本地用户。 |
@@ -96,11 +96,11 @@ npm run doctor:release
 PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:all
 ```
 
-- `doctor:runtime` 检查 `server/.env`、live health、LaunchAgent plist/state、3210 listener cwd/fd、Prisma client、server `.venv` shebang、SQLite `quick_check`、Tailscale health，以及可选 fallback health。它用于确认当前服务没有继续指向旧目录或旧 build。
+- `doctor:runtime` 检查 `server/.env`、live health、LaunchAgent plist/state、3210 listener cwd/fd、Prisma client、server `.venv` shebang、SQLite `quick_check`、Cloudflare endpoint health，以及 Tailscale emergency health。它用于确认当前服务没有继续指向旧目录或旧 build。
 - `doctor:sync` 检查 server change cursor、device 表、pending/rejected sync operations、media 队列、AI summary 队列和 maintenance jobs。设置 `PRIVATE_MOMENTS_SMOKE_PASSWORD` 时，它会登录 Admin status 做只读交叉验证；不设置时会跳过认证检查。
 - `doctor:archive` 对 live SQLite 做临时复制和 `quick_check`，统计 posts/media/check-ins/server changes，确认未删除 media 引用有文件，检查 archive config、`restic` 可用性和 pending promote 文件。它只写 `.tmp/archive-drills/<timestamp>/report.json`，不改 live archive。
 - `doctor:ai` 对 live DB 做启发式质量检查：ready summary title 长度、prompt version、document body、recent one-liner、Weekly Review prompt/version/anchors，以及 `ai_usage_events` 记账。旧历史数据可能产生 warning，但不应阻塞运行态修复。
-- `doctor:release` 做当前工作区开源边界扫描：license、tracked API key 形态、个人 Tailscale/fallback 配置、ignore 边界、公开 docs 和 `.gsd` release 策略。真正公开前仍必须额外做 Git history secret scan。
+- `doctor:release` 做当前工作区开源边界扫描：license、tracked API key 形态、个人 Cloudflare/Tailscale 配置、ignore 边界、公开 docs 和 `.gsd` release 策略。真正公开前仍必须额外做 Git history secret scan。
 
 doctor 输出按 `PASS / WARN / FAIL` 聚合。`FAIL` 表示当前 checkpoint 不应继续发布或迁移；`WARN` 表示存在需要记录的历史数据、发布准备或人工判断项。
 
@@ -347,7 +347,7 @@ sqlite3 server/prisma/dev.db 'PRAGMA user_version=0;'
 
 第一次启动前，需要在 `server/.env` 里设置真实的 `PRIVATE_MOMENTS_INITIAL_PASSWORD`。Agent 应使用安全 secret 收集机制处理这个值，不要在聊天或文档中要求用户粘贴密码。
 
-真实 iPhone 测试时，让 server 可以从 Tailscale 访问：
+真实 iPhone 测试时，让 server 可以从 Cloudflare Tunnel 或紧急 Tailscale 路径访问：
 
 ```text
 HOST=0.0.0.0
@@ -467,31 +467,37 @@ Server health：
 curl -fsS http://127.0.0.1:3210/api/v1/health
 ```
 
-从 Mac 检查 Tailscale reachability：
+从 Mac 检查默认 Cloudflare endpoint：
+
+```bash
+curl -fsS https://your-private-endpoint.example/api/v1/health
+```
+
+从 Mac 检查紧急 Tailscale reachability：
 
 ```bash
 tailscale ip -4
 curl -fsS http://<tailscale-ip>:3210/api/v1/health
 ```
 
-如果启用了 Tailscale Serve，可以优先使用 HTTPS 入口，避免 iOS App Transport Security 对明文 HTTP 的限制：
+如果临时启用了 Tailscale Serve，可使用 HTTPS 入口，避免 iOS App Transport Security 对明文 HTTP 的限制：
 
 ```bash
 tailscale serve status
 curl -fsS --resolve <tailscale-host>:443:<tailscale-ip> https://<tailscale-host>/api/v1/health
 ```
 
-真实 iPhone 的 Server URL 可以填 `https://<tailscale-host>`；如果继续使用 `http://<tailscale-ip>:3210`，Debug app 的 `NSAppTransportSecurity` 当前通过 `NSAllowsArbitraryLoads` 允许开发期明文 HTTP。
+真实 iPhone 的默认 Server URL 应填 Cloudflare HTTPS endpoint；`https://<tailscale-host>` 或 `http://<tailscale-ip>:3210` 只作为紧急备选。Debug app 的 `NSAppTransportSecurity` 当前通过 `NSAllowsArbitraryLoads` 允许开发期明文 HTTP。
 
-### Private fallback endpoint
+### Cloudflare endpoint
 
-公开项目默认只记录 Tailscale/private VPN 路径。个人本机如果还有一个额外 HTTPS endpoint，例如 Cloudflare Tunnel，可以通过 ignored 的 `.env.local` 注入到本机 iOS build 里作为 fallback；不要把个人域名、tunnel id 或 DNS 目标提交到仓库。
+作者真实设备默认使用 Cloudflare Tunnel HTTPS endpoint。个人本机通过 ignored 的 `.env.local` 注入到本机 iOS build；不要把个人域名、tunnel id 或 DNS 目标提交到仓库。
 
 ```bash
-PRIVATE_MOMENTS_FALLBACK_SERVER_URL=https://your-private-fallback.example
+PRIVATE_MOMENTS_FALLBACK_SERVER_URL=https://your-private-endpoint.example
 ```
 
-`npm run ios:device` 和 `npm run ios:simulator` 会读取 `.env.local`，并把 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL` 写入 app bundle 的 `PrivateMomentsFallbackServerURL`。运行时仍以 Settings 中的 Server URL 为 primary；当 primary 出现网络级连接失败时，app 会自动尝试 bundled fallback。HTTP 401/403 或业务级 404 不会触发 fallback；fallback endpoint 返回空 body 404 或 `Route ... not found` 这类路由级 404 时，iOS 会继续尝试下一个 server candidate，避免 stale tunnel allowlist 卡住 primary。
+`npm run ios:device` 和 `npm run ios:simulator` 会读取 `.env.local`，并把 `PRIVATE_MOMENTS_FALLBACK_SERVER_URL` 写入 app bundle 的 `PrivateMomentsFallbackServerURL`。作者真实设备的 Settings 中 Server URL 也应默认使用这个 Cloudflare HTTPS endpoint。Tailscale 只作为紧急备选 candidate。HTTP 401/403 或业务级 404 不会触发 candidate 切换；Cloudflare endpoint 返回空 body 404 或 `Route ... not found` 这类路由级 404 时，iOS 会继续尝试下一个 server candidate，避免 stale tunnel allowlist 卡住同步。
 
 如果使用 Cloudflare Tunnel，建议只放行 iOS 同步所需 API，避免把完整 Mac Admin UI 暴露到公网：
 
@@ -505,21 +511,21 @@ PRIVATE_MOMENTS_FALLBACK_SERVER_URL=https://your-private-fallback.example
 /api/v1/admin/status
 ```
 
-如果 fallback 域名返回 Cloudflare `530` / `error code: 1033`，通常表示 tunnel connector 没有连上 Cloudflare edge，iOS 端会表现为所有公网 fallback 同步失败。先在 Mac 上确认：
+如果 Cloudflare endpoint 返回 Cloudflare `530` / `error code: 1033`，通常表示 tunnel connector 没有连上 Cloudflare edge，iOS 端会表现为默认远程同步失败。先在 Mac 上确认：
 
 ```bash
-curl -i https://your-private-fallback.example/api/v1/health
+curl -i https://your-private-endpoint.example/api/v1/health
 tail -n 80 ~/Library/Logs/cloudflared-blog.err.log
 dig +short region1.v2.argotunnel.com A
 ```
 
-健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、fallback 域名或 `cftunnel.com` 解析到 `198.18.x.x` 时要继续查：Cloudflare Tunnel edge 连接不能长期停在 fake-ip。不要把 Cloudflare Tunnel 相关域名盲目设成 `DIRECT`；2026-05-10 验证过，当前网络下强制 `cloudflared` / Cloudflare edge IP 直连会让 7844 TLS 变成 EOF，反而无法注册 tunnel。当前本机有效组合是：
+健康状态应看到 `/api/v1/health` 返回 `200`，`cloudflared` 日志出现 `Registered tunnel connection`，`cloudflared tunnel info <tunnel-id>` 显示 active connector。如果本机使用 Clash Verge / Mihomo 的 TUN + fake-IP，`region*.v2.argotunnel.com`、`cloudflare.com`、Cloudflare endpoint 域名或 `cftunnel.com` 解析到 `198.18.x.x` 时要继续查：Cloudflare Tunnel edge 连接不能长期停在 fake-ip。不要把 Cloudflare Tunnel 相关域名盲目设成 `DIRECT`；2026-05-10 验证过，当前网络下强制 `cloudflared` / Cloudflare edge IP 直连会让 7844 TLS 变成 EOF，反而无法注册 tunnel。当前本机有效组合是：
 
-- Clash Verge profile 的 `fake-ip-filter` 覆盖 `api.cloudflare.com`、`*.cloudflare.com`、`*.cfargotunnel.com`、`*.argotunnel.com`、`*.v2.argotunnel.com`、`*.cftunnel.com` 和 `update.argotunnel.com`。不要把 `moments.popcornnn.xyz` 放进 `fake-ip-filter`；本机 curl fallback 域名时可以继续走 Clash fake-ip。
-- Clash Verge rules 保持这些 Cloudflare/Tunnel/fallback 域名走当前可用的 `扬帆云` 策略，不强制 `DIRECT`。
+- Clash Verge profile 的 `fake-ip-filter` 覆盖 `api.cloudflare.com`、`*.cloudflare.com`、`*.cfargotunnel.com`、`*.argotunnel.com`、`*.v2.argotunnel.com`、`*.cftunnel.com` 和 `update.argotunnel.com`。不要把 owner Cloudflare endpoint 域名放进 `fake-ip-filter`；本机 curl endpoint 域名时可以继续走 Clash fake-ip。
+- Clash Verge rules 保持这些 Cloudflare/Tunnel/endpoint 域名走当前可用的 `扬帆云` 策略，不强制 `DIRECT`。
 - macOS `Wi-Fi` 和 `Tailscale` DNS 服务器使用 `1.1.1.1`、`8.8.8.8`，避免本机 resolver 优先走 `114.114.114.114` 时解析 Cloudflare Tunnel SRV 失败。
 - `cloudflared` LaunchAgent 不设置 `HTTP_PROXY` / `HTTPS_PROXY`，只保留本地 `NO_PROXY`，并设置 `TUNNEL_DNS_RESOLVER_ADDRS=1.1.1.1:53,8.8.8.8:53`，避免系统 DNS `114.114.114.114` 解析 `_v2-origintunneld._tcp.argotunnel.com` 失败。
-- `cloudflared` 配置继续固定 `protocol: http2`。
+- `cloudflared` 配置固定 `protocol: quic`。2026-05-10 验证过 `protocol: http2` 会出现 Cloudflare edge TLS handshake EOF / `1033`，切到 `quic` 后 `/api/v1/health`、`/api/v1/auth/login` 和 `/api/v1/admin/status` 恢复 `200`。
 
 修改 Clash 或 plist 后重载 LaunchAgent，再用连续 health check 验证：
 
@@ -527,7 +533,7 @@ dig +short region1.v2.argotunnel.com A
 for i in {1..30}; do
   date '+%H:%M:%S'
   curl -sS -o /dev/null -w '%{http_code} %{time_total}\n' --max-time 12 \
-    https://your-private-fallback.example/api/v1/health
+    https://your-private-endpoint.example/api/v1/health
   sleep 10
 done
 ```
@@ -564,18 +570,18 @@ PRIVATE_MOMENTS_SMOKE_PASSWORD="<read-from-server-env>" npm run doctor:sync
 curl -fsS http://127.0.0.1:3210/api/v1/health
 ```
 
-`doctor:runtime` 应证明 live server、LaunchAgent、3210 listener、SQLite、Tailscale health 都指向当前 checkout。`doctor:sync` 应证明 server cursor、server pending/rejected operations、media queue、AI queue 和 maintenance jobs 没有 Mac 侧阻塞。
+`doctor:runtime` 应证明 live server、LaunchAgent、3210 listener、SQLite、Cloudflare endpoint health 和紧急 Tailscale health 都指向当前 checkout。`doctor:sync` 应证明 server cursor、server pending/rejected operations、media queue、AI queue 和 maintenance jobs 没有 Mac 侧阻塞。
 
-2. 分开检查 iPhone 到 Mac 的两条网络路径：
+2. 分开检查 iPhone 到 Mac 的默认 Cloudflare 路径和紧急 Tailscale 路径：
 
 ```bash
 tailscale status
 tailscale ip -4
 curl -fsS --max-time 5 "http://$(tailscale ip -4):3210/api/v1/health"
-curl -fsS -i --max-time 10 https://your-private-fallback.example/api/v1/health
+curl -fsS -i --max-time 10 https://your-private-endpoint.example/api/v1/health
 ```
 
-如果 iPhone 在 `tailscale status` 里是 `offline`，主 Tailscale URL 对 Mac 自己可达也不能证明 iPhone 可达。如果 fallback 返回 Cloudflare `530` / `1033`，说明公网 fallback connector 没有 active connection；先修 tunnel，再让 iPhone 重试。
+Cloudflare endpoint 是默认路径。如果它返回 Cloudflare `530` / `1033`，说明默认 tunnel connector 没有 active connection；先修 tunnel，再让 iPhone 重试。Tailscale 只用于紧急备选或解释 Tailscale-specific 问题；iPhone 在 `tailscale status` 里是 `offline` 时，不应把它当成默认路径失败的主因。
 
 3. 复制真实 iPhone container，看本机 queue 的事实：
 
@@ -621,7 +627,7 @@ sqlite3 "file:$DB?mode=ro&immutable=1" \
 - `outbox_operations` 有 pending/failed：这是本机 metadata 未发送或被拒绝；看 `type`、`attemptCount`、`lastError`，再查 server `sync_operations` 是否收到同一个 `op_id`。
 - app 口径 `pending_uploads > 0`：这是活跃 moment 或 check-in 附件未上传；查本机文件是否存在，再看 server upload stage logs。
 - raw `local_media` 有 pending 但 app 口径 `pending_uploads = 0`：通常是已删除父 moment 的遗留本地行，不是当前活跃上传阻塞；后续可以用清理迁移或维护脚本收口。
-- Mac 端 `doctor:sync` 全绿，但 iPhone 有 pending 且 `attemptCount = 0`：通常是 iPhone 还没有成功连到任何 server candidate，先修 Tailscale 或 fallback，不要先改 sync protocol。
+- Mac 端 `doctor:sync` 全绿，但 iPhone 有 pending 且 `attemptCount = 0`：通常是 iPhone 还没有成功连到任何 server candidate，先修 Cloudflare endpoint；Tailscale 只作为紧急备选，不要先改 sync protocol。
 
 iOS 无签名编译检查：
 
@@ -775,15 +781,15 @@ SELECT COUNT(*) FROM local_tag_aliases WHERE deletedAt IS NULL;
 
 ### Login Fails With App Transport Security
 
-优先检查 Settings 里的 Server URL。如果是 `http://<tailscale-ip>:3210`，ATS 报错通常说明请求在 iOS 侧被拦截，尚未到达 Mac server；此时 server logs 和 `devices.last_seen_at` 通常不会变化。
+优先检查 Settings 里的 Server URL。作者真实设备默认应使用 Cloudflare HTTPS endpoint。如果临时切到 `http://<tailscale-ip>:3210`，ATS 报错通常说明请求在 iOS 侧被拦截，尚未到达 Mac server；此时 server logs 和 `devices.last_seen_at` 通常不会变化。
 
-推荐使用 Tailscale Serve HTTPS：
+紧急 Tailscale 路径可使用 Tailscale Serve HTTPS：
 
 ```bash
 tailscale serve status
 ```
 
-然后把 iOS Server URL 改为输出里的 `https://<tailscale-host>`。当前 Debug app 也通过 `NSAllowsArbitraryLoads` 允许开发期 HTTP fallback；不要同时依赖 `NSAllowsLocalNetworking` 来覆盖 Tailscale `100.x` 地址，因为它不一定被 ATS 判定为 local networking。
+临时把 iOS Server URL 改为输出里的 `https://<tailscale-host>`。当前 Debug app 也通过 `NSAllowsArbitraryLoads` 允许开发期 HTTP fallback；不要同时依赖 `NSAllowsLocalNetworking` 来覆盖 Tailscale `100.x` 地址，因为它不一定被 ATS 判定为 local networking。
 
 ### Duplicate Devices
 
@@ -835,7 +841,7 @@ python3 -m venv .venv
 - 如果 `status` 是 `transcribing` 且长时间不变，优先检查 `.venv/bin/python`、`server/scripts/local-transcribe.py`、`mlx-whisper` 安装和 `AI_LOCAL_TRANSCRIPTION_TIMEOUT_MS`。
 - 如果 `error_code` 是 `media_file_missing`，先修复媒体上传/存储路径；如果是 `empty_transcript`、`local_transcription_timeout`、`local_transcription_failed` 或 `local_transcription_invalid_output`，优先检查本地转写环境、模型下载和源文件可读性；如果是 `provider_*`、`invalid_json` 或 `invalid_output`，再检查 summary model/base URL/API key。
 - iOS 上传 audio/video 后会安排几次延迟 follow-up sync；如果 server 已有 ready summary 但手机没显示，手动触发一次 sync 并检查 `local_ai_summaries` 是否收到了 `ready` 记录。
-- Server 端生成的 `ai_summary_updated` 可能发生在 iPhone 已经没有 pending outbox/media work 之后。如果 server `ai_summaries.status='ready'`、server 最新 `server_changes.version` 高于 iPhone `lastSyncCursor`，但 iPhone 仍显示旧 failed 或没有 `Summary ready`，优先判断为客户端没有拉取 remote-only changes，而不是 summary job 失败。当前 iOS 会在 app 回到前台、手动 `Sync Now` 和 `Pull Server Changes` 时拉取这种 remote-only changes；Storage & Diagnostics refresh 只负责显示 cursor 差异和 Mac 状态。前台空闲拉取会使用短 `/sync` timeout，以便 Tailscale 主地址不可达时快速尝试 fallback endpoint。
+- Server 端生成的 `ai_summary_updated` 可能发生在 iPhone 已经没有 pending outbox/media work 之后。如果 server `ai_summaries.status='ready'`、server 最新 `server_changes.version` 高于 iPhone `lastSyncCursor`，但 iPhone 仍显示旧 failed 或没有 `Summary ready`，优先判断为客户端没有拉取 remote-only changes，而不是 summary job 失败。当前 iOS 会在 app 回到前台、手动 `Sync Now` 和 `Pull Server Changes` 时拉取这种 remote-only changes；Storage & Diagnostics refresh 只负责显示 cursor 差异和 Mac 状态。前台空闲拉取会使用短 `/sync` timeout，以便默认 Cloudflare endpoint 不可达时快速尝试下一个 candidate；Tailscale 只作为紧急备选。
 
 ### AI Summary Is Missing Or Failed
 
@@ -855,7 +861,7 @@ AI summary 没有单独列表页。timeline 只在 ready summary 存在时显示
 
 ### Storage Mac Server Section Is Missing
 
-Settings > Storage & Diagnostics 总是显示本机 iPhone usage。只有在 app 已登录且 `/api/v1/admin/status` 成功时，Mac Server section 才会出现。如果 Mac section 被隐藏，检查 server URL、token state 和 Tailscale reachability。
+Settings > Storage & Diagnostics 总是显示本机 iPhone usage。只有在 app 已登录且 `/api/v1/admin/status` 成功时，Mac Server section 才会出现。如果 Mac section 被隐藏，检查 server URL、token state 和 Cloudflare endpoint reachability；Tailscale 只作为紧急备选路径检查。
 
 AI Summaries subsection 来自 `/api/v1/admin/status.aiSummaries`，AI Token Usage subsection 来自 `/api/v1/admin/status.aiUsage`，Tags subsection 来自 `/api/v1/admin/status.tags`。Diagnostics > Backup Status 还会读取 maintenance jobs、Archive repository 和 snapshots，用于显示 repository、latest job、latest snapshot、schedule、repository path 和 key file path；备份/恢复/切换执行仍只在 Mac Admin。若 Mac Server 出现但 Backup Status 缺数据，先用 curl 检查 `/api/v1/admin/archive/repository`、`/api/v1/admin/archive/snapshots` 和 `/api/v1/admin/maintenance/jobs` 是否能从当前 server 返回。
 

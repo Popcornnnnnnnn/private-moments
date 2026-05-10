@@ -10,7 +10,7 @@ Private Moments is a private, local-first personal timeline:
 
 - iOS app is the primary capture and browsing surface.
 - Mac runs the self-hosted server, SQLite archive, media storage, sync API, and Admin UI.
-- Tailscale or a private VPN is the intended network boundary.
+- Cloudflare Tunnel is the default remote access path for the owner's real-device setup; Tailscale is an emergency backup and diagnostic path, not the default first path.
 - Main timeline simplicity is a design constraint. Put low-frequency controls in toolbar menus, swipe actions, detail views, or settings rather than crowding the timeline.
 - New settings, monitoring, diagnostics, and safe repair controls should prefer iOS Settings / diagnostics first. Keep Mac Admin for low-frequency Mac-local operations such as archive backup/restore, staged promote, export/import artifacts, server logs, and filesystem/process recovery.
 - App-facing UI copy should stay primarily English unless the user explicitly requests localization.
@@ -102,10 +102,10 @@ The paired phone is commonly named `wwz 的 iphone`; the real-device script can 
 - App display name: `Moments`.
 - Current schema version: `13`.
 - Read the development password from `server/.env`; do not hard-code it into reusable docs or code.
-- Get the current Mac Tailscale IP with `tailscale ip -4`.
-- iOS Settings server URL may be `http://<mac-tailscale-ip>:3210` or a Tailscale Serve HTTPS URL.
+- Default iOS Settings server URL should use the configured Cloudflare HTTPS endpoint for the owner setup.
+- Get the current Mac Tailscale IP with `tailscale ip -4` only for emergency fallback or Tailscale-specific diagnostics.
 
-Do not hard-code personal Tailscale values into reusable code unless the user asks for a personal-only shortcut. Prefer script/env overrides.
+Do not hard-code personal Cloudflare or Tailscale values into reusable code unless the user asks for a personal-only shortcut. Prefer ignored `.env.local` or script/env overrides.
 
 ## Sync And Media Notes
 

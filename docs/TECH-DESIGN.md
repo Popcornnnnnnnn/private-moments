@@ -14,8 +14,8 @@ Private Moments 采用 iOS 原生 App + Mac 自托管服务端的本地优先架
   outbox sync queue
   media compression
         |
-        | Tailscale / private VPN
-        | HTTPS or HTTP over private network
+        | Cloudflare Tunnel HTTPS
+        | Tailscale only as emergency backup
         v
 Mac Server
   Node.js + TypeScript
@@ -1109,7 +1109,7 @@ POST   /api/v1/admin/archive/jobs/import
 5. iOS 创建 `create_post` outbox operation。
 6. 同步时先通过 `/api/v1/media/upload` 上传媒体文件；视频额外上传 poster 作为 `thumbnail` variant。
 7. 完整 audio/video 上传成功后，Mac server 异步启动 AI summary job。
-8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、手动 `Sync Now` 或 `Pull Server Changes` 仍会拉取这种 server-originated metadata。空闲 `/sync` 检查使用短 timeout 以便私有主地址不可达时快速尝试 fallback；恢复/本地变更同步保留更长 timeout。Storage & Diagnostics refresh 只做只读状态检查和 cursor 对比，避免进入诊断页就启动隐藏同步。
+8. iOS 安排数次延迟 follow-up sync，用于拉取稍后生成的 `ai_summary_updated`。如果没有本地 pending work，app 回到前台、手动 `Sync Now` 或 `Pull Server Changes` 仍会拉取这种 server-originated metadata。空闲 `/sync` 检查使用短 timeout，以便默认 Cloudflare endpoint 不可达时快速尝试下一个 candidate；Tailscale 仅作为紧急备选。恢复/本地变更同步保留更长 timeout。Storage & Diagnostics refresh 只做只读状态检查和 cursor 对比，避免进入诊断页就启动隐藏同步。
 9. 媒体可以逐项成功或失败。
 10. iOS 通过 `/api/v1/sync` 同步帖子、媒体元数据和 AI summary metadata。
 11. 服务端记录部分同步状态。
@@ -1245,7 +1245,8 @@ Mac 服务端第一版使用 `launchd` 登录自启动。
 
 MVP 安全边界：
 
-- Tailscale 或私有 VPN。
+- 受限 Cloudflare Tunnel HTTPS endpoint 作为作者真实设备默认路径。
+- Tailscale 仅作为紧急备选和专项排障路径。
 - 单用户密码登录。
 - Bearer device token。
 - 服务端保存 token hash。
@@ -1306,7 +1307,7 @@ MVP 安全边界：
 
 - iOS 原生 App 是主入口。
 - Mac 是服务器和后台。
-- 使用 Tailscale 或私有 VPN，不公网暴露。
+- 使用受限 Cloudflare Tunnel HTTPS endpoint 作为作者真实设备默认路径，不暴露完整 Admin UI；Tailscale 仅作为紧急备选。
 - Mac 是权威归档源。
 - iPhone 是本地优先缓存 + 待同步队列。
 - 单用户，但数据结构支持多设备。
