@@ -10,8 +10,14 @@ Private Moments is meant for personal archives, not social sharing. It supports 
 
 <p>
   <img src="docs/assets/screenshots/ios-timeline-demo.jpg" alt="Private Moments timeline with audio summary, tags, comments, pinned moments, and check-ins" width="260">
+  <img src="docs/assets/screenshots/ios-detail-demo.jpg" alt="Private Moments moment detail with audio, tags, comments, and AI summary metadata" width="260">
   <img src="docs/assets/screenshots/ios-calendar-demo.jpg" alt="Private Moments calendar with per-day activity markers" width="260">
+</p>
+
+<p>
   <img src="docs/assets/screenshots/ios-checkins-demo.jpg" alt="Private Moments check-ins list" width="260">
+  <img src="docs/assets/screenshots/ios-settings-demo.jpg" alt="Private Moments settings with connection, sync, storage diagnostics, and feature controls" width="260">
+  <img src="docs/assets/screenshots/ios-tags-demo.jpg" alt="Private Moments tag management with primary and topic tags" width="260">
 </p>
 
 Screenshots are generated from the simulator demo fixture:
